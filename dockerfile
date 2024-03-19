@@ -14,18 +14,19 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Set the working directory in the container
-WORKDIR /home/user
+WORKDIR /ctf
 
 
-# Copy the local directory contents into the container
+
 COPY . .
 
-# Install any needed packages specified in requirements.txt
+
 #COPY requirements.txt ./
 #RUN pip3 install --no-cache-dir #-r requirements.txt
 
 # Make port 80 available to the world outside this container
 EXPOSE 80
+CMD ["tail", "-f", "/dev/null"]
 CMD ["/bin/bash"]
 
 # Define environment variable

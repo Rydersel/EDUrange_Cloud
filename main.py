@@ -5,14 +5,22 @@ from docker.api import container
 
 from utils import load_challenge
 from utils import verify_solution_and_cleanup
-from gamemaster import game_master, start_challenge
+from docker_util import start_challenge
 from utils import del_challenge_directory
 from utils import start_ctf_container
 from utils import start_ctf_container_interactively
-from gamemaster import start_challenge_container
+from docker_util import start_challenge_container
 from utils import shutdown_container
-from gamemaster import interactive_container_shell
+from docker_util  import interactive_container_shell
 
+
+"""
+
+Note to future Ryder, I need to stop for now because stupid mandarin midterm but the current issue seems to be with 
+how the permissions are configured in the docker container. That is what is causing the weird bash issues.
+
+
+"""
 
 
 
@@ -34,7 +42,7 @@ def main_menu():
 
 
             action = input(
-                f"Select action for Challenge {challenge_number}: (1) Generate, (2) Del Directory:, (3) Back ")
+                f"Select action for Challenge {challenge_number}: (1) Generate, (2) Del Local Directory:, (3) Back ")
 
             if action == '1':
                 print(f"Generating Challenge {challenge_number}...")

@@ -1,14 +1,17 @@
 import os
 import shutil
 
+from docker.api import container
+
 from utils import load_challenge
 from utils import verify_solution_and_cleanup
-from gamemaster import game_master
+from gamemaster import game_master, start_challenge
 from utils import del_challenge_directory
 from utils import start_ctf_container
 from utils import start_ctf_container_interactively
 from gamemaster import start_challenge_container
 from utils import shutdown_container
+from gamemaster import interactive_container_shell
 
 
 
@@ -17,9 +20,6 @@ def main_menu():
     # temp console menu
     while True:
         print("\nCTF Challenge Manager")
-        shutdown_container("ctf_instance1")
-        print("API Key:", os.getenv("OPENAI_API_KEY"))
-        game_master()
         choice = input("Enter the challenge number to work with (or 'exit' to quit): ")
 
         if choice.lower() == 'exit':
@@ -31,7 +31,7 @@ def main_menu():
             challenge_number = int(choice)
             challenge_module, solution_module = load_challenge(challenge_number)
 
-          
+
 
             action = input(
                 f"Select action for Challenge {challenge_number}: (1) Generate, (2) Del Directory:, (3) Back ")
@@ -40,6 +40,13 @@ def main_menu():
                 print(f"Generating Challenge {challenge_number}...")
                 challenge_module.create_disk_image()
                 print("Challenge generated successfully.")
+                challenge_id = 1
+                start_challenge_container(challenge_id)
+                start_challenge(challenge_id)
+                cont_id = input("id")
+                interactive_container_shell(cont_id)
+
+
                 while True:
                     user_answer = input("Flag: ")
 

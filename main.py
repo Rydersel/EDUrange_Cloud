@@ -23,6 +23,15 @@ how the permissions are configured in the docker container. That is what is caus
 """
 
 
+def generate_challenge(challenge_number):
+    challenge_module, solution_module = load_challenge(challenge_number)
+    print("Challenge generated successfully.")
+    challenge_module.create_disk_image()
+    print("Challenge generated successfully.")
+    challenge_id = 1
+    start_challenge_container(challenge_id)
+    return start_challenge(challenge_id)
+
 
 def main_menu():
     # temp console menu

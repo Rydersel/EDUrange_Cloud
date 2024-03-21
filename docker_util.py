@@ -17,9 +17,9 @@ def interactive_container_shell(container_id): #not currently using
         else:
             print("Error:", result.stderr)
 
-def start_challenge_container(challenge_id):
+def start_challenge_container(challenge_number):
     """Starts a Docker container for a given challenge."""
-    container_name = f"ctf_challenge_{challenge_id}"
+    container_name = f"ctf_challenge_{challenge_number}"
     try:
         # Stops the container if it's already running
         container = client.containers.get(container_name)
@@ -30,8 +30,9 @@ def start_challenge_container(challenge_id):
 
     # Runs a new container
     client.containers.run("ctf_challenge_image", name=container_name, detach=True,
-                          volumes={os.path.abspath(f"challenges/challenge_{str(challenge_id).zfill(2)}"): {'bind': '/ctf/challenge', 'mode': 'rw'}})
-    print(f"Challenge {challenge_id} environment is ready.")
+                          volumes={os.path.abspath(f"challenges/challenge_{str(challenge_number).zfill(2)}"): {'bind': '/ctf/challenge', 'mode': 'rw'}})
+    print(f"Challenge {challenge_number} environment is ready.")
+
 
 
 
@@ -67,5 +68,7 @@ def start_challenge(challenge_number):
         )
 
         print(f"Challenge {challenge_number} environment is ready. Container ID: {container.id}")
+        return container.id
     except Exception as e:
         print(f"An error occurred: {e}")
+

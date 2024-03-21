@@ -1,0 +1,37 @@
+<!-- challenge_started.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Challenge Console</title>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+</head>
+<body>
+    <h1>Challenge {{ challenge_number }} Console</h1>
+    <div id="console" style="background-color: black; color: white; padding: 10px; height: 300px; overflow-y: scroll;"></div>
+    <input type="text" id="commandInput" autocomplete="off" placeholder="Type command here...">
+    <button onclick="sendCommand()">Send</button>
+
+    <script>
+        function sendCommand() {
+            var command = $('#commandInput').val();
+            var challenge_number = '{{ challenge_number }}';
+            $.post('/execute_command', {command: command, challenge_number: challenge_number}, function(data) {
+                $('#console').append(data.output + '\n');
+                $('#commandInput').val(''); // Clear input field after sending
+                $('#console').scrollTop($('#console')[0].scrollHeight); // Scroll to the bottom
+            });
+        }
+
+        // Allow pressing Enter to send command
+        $('#commandInput').keypress(function(e) {
+            if (e.which == 13) {
+                sendCommand();
+                return false;
+            }
+        });
+    </script>
+
+    <a href="{{ url_for('home') }}">Back to Home</a>
+</body>
+</html>

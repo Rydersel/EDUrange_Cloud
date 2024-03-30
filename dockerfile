@@ -24,8 +24,8 @@ COPY . .
 #COPY requirements.txt ./
 #RUN pip3 install --no-cache-dir #-r requirements.txt
 
-
-EXPOSE 80 #not currently being used
+#not currently being used
+EXPOSE 80
 CMD ["tail", "-f", "/dev/null"]
 CMD ["/bin/bash"]
 

@@ -37,7 +37,7 @@ def main_menu():
     # temp console menu
     while True:
         print("\nCTF Challenge Manager")
-        choice = input("Enter the challenge number to work with (or 'exit' to quit): ")
+        choice = input("Enter the file_carving_2 number to work with (or 'exit' to quit): ")
 
         if choice.lower() == 'exit':
             print("Exiting...")
@@ -51,9 +51,9 @@ def main_menu():
 
 
             action = input(
-                f"Select action for Challenge {challenge_number}: (1) Generate, (2) Del Local Directory:, (3) Back ")
+                f"Select action for Challenge {challenge_number}: (web_1) Generate, (2) Del Local Directory:, (3) Back ")
 
-            if action == '1':
+            if action == 'web_1':
                 print(f"Generating Challenge {challenge_number}...")
                 challenge_module.create_disk_image()
                 print("Challenge generated successfully.")
@@ -86,7 +86,7 @@ def main_menu():
             if action == '3':
                 break
         except ValueError:
-            print("Please enter a valid challenge number.")
+            print("Please enter a valid file_carving_2 number.")
         except ModuleNotFoundError:
             print(f"Challenge {choice} does not exist.")
 

@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Flag Checker</title>
+</head>
+<body>
+    <h1>Submit your flag</h1>
+    <form method="post">
+        <input type="text" name="flag" placeholder="CTF{...}" required>
+        <button type="submit">Check</button>
+    </form>
+    {% if message %}
+        <p>{{ message }}</p>
+    {% endif %}
+</body>
+</html>

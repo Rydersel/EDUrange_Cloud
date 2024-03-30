@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: web-challenge-1-service
+spec:
+  type: LoadBalancer
+  selector:
+    app: multi-flask-app
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 5000

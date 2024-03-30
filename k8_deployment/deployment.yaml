@@ -1,0 +1,19 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: file_carving_2-deployment
+spec:
+  replicas: web_1
+  selector:
+    matchLabels:
+      app: file_carving_2
+  template:
+    metadata:
+      labels:
+        app: file_carving_2
+    spec:
+      containers:
+      - name: file_carving_2
+        image: rydersel/ctf-file_carving_2:latest
+        ports:
+        - containerPort: 80

@@ -1,0 +1,53 @@
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fc1 # REPLACE file_carving_2-name and file_carving_2-category to your challenges's name and category
+  labels:
+    category: file-carving # We assign labels to the deployment to link it to a service later, and to help manage deployments
+    challenge: fc1
+spec:
+  replicas: 3 # The no of replicas sets the no of instances/pods of the file_carving_2 deployed on the cluster
+  selector:
+    matchLabels:
+      category: file-carving
+      challenge: fc1
+  template:
+    metadata:
+      labels:
+        category: file-carving
+        challenge: fc1
+    spec:
+      containers:
+      - name: file-carving-1-container
+        image: gcr.io/edurangectf/file_carving_2 # Set this URL to your file_carving_2 container's image
+        securityContext:
+          privileged: true
+        resources: # Resource limits for the container. These are important, in case people manage to max out CPU/RAM on your file_carving_2
+          limits:
+            cpu: 100m
+            memory: 150Mi
+          requests:
+            cpu: 10m
+            memory: 30Mi
+        ports: # Port exposed by the container, you can add multiple
+        - containerPort: 9999
+          name: port-9999
+---
+apiVersion: v1
+kind: Service
+metadata: # Set the file_carving_2-name/file_carving_2-category SAME as the deployment, otherwise they won't link to each other
+  name: fc1
+  labels:
+    category: file-carving
+    challenge: fc1
+spec:
+  type: NodePort
+  selector:
+    category: file-carving
+    challenge: fc1
+  ports:
+    - port: 9999 # The port exposed by the container
+      name: port-9999
+      targetPort: 9999 # The port exposed by the container
+      nodePort: 30002 # The port that is exposed on each Node on the cluster

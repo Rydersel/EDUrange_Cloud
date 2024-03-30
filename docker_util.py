@@ -18,7 +18,7 @@ def interactive_container_shell(container_id): #not currently using
             print("Error:", result.stderr)
 
 def start_challenge_container(challenge_number):
-    """Starts a Docker container for a given challenge."""
+    """Starts a Docker container for a given file_carving_2."""
     container_name = f"ctf_challenge_{challenge_number}"
     try:
         # Stops the container if it's already running
@@ -30,7 +30,7 @@ def start_challenge_container(challenge_number):
 
     # Runs a new container
     client.containers.run("ctf_challenge_image", name=container_name, detach=True,
-                          volumes={os.path.abspath(f"challenges/challenge_{str(challenge_number).zfill(2)}"): {'bind': '/ctf/challenge', 'mode': 'rw'}})
+                          volumes={os.path.abspath(f"challenges/challenge_{str(challenge_number).zfill(2)}"): {'bind': '/ctf/file_carving_2', 'mode': 'rw'}})
     print(f"Challenge {challenge_number} environment is ready.")
 
 
@@ -44,7 +44,7 @@ def start_challenge(challenge_number):
     client = docker.from_env()
     image_name = 'ctf_challenge_image'
 
-    # Ensure the challenge file exists
+    # Ensure the file_carving_2 file exists
     if not os.path.exists(challenge_file_path):
         print(f"Challenge file {challenge_file_path} does not exist.")
         return
@@ -57,12 +57,12 @@ def start_challenge(challenge_number):
         except docker.errors.NotFound:
             pass  # Container does not exist, proceed
 
-        # Run a new container with the challenge file directory mounted
+        # Run a new container with the file_carving_2 file directory mounted
         container = client.containers.run(
             image_name,
             "/bin/bash",
             name=f"ctf_challenge_{challenge_number}",
-            volumes={challenge_file_dir: {'bind': '/ctf/challenge', 'mode': 'ro'}},
+            volumes={challenge_file_dir: {'bind': '/ctf/file_carving_2', 'mode': 'ro'}},
             detach=True,
             tty=True
         )

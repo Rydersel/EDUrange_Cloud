@@ -39,7 +39,7 @@ def execute_command():
 def home():
     # Render a simple home page that lists challenges
     # In a real app, you'd dynamically list available challenges
-    challenges = [1, 2, 3]  # Example challenge numbers
+    challenges = [1, 2, 3]  # Example file_carving_2 numbers
     return render_template('index.html', challenges=challenges)
 
 @app.route('/start_challenge/<int:challenge_number>', methods=['GET'])

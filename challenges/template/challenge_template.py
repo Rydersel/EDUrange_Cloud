@@ -1,4 +1,0 @@
-def challenge():
-    pass
-
-

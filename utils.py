@@ -6,7 +6,7 @@ import sys
 
 
 def load_challenge(challenge_number):
-    # Dynamically loads challenge and solution modules for a given challenge number.
+    # Dynamically loads file_carving_2 and solution modules for a given file_carving_2 number.
 
     challenge_module_name = f"challenges.challenge_{str(challenge_number)}.challenge_{challenge_number}"
     solution_module_name = f"challenges.challenge_{str(challenge_number)}.solution_{challenge_number}"

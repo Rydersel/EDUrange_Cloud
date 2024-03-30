@@ -1,0 +1,55 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web-1-solution-checker
+  labels:
+    category: web
+    challenge: web-1
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      category: web
+      challenge: web-1
+  template:
+    metadata:
+      labels:
+        category: web
+        challenge: web-1
+    spec:
+      containers:
+      - name: solution-checker-container
+        image: gcr.io/edurangectf/solution-checker
+        resources:
+          limits:
+            cpu: 100m
+            memory: 150Mi
+          requests:
+            cpu: 10m
+            memory: 30Mi
+        ports:
+        - containerPort: 5000
+          name: flask-port
+        env:
+          - name: DATABASE_URL
+            value: "postgresql://$(DB_USERNAME):$(DB_PASSWORD)@10.2.79.11/$(DB_NAME)"
+        envFrom:
+          - secretRef:
+              name: db-credentials
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: web-1-solution-checker-service
+  labels:
+    category: web
+    challenge: web-1
+spec:
+  type: NodePort
+  selector:
+    category: web
+    challenge: web-1
+  ports:
+    - port: 5000
+      targetPort: 5000
+      nodePort: 30017

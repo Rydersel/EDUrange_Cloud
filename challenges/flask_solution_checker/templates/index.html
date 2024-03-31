@@ -1,16 +1,27 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Flag Checker</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Submit Challenge Answer</title>
 </head>
 <body>
-    <h1>Submit your flag</h1>
-    <form method="post">
-        <input type="text" name="flag" placeholder="CTF{...}" required>
-        <button type="submit">Check</button>
+    <h1>Submit Your Challenge Answer</h1>
+    <form action="/submit" method="post">
+        <label for="user_id">Your ID:</label>
+        <input type="text" id="user_id" name="user_id" required>
+
+        <label for="challenge_id">Select Challenge:</label>
+        <select name="challenge_id" id="challenge_id">
+            {% for challenge in challenges %}
+            <option value="{{ challenge.id }}">{{ challenge.name }}</option>
+            {% endfor %}
+        </select>
+
+        <label for="flag">Flag:</label>
+        <input type="text" id="flag" name="flag" required>
+
+        <button type="submit">Submit</button>
     </form>
-    {% if message %}
-        <p>{{ message }}</p>
-    {% endif %}
 </body>
 </html>

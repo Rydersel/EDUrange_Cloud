@@ -19,7 +19,7 @@ spec:
     spec:
       containers:
       - name: web-1
-        image: gcr.io/edurangectf/ctf-challenge
+        image:  gcr.io/edurangectf/web-1
         resources:
           limits:
             cpu: 100m

@@ -1,29 +1,27 @@
-from flask import Flask, render_template
-from config import Config
-from flask_sqlalchemy import SQLAlchemy
+from flask import Flask, request, render_template, redirect, url_for
+from flag_util import verify_flag
 
 app = Flask(__name__)
-app.config.from_object(Config)
 
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+@app.route('/', methods=['GET'])
+def index():
+    # Example challenges list, replace with your actual challenges
+    challenges = [
+        {'id': 'web-1', 'name': 'Web 1'},
+        {'id': 'web-1', 'name': 'Web 2'},
+    ]
+    return render_template('index.html', challenges=challenges)
 
-# Initialize SQLAlchemy with the Flask app
-db = SQLAlchemy(app)
+@app.route('/submit', methods=['POST'])
+def submit_challenge():
+    user_id = request.form.get('user_id')  # Ensure you have a way to uniquely identify users
+    challenge_id = request.form.get('challenge_id')
+    user_flag = request.form.get('flag')
 
-# Example model
-class ExampleModel(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(80), nullable=False)
+    if verify_flag(user_id, challenge_id, user_flag):
+        return "Correct flag!", 200
+    else:
+        return "Incorrect flag.", 400
 
-@app.route('/')
-def home():
-    return render_template('index.html')
-
-if __name__ == '__main__':
-    # Create the tables in the database (SQLAlchemy)
-    db.create_all()
-
-    # Run the Flask app
-    app.run(host='0.0.0.0', port=5000, debug=True)  # debug=True for development only!
-
-
+if __name__ == "__main__":
+    app.run(debug=True)

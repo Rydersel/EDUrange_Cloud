@@ -1,9 +1,9 @@
 from extentions import db
 
-class Challenge(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.String(255), nullable=False, unique=True)
-    flag = db.Column(db.String(255), nullable=False)
 
-    def __repr__(self):
-        return f'<Challenge {self.user_id}>'
+class UserChallenge(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.String(128), unique=True, nullable=False)
+    encrypted_data = db.Column(db.Text, nullable=False)
+    decryption_key = db.Column(db.String(128), nullable=False)
+

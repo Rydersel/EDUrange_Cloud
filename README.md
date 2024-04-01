@@ -78,6 +78,18 @@ To start a new CTF challenge instance:
 
 2. Access the challenge instance through the provided URL.
 
+## Flag Generation
+
+Our system generates unique flags for each challenge instance using a seed-based methodology. This ensures that each participant receives a distinct flag, enhancing the challenge's security and integrity. Upon challenge initiation, a unique seed is generated and used in a deterministic function to produce the flag. This scalable approach allows for secure, personalized challenge experiences.
+
+### Example Code Snippet:
+
+```python
+import hashlib
+
+def generate_flag(seed):
+    # Example using SHA-256 hash of the seed to generate a flag
+    return hashlib.sha256(seed.encode()).hexdigest()
 
 
 ## License:

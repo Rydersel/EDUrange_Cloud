@@ -1,0 +1,31 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: flask-backend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: flask-backend
+  template:
+    metadata:
+      labels:
+        app: flask-backend
+    spec:
+      containers:
+      - name: flask-backend
+        image: gcr.io/edurangectf/instance-manager
+        ports:
+        - containerPort: 8000
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: instance-manager
+spec:
+  type: ClusterIP
+  selector:
+    app: flask-backend
+  ports:
+    - port: 8000
+      targetPort: 8000

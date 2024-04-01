@@ -10,7 +10,7 @@ The EDURANGE CTF Module is a dynamic, Kubernetes-powered platform designed to ho
 
 ## Getting Started:
 
-These instructions will probally you a copy of the project up and running on your local machine for development and testing purposes. It also might not, the project is very early in development.
+These instructions will probally get you a copy of the project up and running on your local machine for development and testing purposes. It also might not, the project is very early in development.
 
 ### Prerequisites:
 

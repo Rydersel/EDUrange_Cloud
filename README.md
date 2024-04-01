@@ -84,4 +84,6 @@ To start a new CTF challenge instance:
 
 2. Access the challenge instance through the provided URL.
 
+## Diagram of Challenge Initialization: 
+![Diagram](assets/diagram.png "Diagram")
 

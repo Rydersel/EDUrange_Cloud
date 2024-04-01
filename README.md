@@ -36,7 +36,7 @@ These instructions will probally get you a copy of the project up and running on
     minikube start
     ```
 
-3. **Build and Deploy the Flask Backend**
+3. **Build and Deploy the Instance Manager**
 
     - Navigate to the Flask backend directory:
 

@@ -1,6 +1,10 @@
 # EDURANGE CTF Module (WORK IN PROGRESS)
 
+
+
 The EDURANGE CTF Module is a dynamic, Kubernetes-powered platform designed to host and manage Capture The Flag (CTF) challenges. It provides an automated system for deploying individual challenge instances, ensuring a unique and isolated environment for each participant.
+
+### For detailed documentation visit [Documentation](https://github.com/Rydersel/EDURANGE_CTF_Module/wiki)
 
 ## Features:
 
@@ -11,6 +15,8 @@ The EDURANGE CTF Module is a dynamic, Kubernetes-powered platform designed to ho
 ## Getting Started:
 
 These instructions will probally get you a copy of the project up and running on your local machine for development and testing purposes. It also might not, the project is very early in development.
+
+
 
 ### Prerequisites:
 
@@ -78,25 +84,6 @@ To start a new CTF challenge instance:
 
 2. Access the challenge instance through the provided URL.
 
-## Flag Generation
-
-Our system generates unique flags for each challenge instance using a seed-based methodology. This ensures that each participant receives a distinct flag, enhancing the challenge's security and integrity. Upon challenge initiation, a unique seed is generated and used in a deterministic function to produce the flag. This scalable approach allows for secure, personalized challenge experiences.
-
-### Example Code Snippet:
-
-```python
-import hashlib
-
-def generate_flag(seed):
-    # Example using SHA-256 hash of the seed to generate a flag
-    return hashlib.sha256(seed.encode()).hexdigest()
-
-
-## License:
-
-Distributed under the MIT License. See `LICENSE` for more information.
-
-(Does anyone actually know what that means? I just put it on all my README's since everyone else does.)
 ## Diagram of Challenge Initialization: 
 ![Diagram](assets/diagram.png "Diagram")
 

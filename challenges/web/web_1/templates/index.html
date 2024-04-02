@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Web Challenge</title>
+</head>
+<body>
+    <h1>Welcome to the Web Challenge</h1>
+    {% if flag %}
+    <p>Your unique flag for user ID "{{ user_id }}": {{ flag }}</p>
+    {% endif %}
+    <form action="/" method="post">
+        <label for="user_id">Enter your ID:</label>
+        <input type="text" id="user_id" name="user_id" required>
+        <button type="submit">Generate Flag</button>
+    </form>
+</body>
+</html>

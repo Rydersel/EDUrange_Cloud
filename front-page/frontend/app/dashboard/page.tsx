@@ -6,7 +6,6 @@ import axios from 'axios';
 import { Challenge } from '../../types/types';
 import Link from 'next/link';
 
-
 const HomeContainer = styled.div`
   color: #fff;
   background-color: #121212; 
@@ -28,6 +27,7 @@ const ChallengesContainer = styled.section`
   flex-direction: column;
   align-items: center;
 `;
+
 const LoginButton = styled.button`
   position: absolute;
   top: 20px;
@@ -49,9 +49,9 @@ const ChallengeCard = styled.div`
   border: 1px solid #0f0; // Neon green border
   margin: 10px;
   padding: 20px;
-  
   cursor: pointer;
   transition: transform 0.3s ease;
+
   &:hover {
     transform: scale(1.05);
     border-color: #ff00ff; // Neon magenta 
@@ -61,7 +61,6 @@ const ChallengeCard = styled.div`
 const ChallengeName = styled.h3`
   color: #00ff00; // Neon green
   text-align: center;
-  
 `;
 
 const ChallengeDescription = styled.p`
@@ -87,10 +86,16 @@ const Home: React.FC = () => {
 
   const handleChallengeClick = async (challenge: Challenge) => {
     try {
-      const response = await axios.post('http://127.0.0.1:5000/api/challenge/clicked', challenge);
-      console.log(response.data.message); // Optionally log the response message
+      const user_id = "example_user_id"; // Replace with actual logic to get user_id
+      const startChallengeResponse = await axios.post('http://127.0.0.1:5001/api/start-challenge', { user_id });
+
+      if (startChallengeResponse.data.url) {
+        window.location.href = startChallengeResponse.data.url;
+      } else {
+        console.error('URL for the challenge is not provided.');
+      }
     } catch (error) {
-      console.error("Error sending challenge click to backend:", error);
+      console.error("Error starting a new challenge instance:", error);
     }
   };
 
@@ -98,7 +103,7 @@ const Home: React.FC = () => {
     <HomeContainer>
       <Link href="/login" passHref>
         <LoginButton>Log In</LoginButton>
-       </Link>
+      </Link>
       <Title>Welcome to the Edurange CTF Challenges</Title>
       <ChallengesContainer>
         <h2>Select a Challenge</h2>

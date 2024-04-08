@@ -19,7 +19,7 @@ spec:
     spec:
       containers:
       - name: web-1
-        image:  gcr.io/edurangectf/web-1
+        image: gcr.io/edurangectf/web-1
         resources:
           limits:
             cpu: 100m
@@ -30,6 +30,12 @@ spec:
         ports:
         - containerPort: 9999
           name: port-9999
+        env:
+        - name: FLAG
+          valueFrom:
+            secretKeyRef:
+              name: flag-secret
+              key: flag
 ---
 apiVersion: v1
 kind: Service

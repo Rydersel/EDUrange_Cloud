@@ -11,7 +11,7 @@ from utils import start_ctf_container
 from utils import start_ctf_container_interactively
 from docker_util import start_challenge_container
 from utils import shutdown_container
-from docker_util  import interactive_container_shell
+from docker_util import interactive_container_shell
 
 
 """

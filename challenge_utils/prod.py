@@ -1,28 +1,43 @@
 from kubernetes import client, config
 import time
 import uuid
+import hashlib
 
 def load_config():
     config.load_kube_config()
 
+def generate_unique_flag(user_id):
+    secret_salt = "test123"
+    return f"CTF{{{hashlib.sha256((user_id + secret_salt).encode()).hexdigest()}}}"
+
+def create_flag_secret(user_id, flag):
+    sanitized_user_id = user_id.replace("_", "-").lower()
+    timestamp = str(int(time.time()))
+    secret_name = f"flag-secret-{sanitized_user_id}-{timestamp}"  # Unique name
+    body = client.V1Secret(
+        metadata=client.V1ObjectMeta(name=secret_name),
+        string_data={"flag": flag}
+    )
+    core_api = client.CoreV1Api()
+    core_api.create_namespaced_secret(namespace="default", body=body)
+    return secret_name
 
 def wait_for_loadbalancer_ip(api, service_name, namespace="default", retry_interval=10, timeout=300):
     start_time = time.time()
     while time.time() - start_time < timeout:
         service = api.read_namespaced_service(name=service_name, namespace=namespace)
-        if service.status.load_balancer.ingress is not None:
+        if service.status.load_balancer.ingress is not None and len(service.status.load_balancer.ingress) > 0:
             return service.status.load_balancer.ingress[0].ip
-        print(f"Waiting for LoadBalancer IP for service '{service_name}'...")  # Add logging or feedback
+        print(f"Waiting for LoadBalancer IP for service '{service_name}'...")
         time.sleep(retry_interval)
     raise TimeoutError("Timeout waiting for LoadBalancer IP")
 
-
-def create_challenge_deployment(user_id,image):
-    # Replace underscores with hyphens in user_id and ensure lowercase
+def create_challenge_deployment(user_id, image):
+    flag = generate_unique_flag(user_id)
+    secret_name = create_flag_secret(user_id, flag)
     sanitized_user_id = user_id.replace("_", "-").lower()
     deployment_name = f"ctfchal-{sanitized_user_id}-{str(uuid.uuid4())[:8]}".lower()
-
-    container_port = 5000  # MUST MATCH PORT CHAL CONTAINER LISTENS ON
+    container_port = 5000
 
     deployment = client.V1Deployment(
         api_version="apps/v1",
@@ -39,8 +54,19 @@ def create_challenge_deployment(user_id,image):
                     containers=[
                         client.V1Container(
                             name=deployment_name,
-                            image=image,  #chal input
-                            ports=[client.V1ContainerPort(container_port=container_port)]
+                            image=image,
+                            ports=[client.V1ContainerPort(container_port=container_port)],
+                            env=[
+                                client.V1EnvVar(
+                                    name="FLAG",
+                                    value_from=client.V1EnvVarSource(
+                                        secret_key_ref=client.V1SecretKeySelector(
+                                            name=secret_name,
+                                            key="flag"
+                                        )
+                                    )
+                                )
+                            ]
                         )
                     ]
                 )
@@ -48,14 +74,9 @@ def create_challenge_deployment(user_id,image):
         )
     )
 
-    # Create the deployment in Kubernetes
     api = client.AppsV1Api()
-    api.create_namespaced_deployment(
-        body=deployment,
-        namespace="default"
-    )
+    api.create_namespaced_deployment(body=deployment, namespace="default")
 
-    # Create a Kubernetes service
     service = client.V1Service(
         api_version="v1",
         kind="Service",
@@ -66,27 +87,40 @@ def create_challenge_deployment(user_id,image):
             type="LoadBalancer"
         )
     )
+
     core_api = client.CoreV1Api()
     core_api.create_namespaced_service(namespace="default", body=service)
 
     try:
-        # Wait for LoadBalancer IP (with retries and timeout)
         external_ip = wait_for_loadbalancer_ip(core_api, deployment_name)
         challenge_url = f"http://{external_ip}"
     except TimeoutError:
-        # Handle timeout error (e.g., inform the user, clean up resources)
         print("Timeout waiting for LoadBalancer IP. Cleaning up resources...")
-        # Add logic to delete deployment and service if needed
-        # ...
-        raise  # Re-raise the error to stop execution
+        delete_challenge_deployment(deployment_name)
+        raise
 
     return deployment_name, challenge_url
 
 def delete_challenge_deployment(deployment_name):
-    # delete user challenge
     api = client.AppsV1Api()
     api.delete_namespaced_deployment(
         name=deployment_name,
-        namespace="default",  # Specify your namespace if different
+        namespace="default",
         body=client.V1DeleteOptions(propagation_policy='Foreground')
     )
+    core_api = client.CoreV1Api()
+    core_api.delete_namespaced_service(
+        name=deployment_name,
+        namespace="default",
+    )
+
+if __name__ == "__main__":
+    # Example usage
+    load_config()
+    user_id = "example_user"
+    image = "your_docker_image_here"
+    try:
+        deployment_name, challenge_url = create_challenge_deployment(user_id, image)
+        print(f"Challenge deployed for {user_id}. Access it at {challenge_url}")
+    except Exception as e:
+        print(f"Error deploying challenge for {user_id}: {str(e)}")

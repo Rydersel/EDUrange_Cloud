@@ -4,9 +4,10 @@ from kubernetes.config import load_incluster_config
 from flask_cors import CORS  # Fuck you CORS
 from challenge_utils.prod import create_challenge_deployment, delete_challenge_deployment, load_config
 
+#docker buildx build --platform linux/amd64,linux/arm64 -t gcr.io/edurangectf/web-1 . --push
 
 app = Flask(__name__)
-CORS(app, resources={r"/api/*": {"origins": "http://localhost:3000"}})
+CORS(app)
 
 load_config()  # Initialize Kubernetes client configuration
 
@@ -15,7 +16,7 @@ load_config()  # Initialize Kubernetes client configuration
 def start_challenge():
 
     user_id = request.json['user_id']
-    deployment_name, challenge_url = create_challenge_deployment(user_id, "gcr.io/edurangectf/web-1")
+    deployment_name, challenge_url = create_challenge_deployment(user_id, "gcr.io/edurangectf/web-1:latest")
     return jsonify({"message": "Challenge started", "deployment_name": deployment_name, "url": challenge_url})
 
 

@@ -1,22 +1,22 @@
-from flask import Flask, render_template, request, redirect, url_for
-import hashlib
+from flask import Flask, render_template, request
+import os
 
 app = Flask(__name__)
 
-SECRET_SALT = "YourConstantSaltHere"
-
-def generate_flag(user_id, challenge_id="web-1"):
-    seed = f"{user_id}-{challenge_id}-{SECRET_SALT}"
-    flag = hashlib.sha256(seed.encode()).hexdigest()
-    return flag[:8]  # Use the first 8 characters for simplicity
+# Retrieve the FLAG environment variable
+FLAG = os.getenv('FLAG', 'default_flag_value')
 
 @app.route('/', methods=['GET', 'POST'])
 def home():
+    message = ''
     if request.method == 'POST':
-        user_id = request.form.get('user_id', 'default_user')
-        flag = generate_flag(user_id)
-        return render_template('index.html', flag=flag, user_id=user_id)
-    return render_template('index.html', flag=None)
+        submitted_flag = request.form.get('flag', '')
+        if submitted_flag == FLAG:
+            message = 'Correct flag!'
+        else:
+            message = 'Incorrect flag.'
+    # Pass the FLAG variable to the template
+    return render_template('index.html', message=message, FLAG=FLAG)
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)

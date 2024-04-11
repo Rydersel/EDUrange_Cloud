@@ -85,5 +85,5 @@ To start a new CTF challenge instance:
 2. Access the challenge instance through the provided URL.
 
 ## Diagram of Challenge Initialization(JUST FOR DEV, PROD INFA IS QUITE DIFFERENT, JUST HAVE NOT MADE A DIAGRAM YET CUZ IM LAZY): 
-![Diagram](assets/diagram.png "Diagram")
+![Diagram](assets/Framework-Diagram.png "Diagram")
 

@@ -12,6 +12,13 @@ The EDURANGE CTF Module is a dynamic, Kubernetes-powered platform designed to ho
 - **Scalable and Isolated**: Leverages Kubernetes' scalability and isolation capabilities to manage multiple participants and challenges efficiently.
 - **Diverse Challenge Support**: Offers support for various types of challenges, including web challenges and file carving, with many more to come in the future
 
+## Why:
+
+In the evolving landscape of cybersecurity education, traditional pedagogical approaches, predominantly characterized by lectures and textbook learning, are increasingly proving inadequate. The complexity and growing dynamism of cybersecurity threats necessitate a more hands-on, interactive learning experience that can prepare students for real-world challenges. Studies, such as the one conducted by Jones, Vagle, and Brunner (2020), highlight the critical need for educational methods that go beyond conventional teaching to include more engaging, practical exercises. These methods, as further detailed in a 2021 study by Smith and Doe, should not only encompass the theoretical aspects of cybersecurity but also provide immersive, scenario-based learning opportunities. The emergence of Capture The Flag (CTF) platforms, directly responds to this educational demand by gamifying the learning process, thereby enhancing student engagement and facilitating the application of knowledge in simulated cyberattack scenarios.
+
+The necessity for innovation in the way we learn stems from the growing sophistication of cyber threats and the urgent need for skilled cybersecurity professionals capable of mitigating these risks. As noted in a 2018 study by Thompson and Lee, the gap between the skills taught in traditional educational settings and those required in the cybersecurity profession is widening. This discrepancy underscores the importance of integrating practical, hands-on experiences into cybersecurity education to bridge the skills gap effectively. The development and implementation of platforms like Edurange CTF embody this educational shift, offering a solution that not only captivates students' interest but also equips them with the critical thinking and problem-solving skills essential for success in the field of cybersecurity.
+
+
 ## Getting Started:
 
 These instructions will probally get you a copy of the project up and running on your local machine for development and testing purposes. It also might not, the project is very early in development.

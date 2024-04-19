@@ -1,4 +1,4 @@
-Flask==2.0.1
+Flask==2.2.5 # Updating to 3.0+ currently gives errors so temporarily setting to older version
 gunicorn==20.0.4
 Werkzeug==2.0.1
 kubernetes==29.0.0

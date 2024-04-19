@@ -67,7 +67,7 @@ def create_challenge_deployment(user_id, image):
                                     )
                                 )
                             ]
-                        )
+                        )  # This hurts
                     ]
                 )
             )

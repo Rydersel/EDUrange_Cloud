@@ -4,15 +4,15 @@ import { useRouter } from 'next/navigation';
 import styled, { keyframes } from 'styled-components';
 
 const gradient = keyframes`
-  0% {
-    background-position: 0% 50%;
-  }
-  50% {
-    background-position: 100% 50%;
-  }
-  100% {
-    background-position: 0% 50%;
-  }
+    0% {
+        background-position: 0 50%;
+    }
+    50% {
+        background-position: 100% 50%;
+    }
+    100% {
+        background-position: 0 50%;
+    }
 `;
 
 const LandingContainer = styled.div`
@@ -70,16 +70,16 @@ export default function Landing() {
   const router = useRouter();
 
   const navigateToLogin = () => {
-    router.push('/login'); // Update to match the path of your login page
+    router.push('/login');
   };
 
   return (
-    <LandingContainer>
-      <Title>Edurange CTF</Title>
-      <Button onClick={navigateToLogin}>Login / Dashboard</Button>
-      <a href="https://github.com/Rydersel/EDURANGE_CTF_Module" target="_blank" rel="noopener noreferrer">
-        <GithubButton>View on GitHub</GithubButton>
-      </a>
-    </LandingContainer>
+      <LandingContainer>
+          <Title>Edurange CTF</Title>
+          <Button onClick={navigateToLogin}>Login / Dashboard</Button>
+          <a href="https://github.com/Rydersel/EDURANGE_CTF_Module" target="_blank" rel="noopener noreferrer">
+              <GithubButton>View on GitHub</GithubButton>
+          </a>
+      </LandingContainer>
   );
 }

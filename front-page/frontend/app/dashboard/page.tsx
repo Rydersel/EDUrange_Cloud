@@ -3,7 +3,7 @@
 import styled from 'styled-components';
 import { useEffect, useState } from 'react';
 import axios from 'axios';
-import { Challenge } from '../../types/types';
+import { Challenge } from '@/types/types';
 import Link from 'next/link';
 
 const HomeContainer = styled.div`

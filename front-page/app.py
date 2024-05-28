@@ -21,7 +21,7 @@ def challenge_clicked():
     try:
         print(request)
         challenge_data = request.json
-        instance_manager_url = 'http://localhost:5001/api/start-challenge'
+        instance_manager_url = 'http://localhost:5002/api/start-challenge'
         user_id = challenge_data.get('user_id', 'default-user1')  # Will adjust when user auth is added
         response = requests.post(instance_manager_url, json={'user_id': user_id})
         # error handling was done by Gemini 1.5 so if it sucks not my fault.

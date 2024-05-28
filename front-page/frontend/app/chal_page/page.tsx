@@ -83,6 +83,7 @@ const ResponsiveIframe = styled.iframe`
   
 `;
 
+
 const ToggleButton = styled.button<{ $isOpen: boolean }>`
    background: #1e1e2f;
   border: 2px solid #00ff00;
@@ -121,6 +122,7 @@ export default function ChallengePage() {
     }
   };
 
+  let WebOs_Link = "http://localhost:3001/";
   return (
 
     <PageContainer>
@@ -136,8 +138,8 @@ export default function ChallengePage() {
           <Frame>
               <ResponsiveIframe
                   ref={iframeRef}
-                  src="http://10.4.16.239:3002"
-                  title="Web OS"
+                  src={WebOs_Link}
+                  title="WebOS"
               ></ResponsiveIframe>
           </Frame>
           <div>

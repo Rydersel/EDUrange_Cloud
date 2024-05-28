@@ -17,6 +17,7 @@ def start_challenge():
 
     user_id = request.json['user_id']
     deployment_name, challenge_url = create_challenge_deployment(user_id, "gcr.io/edurangectf/web-1:latest")
+    #webos_deployment_name, webos_challenge_url = create_challenge_deployment(user_id, "gcr.io/edurangectf/web-1:latest")
     return jsonify({"message": "Challenge started", "deployment_name": deployment_name, "url": challenge_url})
 
 
@@ -28,4 +29,4 @@ def end_challenge():
 
 
 if __name__ == '__main__':
-    app.run(debug=True, host='localhost', port=5001) #temp
+    app.run(debug=True, host='localhost', port=5002) #temp

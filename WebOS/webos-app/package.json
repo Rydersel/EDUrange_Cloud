@@ -1,0 +1,45 @@
+{
+  "name": "Edurange WebOS",
+  "version": "0.1.0",
+  "private": true,
+  "homepage": "https://www.edurange.org/index.html",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "export": "next export"
+  },
+  "engines": {
+    "node": ">=16.x"
+  },
+  "dependencies": {
+    "@emailjs/browser": "^3.10.0",
+    "@xterm/xterm": "^5.5.0",
+    "autoprefixer": "^10.4.13",
+    "axios": "^1.7.2",
+    "dosbox": "^0.1.0",
+    "eslint-config-next": "^14.2.3",
+    "expr-eval": "^2.0.2",
+    "fs": "^0.0.1-security",
+    "javascript-terminal": "^1.1.1",
+    "jquery": "^3.6.3",
+    "next": "^14.2.3",
+    "next-auth": "^4.24.7",
+    "path": "^0.12.7",
+    "postcss": "^8.4.21",
+    "prop-types": "^15.8.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-draggable": "^4.4.5",
+    "react-ga4": "^2.1.0",
+    "react-onclickoutside": "^6.12.2",
+    "react-terminal": "^1.4.4",
+    "socket.io-client": "^4.7.5",
+    "tailwindcss": "^3.2.4",
+    "typewriter": "^9.2.0",
+    "typewriter-effect": "^2.21.0",
+    "xterm": "^5.3.0",
+    "xterm-addon-attach": "^0.9.0",
+    "xterm-addon-fit": "^0.8.0"
+  }
+}

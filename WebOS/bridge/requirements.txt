@@ -1,0 +1,8 @@
+flask
+flask_socketio
+gunicorn
+docker
+eventlet
+flask_cors
+
+requests==2.25.1 #https://www.reddit.com/r/docker/comments/1cwx3pg/issue_with_python_docker_sdk/

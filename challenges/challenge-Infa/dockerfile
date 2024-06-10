@@ -1,0 +1,12 @@
+FROM docker/compose:1.29.2
+
+# Copy the Docker Compose file
+COPY docker-compose.yml /app/docker-compose.yml
+
+# Entrypoint script to start the services
+COPY entrypoint.sh /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh
+
+WORKDIR /app
+
+ENTRYPOINT ["./entrypoint.sh"]

@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: challenge-pod
+  labels:
+    app: challenge
+spec:
+  containers:
+  - name: challenge-container
+    image: rydersel/debiantest:latest
+    ports:
+    - containerPort: 22
+      name: ssh
+  - name: bridge
+    image: rydersel/bridge:latest
+    ports:
+    - containerPort: 5000
+      name: http
+    env:
+    - name: CHALLENGE_CONTAINER_NAME
+      value: "challenge-container"

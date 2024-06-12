@@ -1,13 +1,6 @@
 FROM python:3.8-slim
 
-# Set working directory
-WORKDIR /app
-
-# Copy requirements.txt and install dependencies
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-
-
+# Install dependencies
 RUN apt-get update && apt-get install -y \
     libffi-dev \
     libssl-dev \
@@ -18,21 +11,23 @@ RUN apt-get update && apt-get install -y \
     && apt-get clean
 
 # Install kubectl
-RUN curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl" && \
-    chmod +x kubectl && \
-    mv kubectl /usr/local/bin/
+RUN curl -LO https://storage.googleapis.com/kubernetes-release/release/$(curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)/bin/linux/amd64/kubectl
+RUN chmod +x ./kubectl
+RUN mv ./kubectl /usr/local/bin
 
+# Verify kubectl installation
+RUN which kubectl
 
-# Copy the challenge_utils directory
-COPY challenge_utils /app/challenge_utils
+# Copy application files
+COPY requirements.txt /app/requirements.txt
 
-# Copy the rest of the application code
-COPY . .
+# Install Python packages
+RUN pip install --no-cache-dir -r /app/requirements.txt
 
+# Copy the application code
+COPY . /app
 
+WORKDIR /app
 
-# Expose the port the app runs on
-EXPOSE 8000
-
-# Command to run the application
-CMD ["gunicorn", "-w", "4", "-b", "0.0.0.0:8000", "app:app"]
+# Run the application
+CMD ["gunicorn", "-b", "0.0.0.0:8000", "app:app", "--worker-class", "eventlet", "--workers", "1"]

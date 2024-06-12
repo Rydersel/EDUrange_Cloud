@@ -24,9 +24,10 @@ kind: Service
 metadata:
   name: instance-manager
 spec:
-  type: ClusterIP
+  type: NodePort
   selector:
     app: instance-manager
   ports:
     - port: 8000
       targetPort: 8000
+      nodePort: 32001

@@ -1,43 +1,48 @@
+from time import sleep
+
 from flask import Flask, request, jsonify
-from kubernetes import client, config
 from flask_cors import CORS
-from challenge_utils.local import deploy_challenge, delete_challenge, wait_for_pod, find_free_port
+from challenge_utils.local import deploy_challenge, delete_challenge, wait_for_pod, find_free_port, port_forward
+import logging
 
 app = Flask(__name__)
 CORS(app)
-
-config.load_incluster_config()
-v1 = client.CoreV1Api()
-apps_v1 = client.AppsV1Api()
-
+logging.basicConfig(level=logging.DEBUG)
 
 @app.route('/api/start-challenge', methods=['POST'])
 def start_challenge():
-    user_id = request.json['user_id']
-    challenge_image = request.json['challenge_image']
-    instance_name = f"challenge-{user_id}"
+    try:
+        user_id = request.json['user_id']
+        challenge_image = request.json['challenge_image']
+        instance_name = f"challenge-{user_id}"
 
-    # Deploy the challenge with the specified image
-    deploy_challenge(instance_name, challenge_image)
+        # Deploy the challenge with the specified image
+        deploy_challenge(instance_name, challenge_image)
 
-    # Wait for the pod to be ready
-    wait_for_pod(instance_name)
+        # Wait for the pod to be ready
+        wait_for_pod(instance_name)
 
-    # Construct the challenge URL based on the instance name
-    challenge_url = f"http://localhost:{find_free_port()}"
+        # Construct the challenge URL based on the NodePort
+        node_port = 30000  # Assuming this is the node port assigned
+        challenge_url = f"http://localhost:{node_port}"
 
-    return jsonify({"message": "Challenge started", "deployment_name": instance_name, "url": challenge_url})
-
+        return jsonify({"message": "Challenge started", "deployment_name": instance_name, "url": challenge_url})
+    except Exception as e:
+        logging.error(f"Error starting challenge: {e}")
+        return jsonify({"message": "Internal Server Error"}), 500
 
 @app.route('/api/end-challenge', methods=['POST'])
 def end_challenge():
-    deployment_name = request.json['deployment_name']
+    try:
+        deployment_name = request.json['deployment_name']
 
-    # Delete the challenge deployment
-    delete_challenge(deployment_name)
+        # Delete the challenge deployment
+        delete_challenge(deployment_name)
 
-    return jsonify({"message": "Challenge ended"})
-
+        return jsonify({"message": "Challenge ended"})
+    except Exception as e:
+        logging.error(f"Error ending challenge: {e}")
+        return jsonify({"message": "Internal Server Error"}), 500
 
 if __name__ == '__main__':
-    app.run(debug=True, host='localhost', port=5002)
+    app.run(debug=True, host='0.0.0.0', port=5002)

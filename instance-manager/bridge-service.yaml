@@ -9,4 +9,5 @@ spec:
   - protocol: TCP
     port: 80
     targetPort: 5000
+    nodePort: 30000  # This will be overwritten by deploy_challenge function
   type: NodePort

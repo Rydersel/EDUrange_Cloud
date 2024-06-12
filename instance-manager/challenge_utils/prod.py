@@ -4,7 +4,7 @@ import uuid
 import hashlib
 
 def load_config():
-    config.load_kube_config()  # this feels like blasphemy
+    config.load_kube_config()  # Ensure your kubeconfig is set up to point to your GKE cluster
 
 def generate_unique_flag(user_id):
     secret_salt = "test123"
@@ -31,6 +31,7 @@ def wait_for_loadbalancer_ip(api, service_name, namespace="default", retry_inter
         print(f"Waiting for LoadBalancer IP for service '{service_name}'...")
         time.sleep(retry_interval)
     raise TimeoutError("Timeout waiting for LoadBalancer IP")
+
 def create_webos_deployment(user_id, image):
     flag = generate_unique_flag(user_id)
     secret_name = create_flag_secret(user_id, flag)
@@ -66,7 +67,7 @@ def create_webos_deployment(user_id, image):
                                     )
                                 )
                             ]
-                        )  # This hurts
+                        )
                     ]
                 )
             )
@@ -99,6 +100,7 @@ def create_webos_deployment(user_id, image):
         raise
 
     return deployment_name, challenge_url
+
 def create_challenge_deployment(user_id, image):
     flag = generate_unique_flag(user_id)
     secret_name = create_flag_secret(user_id, flag)
@@ -134,7 +136,7 @@ def create_challenge_deployment(user_id, image):
                                     )
                                 )
                             ]
-                        )  # This hurts
+                        )
                     ]
                 )
             )
@@ -180,5 +182,3 @@ def delete_challenge_deployment(deployment_name):
         name=deployment_name,
         namespace="default",
     )
-
-

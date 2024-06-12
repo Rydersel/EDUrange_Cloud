@@ -23,7 +23,7 @@ sudo docker push rydersel/instance-manager:latest
 
 
 
-curl -X POST http://localhost:5002/api/start-challenge -H "Content-Type: application/json" -d '{
+curl -X POST http://localhost:5003/api/start-challenge -H "Content-Type: application/json" -d '{
   "user_id": "rydersel1123131",
   "challenge_image": "rydersel/debiantest:latest"
 }'

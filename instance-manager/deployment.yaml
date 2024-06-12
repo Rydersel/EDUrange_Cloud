@@ -1,20 +1,21 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: flask-backend
+  name: instance-manager
 spec:
-  replicas: 2
+  replicas: 1
   selector:
     matchLabels:
-      app: flask-backend
+      app: instance-manager
   template:
     metadata:
       labels:
-        app: flask-backend
+        app: instance-manager
     spec:
       containers:
       - name: flask-backend
-        image: gcr.io/edurangectf/instance-manager
+        image: rydersel/instance-manager:latest
+        imagePullPolicy: Always
         ports:
         - containerPort: 8000
 ---
@@ -25,7 +26,7 @@ metadata:
 spec:
   type: ClusterIP
   selector:
-    app: flask-backend
+    app: instance-manager
   ports:
     - port: 8000
       targetPort: 8000

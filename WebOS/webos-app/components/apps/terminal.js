@@ -1,36 +1,45 @@
 import React, { useEffect, useRef, useState } from 'react';
-import io from 'socket.io-client';
 import { Terminal } from 'xterm';
 import 'xterm/css/xterm.css';
 
 const TerminalComponent = () => {
     const xtermRef = useRef(null);
-    const socketRef = useRef(null);
-    const [isConnected, setIsConnected] = useState(false);
+    const [isConnected, setIsConnected] = useState(true);
     const commandBuffer = useRef('');
 
     useEffect(() => {
         const xterm = new Terminal();
         xtermRef.current = xterm;
         xterm.open(document.getElementById('terminal'));
+        xterm.writeln('Connected to server\r\n');
 
-        socketRef.current = io('http://localhost:5000');
-
-        socketRef.current.on('connect', () => {
-            setIsConnected(true);
-            xterm.writeln('Connected to server\r\n');
-        });
-
-        socketRef.current.on('response', (data) => {
-            xterm.write('\r\n' + data);
-        });
-
-        xterm.onData((data) => {
+        xterm.onData(async (data) => {
             const code = data.charCodeAt(0);
 
             if (code === 13) { // Enter key
-                socketRef.current.emit('command', commandBuffer.current);
+                const command = commandBuffer.current;
                 commandBuffer.current = '';
+
+                // Display the command in the terminal
+                xterm.write('\r\n');
+
+                if (command.trim()) {
+                    try {
+                        const response = await fetch('http://localhost:5000/execute', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                "show_writable_only": true,
+                            },
+                            body: JSON.stringify({ command }),
+                        });
+                        const result = await response.json();
+                        xterm.write(result.output);
+                    } catch (error) {
+                        xterm.write('\r\nError executing command\r\n');
+                    }
+                }
+                xterm.write('\r\n$ ');
             } else if (code === 127) { // Backspace
                 if (commandBuffer.current.length > 0) {
                     commandBuffer.current = commandBuffer.current.slice(0, -1);
@@ -42,8 +51,10 @@ const TerminalComponent = () => {
             }
         });
 
+        // Initialize prompt
+        xterm.write('$ ');
+
         return () => {
-            socketRef.current.disconnect();
             xterm.dispose();
         };
     }, [isConnected]);

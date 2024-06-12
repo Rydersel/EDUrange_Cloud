@@ -1,0 +1,29 @@
+# Delete the existing deployment
+kubectl delete deployment instance-manager
+
+# Apply the deployment configuration
+kubectl apply -f deployment.yaml
+
+# Force the deployment to use the latest image (optional)
+
+# Rollout restart to ensure pods are updated
+kubectl rollout restart deployment/instance-manager
+
+kubectl port-forward svc/instance-manager 5000:8000
+
+kubectl delete deployment instance-manager
+
+
+
+
+sudo docker build -t rydersel/instance-manager:latest .
+
+# Push the Docker image to the registry
+sudo docker push rydersel/instance-manager:latest
+
+
+
+curl -X POST http://localhost:5002/api/start-challenge -H "Content-Type: application/json" -d '{
+  "user_id": "rydersel1123131",
+  "challenge_image": "rydersel/debiantest:latest"
+}'

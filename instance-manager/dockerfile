@@ -1,23 +1,38 @@
-# Use an official Python runtime as a base image
 FROM python:3.8-slim
 
-# Set the working directory in the container to /app
+# Set working directory
 WORKDIR /app
 
-# Copy the current directory contents into the container at /app
-COPY . /app
-
-# Install any needed packages specified in requirements.txt
+# Copy requirements.txt and install dependencies
+COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Install Gunicorn
-RUN pip install gunicorn
 
-# Make port 8000 available to the world outside this container
+RUN apt-get update && apt-get install -y \
+    libffi-dev \
+    libssl-dev \
+    gcc \
+    libc-dev \
+    make \
+    curl \
+    && apt-get clean
+
+# Install kubectl
+RUN curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl" && \
+    chmod +x kubectl && \
+    mv kubectl /usr/local/bin/
+
+
+# Copy the challenge_utils directory
+COPY challenge_utils /app/challenge_utils
+
+# Copy the rest of the application code
+COPY . .
+
+
+
+# Expose the port the app runs on
 EXPOSE 8000
 
-# Define environment variable to improve Flask performance
-ENV FLASK_ENV=production
-
-# Run app.py using Gunicorn, bind to 0.0.0.0:8000
-CMD ["gunicorn", "-b", "0.0.0.0:8000", "app:app"]
+# Command to run the application
+CMD ["gunicorn", "-w", "4", "-b", "0.0.0.0:8000", "app:app"]

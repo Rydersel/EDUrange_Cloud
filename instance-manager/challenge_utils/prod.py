@@ -4,7 +4,7 @@ import uuid
 import hashlib
 
 def load_config():
-    config.load_kube_config() # this feels like blasphemy
+    config.load_kube_config()  # this feels like blasphemy
 
 def generate_unique_flag(user_id):
     secret_salt = "test123"

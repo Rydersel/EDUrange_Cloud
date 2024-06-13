@@ -1,24 +1,30 @@
 import time
-from kubernetes import client, config
 from kubernetes.client.rest import ApiException
+from kubernetes import client, config, stream
 import yaml
-import socket
+import select
 import logging
+import socket
 
-# Initialize Kubernetes client
+
+
+# Init Kubernetes client
 config.load_incluster_config()
 v1 = client.CoreV1Api()
 apps_v1 = client.AppsV1Api()
+
 
 def find_free_port():
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.bind(('', 0))
         return s.getsockname()[1]
 
+
 # Load YAML configuration
 def load_yaml(filename):
     with open(filename) as f:
         return yaml.safe_load(f)
+
 
 # Deploy the challenge and bridge
 def deploy_challenge(instance_name, challenge_image, namespace='default'):
@@ -34,11 +40,10 @@ def deploy_challenge(instance_name, challenge_image, namespace='default'):
         if container['name'] == 'challenge-container':
             container['image'] = challenge_image
 
+    challenge_yaml['spec']['serviceAccountName'] = 'portforward-sa'
     # Assign a free port for the bridge service
-    free_port = find_free_port()
-    for port in bridge_yaml['spec']['ports']:
-        if 'nodePort' in port:
-            port['nodePort'] = free_port
+    free_port = 30009
+    bridge_yaml['spec']['ports'][0]['nodePort'] = free_port
 
     # Apply the YAML configurations
     try:
@@ -50,6 +55,7 @@ def deploy_challenge(instance_name, challenge_image, namespace='default'):
     except ApiException as e:
         logging.error(f"Exception when creating deployment: {e}")
 
+
 # Delete the challenge and bridge
 def delete_challenge(instance_name, namespace='default'):
     try:
@@ -58,6 +64,7 @@ def delete_challenge(instance_name, namespace='default'):
         logging.info(f"Deletion of {instance_name} started")
     except ApiException as e:
         logging.error(f"Exception when deleting deployment: {e}")
+
 
 # Check pod status
 def wait_for_pod(instance_name, namespace='default'):
@@ -74,21 +81,55 @@ def wait_for_pod(instance_name, namespace='default'):
             logging.error(f"Exception when checking pod status: {e}")
             time.sleep(1)
 
+
 # Set up port forwarding
-def port_forward(namespace, pod_name, local_port, remote_port):
-    from kubernetes.stream import portforward
+def port_forward(name, namespace, port, local_port):
+    config.load_incluster_config()
+    api_instance = client.CoreV1Api()
 
+    pod_name = name + '-challenge'
+    logging.info(f"Pod name: {pod_name}")
     try:
-        config.load_kube_config()
-        v1 = client.CoreV1Api()
-        pf = portforward(v1.connect_get_namespaced_pod_portforward, pod_name, namespace, ports=f"{local_port}:{remote_port}")
-        logging.info(f"Port forwarding {local_port} -> {remote_port} for pod {pod_name}")
-    except Exception as e:
-        logging.error(f"Error setting up port forwarding: {e}")
+        # Execute the port forward
+        forward = stream.stream(api_instance.connect_get_namespaced_pod_portforward,
+                                pod_name,
+                                namespace,
+                                ports=str(port),
+                                _preload_content=False)
+        logging.info(f"Port forwarding to {pod_name} in namespace {namespace} on remote port {port}")
 
-# Main function for testing
-if __name__ == '__main__':
-    deploy_challenge('example-instance', 'rydersel/debiantest:latest')
-    wait_for_pod('example-instance')
-    port_forward('default', 'example-instance-challenge', 30000, 5000)
-    delete_challenge('example-instance')
+        # Open a local socket
+        local_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        local_sock.bind(('localhost', local_port))
+        local_sock.listen(1)
+        logging.info(f"Listening on local port {local_port}")
+
+        conn, addr = local_sock.accept()
+        logging.info(f"Connection accepted from {addr}")
+
+        while True:
+            read_sockets, _, _ = select.select([conn, forward], [], [])
+
+            if conn in read_sockets:
+                data = conn.recv(1024)
+                if not data:
+                    break
+                forward.write_channel(data, str(port))
+                logging.debug(f"Sent data to pod: {data}")
+
+            if forward in read_sockets:
+                data = forward.read_channel(str(port))
+                if not data:
+                    break
+                conn.send(data)
+                logging.debug(f"Received data from pod: {data}")
+
+        forward.close()
+        conn.close()
+        local_sock.close()
+        logging.info("Port forwarding session closed")
+
+    except client.ApiException as e:
+        logging.error(f"Exception when port forwarding: {e}")
+
+

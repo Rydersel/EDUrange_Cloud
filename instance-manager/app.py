@@ -22,9 +22,17 @@ def start_challenge():
         # Wait for the pod to be ready
         wait_for_pod(instance_name)
 
-        # Construct the challenge URL based on the NodePort
-        node_port = 30000  # Assuming this is the node port assigned
-        challenge_url = f"http://localhost:{node_port}"
+
+
+        namespace = "default"
+        #local_port = find_free_port()
+        local_port = 34800
+        challenge_url = f"http://localhost:{local_port}"
+        pod_port = 5000  # Assuming your service listens on port 5000 inside the pod
+        pod_name = f"{instance_name}-challenge"
+        logging.info(f"Attempting to open port {local_port}")
+
+        port_forward(instance_name, namespace, local_port, pod_port)
 
         return jsonify({"message": "Challenge started", "deployment_name": instance_name, "url": challenge_url})
     except Exception as e:

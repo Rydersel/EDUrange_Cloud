@@ -4,5 +4,5 @@ metadata:
   name: instance-manager-clusterrole
 rules:
 - apiGroups: [""]
-  resources: ["services", "pods"]
+  resources: ["services", "pods", "pods/portforward"]
   verbs: ["get", "list", "create", "delete"]

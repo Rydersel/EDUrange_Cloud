@@ -5,6 +5,7 @@ metadata:
   labels:
     app: challenge
 spec:
+  serviceAccountName: portforward-sa
   containers:
   - name: challenge-container
     image: rydersel/debiantest:latest

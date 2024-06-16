@@ -86,8 +86,11 @@ const Home: React.FC = () => {
 
   const handleChallengeClick = async (challenge: Challenge) => {
     try {
+      console.log("clicked")
       const user_id = "example_user_id"; // Replace with actual logic to get user_id
-      const startChallengeResponse = await axios.post('http://127.0.0.1:5001/api/start-challenge', { user_id });
+      const challenge_image = "gcr.io/edurangectf/debiantest"
+      const webos_url = "http://localhost:3001"
+        const startChallengeResponse = await axios.post('http://34.83.141.170:80/api/start-challenge', { user_id, challenge_image, webos_url});
 
       if (startChallengeResponse.data.url) {
         window.location.href = startChallengeResponse.data.url;

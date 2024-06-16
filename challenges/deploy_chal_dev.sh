@@ -1,6 +1,6 @@
 kubectl delete pod challenge-pod --wait=false
 sleep 10
-cd challenge-infa
+cd dev
 kubectl apply -f challenge-pod.yaml
 kubectl apply -f bridge-service.yaml
 kubectl apply -f network-policy.yaml

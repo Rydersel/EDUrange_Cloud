@@ -1,0 +1,31 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: challenge-pod
+  labels:
+    app: challenge
+spec:
+  containers:
+  - name: challenge-container
+    image: gcr.io/edurangectf/debiantest # Gets overwritten anyway
+    ports:
+    - containerPort: 22
+      name: ssh
+    securityContext:
+      runAsUser: 0  # Run as root user
+      privileged: false
+  - name: bridge
+    image: gcr.io/edurangectf/bridge:latest
+    ports:
+    - containerPort: 5000
+      name: http
+    env:
+    - name: CHALLENGE_CONTAINER_NAME
+      value: "challenge-container"
+    resources: # Will finetune exact limits later
+      limits:
+        memory: "512Mi"
+        cpu: "500m"
+      requests:
+        memory: "256Mi"
+        cpu: "250m"

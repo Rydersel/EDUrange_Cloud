@@ -1,8 +1,10 @@
+import {env} from "process";
+
 export default async function handler(req, res) {
     if (req.method === 'POST') {
         const { command } = req.body;
 
-        const response = await fetch('http://localhost:5000/execute', {
+        const response = await fetch(`${env.IP}/execute`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -13,6 +15,6 @@ export default async function handler(req, res) {
         const data = await response.json();
         res.status(response.status).json(data);
     } else {
-        res.status(405).end(); // Method Not Allowed
+        res.status(405).end();
     }
 }

@@ -1,6 +1,6 @@
 import React, { Component } from 'react';
-import Clock from '../util components/clock';
-import Countdown from '../util components/Countdown';
+import Clock from '@/components/util-components/clock';
+import Countdown from '@/components/util-components/countdown';
 
 export default class Navbar extends Component {
 	constructor() {

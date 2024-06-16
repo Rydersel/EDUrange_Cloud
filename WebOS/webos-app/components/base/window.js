@@ -1,3 +1,4 @@
+
 import React, { Component } from 'react';
 import Draggable from 'react-draggable';
 import Settings from '../apps/settings';
@@ -95,10 +96,10 @@ export class Window extends Component {
         var r = document.querySelector("#" + this.id);
         var rect = r.getBoundingClientRect();
         if (rect.x.toFixed(1) < 50) { // if this window overlaps with SideBar
-            this.props.hideSideBar(this.id, true);
+            this.props.hideDock(this.id, true);
         }
         else {
-            this.props.hideSideBar(this.id, false);
+            this.props.hideDock(this.id, false);
         }
     }
 
@@ -147,17 +148,17 @@ export class Window extends Component {
             // translate window to maximize position
             r.style.transform = `translate(-1pt,-2pt)`;
             this.setState({ maximized: true, height: 96.3, width: 100.2 });
-            this.props.hideSideBar(this.id, true);
+            this.props.hideDock(this.id, true);
         }
     }
 
     closeWindow = () => {
         this.setWindowPosition();
         this.setState({ closed: true }, () => {
-            this.props.hideSideBar(this.id, false);
+            this.props.hideDock(this.id, false);
             setTimeout(() => {
                 this.props.closed(this.id)
-            }, 300) // after 300ms this window will be unmounted from parent (Desktop)
+            }, 300) // after 3 seconds this window will be unmounted from parent (Desktop)
         });
     }
 

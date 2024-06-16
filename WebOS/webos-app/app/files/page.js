@@ -1,6 +1,6 @@
 'use client'
 
-import FileSystemView from '../../components/util components/FileSystemView';
+import FileSystemView from '@/components/util-components/FileSystemView';
 
 const FileSystemPage = () => {
     return (

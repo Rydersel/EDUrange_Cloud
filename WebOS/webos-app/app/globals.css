@@ -266,3 +266,39 @@ input[type=range].ubuntu-slider::-webkit-slider-thumb {
 .calculator-button:hover {
     background-color: #555;
 }
+.fade-in {
+    animation: fadeIn 0.3s forwards;
+}
+
+.fade-out {
+    animation: fadeOut 0.3s forwards;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+@keyframes fadeOut {
+    from {
+        opacity: 1;
+    }
+    to {
+        opacity: 0;
+    }
+}
+dock-bar {
+    transition: transform 0.3s ease-in-out;
+}
+
+.dock-bar.slide-in {
+    transform: translateY(0);
+}
+
+.dock-bar.slide-out {
+    transform: translateY(100%);
+}

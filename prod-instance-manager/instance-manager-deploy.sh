@@ -25,6 +25,6 @@ execute_and_continue kubectl delete svc instance-manager
 
 execute_and_exit_on_failure docker buildx build --platform linux/amd64,linux/arm64 -t gcr.io/edurangectf/instance-manager . --push
 
-execute_and_exit_on_failure kubectl apply -f deployment.yaml
+execute_and_exit_on_failure kubectl apply -f instance-manager-deployment.yaml
 
 echo "Success! Instance manager deployed to cluster"

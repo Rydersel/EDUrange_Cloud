@@ -26,8 +26,6 @@ def read_yaml_file(yaml_path):
         raise
 
 
-# Flag Util:
-
 def generate_unique_flag(user_id):
     secret_salt = "test123"
     return f"CTF{{{hashlib.sha256((user_id + secret_salt).encode()).hexdigest()}}}"
@@ -55,6 +53,10 @@ def wait_for_loadbalancer_ip(api, service_name, namespace="default", retry_inter
         print(f"Waiting for LoadBalancer IP for service '{service_name}'...")
         time.sleep(retry_interval)
     raise TimeoutError("Timeout waiting for LoadBalancer IP")
+
+
+#  -------------------- Challenge Deployment  --------------------
+
 
 
 def construct_challenge_deployment(pod_spec, instance_name, sanitized_user_id, challenge_image, secret_name, run_as_root):
@@ -137,6 +139,7 @@ def construct_challenge_deployment(pod_spec, instance_name, sanitized_user_id, c
 
     logging.info("Constructed Kubernetes Deployment object")
     return deployment
+
 
 def construct_challenge_service(service_spec, instance_name, sanitized_user_id):
     service_spec['metadata']['name'] = instance_name
@@ -261,6 +264,8 @@ def delete_challenge_deployment(deployment_name):
         namespace="default",
     )
 
+
+#  -------------------- Web OS  --------------------
 
 def construct_webos_deployment(pod_spec, instance_name, sanitized_user_id, webos_image):
     pod_spec['metadata']['name'] = instance_name
@@ -396,7 +401,6 @@ def create_webos(user_id):
         logging.error(f"Error creating WebOS service: {e}")
         raise
 
-
     # Wait for LoadBalancer IP
     try:
         logging.info("Attempting to assign LoadBalancer IP to WebOS")
@@ -408,4 +412,3 @@ def create_webos(user_id):
         raise
 
     return external_ip
-

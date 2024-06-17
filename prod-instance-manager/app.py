@@ -24,7 +24,7 @@ def start_challenge():
         logging.error(f"Missing key in JSON payload: {e}")
         return jsonify({"error": f"Missing key in JSON payload: {e}"}), 400
 
-    webos_url = f"http//:{create_webos(user_id)}/execute"
+    webos_url = f"http://{create_webos(user_id)}"
     logging.debug(f"Received webos_url: {webos_url}")
 
     deployment_name, challenge_url = create_challenge_deployment(user_id, challenge_image, 'challenge-template.yaml',

@@ -2,6 +2,12 @@
 import { useEffect, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 import 'xterm/css/xterm.css';
+import { FitAddon } from '@xterm/addon-fit';
+import { ClipboardAddon } from '@xterm/addon-clipboard';
+import { WebLinksAddon } from '@xterm/addon-web-links';
+
+
+
 
 // Dynamically import xterm
 const Terminal = dynamic(
@@ -45,10 +51,10 @@ const TerminalComponent = () => {
                 if (response.ok) {
                     setIp(data.ip);
                 } else {
-                    xtermRef.current.writeln(`Failed to fetch IP: ${data.error}`);
+                    console.log(`Failed to fetch IP: ${data.error}`);
                 }
             } catch (error) {
-                xtermRef.current.writeln(`Failed to fetch IP: ${error.message}`);
+                console.log(`Failed to fetch IP: ${error.message}`);
             }
         };
 
@@ -66,9 +72,26 @@ const TerminalComponent = () => {
     useEffect(() => {
         const initializeTerminal = async () => {
             const { Terminal } = await import('xterm');
-            const xterm = new Terminal();
+
+            const xterm = new Terminal({
+                cursorBlink: true,
+                theme: { background: 'rgba(14,14,14,0.5)' }
+
+            });
+            const fitAddon = new FitAddon();
+            const clipboardAddon = new ClipboardAddon();
+            xterm.loadAddon(fitAddon);
+            xterm.loadAddon(clipboardAddon);
+            xterm.loadAddon(new WebLinksAddon());
+
+
+
+
             xtermRef.current = xterm;
             xterm.open(document.getElementById('terminal'));
+            fitAddon.fit();
+
+
 
             xterm.writeln('Connected to server\r\n');
 
@@ -137,7 +160,7 @@ const TerminalComponent = () => {
     }, [isConnected, ip]);
 
     return (
-        <div id="terminal" style={{ height: '100%', width: '100%' }}></div>
+        <div id="terminal"></div>
     );
 };
 

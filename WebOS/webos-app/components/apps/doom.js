@@ -1,6 +1,3 @@
-import { ReactTerminal } from "react-terminal";
-
-
 
 import React from 'react';
 
@@ -13,5 +10,5 @@ export default function Doom() {
 }
 
 export const displayDoom = () => {
-    return   <ReactTerminal/>
+    return   <Doom/>
 }

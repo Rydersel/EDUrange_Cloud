@@ -1,5 +1,5 @@
 import React from 'react'
-import Doom from "./doom";
+
 
 export default function Code_editor() {
     return (

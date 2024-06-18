@@ -327,20 +327,6 @@ def create_webos(user_id):
     sanitized_user_id = user_id.replace("_", "-").lower()
     deployment_name = f"webos-{sanitized_user_id}"
 
-    # Check if the user already has a webos deployment
-    existing_deployments = apps_api.list_namespaced_deployment(namespace="default",
-                                                               label_selector=f"user={sanitized_user_id}")
-    if existing_deployments.items:
-        logging.info(f"User {user_id} already has a webos deployment")
-        existing_service = core_api.read_namespaced_service(name=deployment_name, namespace="default")
-        if existing_service.status.load_balancer.ingress:
-            existing_ip = existing_service.status.load_balancer.ingress[0].ip
-            logging.info(f"Returning existing LoadBalancer IP: {existing_ip}")
-            return existing_ip
-        else:
-            logging.warning(f"No LoadBalancer IP found for existing deployment. Retrying...")
-            return wait_for_loadbalancer_ip(core_api, deployment_name)
-
     # Define deployment spec
     pod_spec = {
         "metadata": {

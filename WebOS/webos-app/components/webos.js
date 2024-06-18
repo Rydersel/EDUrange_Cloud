@@ -13,7 +13,7 @@ export default class Webos extends Component {
 		this.state = {
 			screen_locked: false,
 			bg_image_name: 'wall-1',
-			booting_screen: true, // Enable boot screen
+			booting_screen: false, // Enable boot screen
 			shutDownScreen: false // Requires pressing button to enter, will eventually be login screen
 		};
 	}

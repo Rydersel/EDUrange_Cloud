@@ -1,7 +1,7 @@
 # docker buildx build --platform linux/amd64,linux/arm64 -t gcr.io/edurangectf/webos . --push
 
 
-FROM node:22
+FROM node:18.17.0
 
 WORKDIR /app
 

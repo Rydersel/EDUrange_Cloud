@@ -1,13 +1,17 @@
-'use client'
-import { useRouter } from 'next/navigation'
-import { useEffect } from 'react'
+import Webos from "../components/webos";
 
-export default function Page() {
-  const router = useRouter();
+import ReactGA from 'react-ga4';
 
-  useEffect(() => {
-    router.push('/home'); // Redirect home for now
-  }, [router]);
 
-  return null;
+
+
+function App() {
+  return (
+    <>
+      <Webos />
+    </>
+  )
 }
+
+export default App;
+

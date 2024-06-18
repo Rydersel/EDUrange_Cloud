@@ -29,6 +29,7 @@ def start_challenge():
 
     deployment_name, challenge_url = create_challenge_deployment(user_id, challenge_image, 'challenge-template.yaml',
                                                                  True)
+    challenge_url = f"{challenge_url}/execute"
 
     if not webos_url or not challenge_url:
         response = jsonify({"error": "Invalid URL provided"}), 400

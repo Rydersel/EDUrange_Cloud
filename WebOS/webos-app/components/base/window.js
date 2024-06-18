@@ -3,7 +3,6 @@ import React, { Component } from 'react';
 import Draggable from 'react-draggable';
 import Settings from '../apps/settings';
 import ReactGA from 'react-ga4';
-import { displayTerminal } from '../apps/terminal';
 import apps from '../../app/apps.config';
 
 export class Window extends Component {

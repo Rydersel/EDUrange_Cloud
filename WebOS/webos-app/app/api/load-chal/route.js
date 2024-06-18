@@ -1,35 +1,40 @@
 import { NextResponse } from 'next/server';
-import { env } from 'process';
+import fs from 'fs';
+import path from 'path';
+
+const ipFilePath = path.resolve(process.cwd(), 'tmp/ip.txt');
 
 export async function POST(req) {
-  const body = await req.json();
-  const { ip } = body;
+  try {
+    const body = await req.json();
+    const { ip } = body;
 
-  if (!ip) {
-    return NextResponse.json({ error: 'IP is required' }, { status: 400 });
+    if (!ip) {
+      return NextResponse.json({ error: 'IP is required' }, { status: 400 });
+    }
+
+    fs.writeFileSync(ipFilePath, ip, 'utf8');
+    console.log(`IP set to: ${ip}`);
+
+    return NextResponse.json({ message: `IP set to ${ip}` }, { status: 200 });
+  } catch (error) {
+    console.error('Error setting IP:', error);
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
-
-  env.IP = ip;
-
-  return NextResponse.json({ message: `IP set to ${ip}` }, { status: 200 });
 }
 
 export async function GET() {
-  const ip = env.IP;
+  try {
+    if (!fs.existsSync(ipFilePath)) {
+      return NextResponse.json({ error: 'IP not set' }, { status: 404 });
+    }
 
-  if (!ip) {
-    return NextResponse.json({ error: 'IP not set' }, { status: 404 });
-  }
-  else {
-    console.log(ip);
+    const ip = fs.readFileSync(ipFilePath, 'utf8');
+    console.log(`Fetched IP: ${ip}`);
+
     return NextResponse.json({ ip }, { status: 200 });
-
+  } catch (error) {
+    console.error('Error fetching IP:', error);
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
-
 }
-
-// Example curl commands
-// Set IP: curl -X POST http://localhost:3000/api/load-chal -H "Content-Type: application/json" -d '{"ip": "192.168.1.1"}'
-// Get IP: curl http://localhost:3000/api/load-chal
-//  curl -X POST http://34.168.194.207/api/load-chal -H "Content-Type: application/json" -d '{"ip": "http://34.145.93.234/execute"}'
-

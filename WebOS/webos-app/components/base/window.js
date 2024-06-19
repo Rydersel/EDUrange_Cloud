@@ -1,9 +1,9 @@
-
 import React, { Component } from 'react';
 import Draggable from 'react-draggable';
 import Settings from '../apps/settings';
 import ReactGA from 'react-ga4';
 import apps from '../../app/apps.config';
+import TerminalComponent from '../../components/apps/terminal';
 
 export class Window extends Component {
     constructor() {
@@ -14,7 +14,7 @@ export class Window extends Component {
         this.state = {
             cursorType: "cursor-default",
             width: 60,
-            height: 85,
+            height: 100,
             closed: false,
             maximized: false,
             parentSize: {
@@ -162,6 +162,9 @@ export class Window extends Component {
     }
 
     render() {
+        const appConfig = apps.find(app => app.id === this.props.id);
+        const disableScrolling = appConfig && appConfig.disableScrolling ? 'overflow-hidden' : 'overflow-y-auto';
+
         return (
             <Draggable
                 axis="both"
@@ -185,11 +188,11 @@ export class Window extends Component {
                     <WindowEditButtons minimize={this.minimizeWindow} maximize={this.maximizeWindow} isMaximized={this.state.maximized} close={this.closeWindow} id={this.id} />
                     {this.id === "settings" ? (
                         <Settings changeBackgroundImage={this.props.changeBackgroundImage} currBgImgName={this.props.bg_image_name} />
-
                     ) : (
                         <WindowMainScreen screen={this.props.screen} title={this.props.title}
                             addFolder={this.props.id === "terminal" ? this.props.addFolder : null}
-                            openApp={this.props.openApp} />
+                            openApp={this.props.openApp}
+                            disableScrolling={disableScrolling} />
                     )}
                 </div>
             </Draggable>
@@ -293,9 +296,10 @@ export class WindowMainScreen extends Component {
         }, 3000);
     }
     render() {
+        const { screen, disableScrolling } = this.props;
         return (
-            <div className={"w-full flex-grow z-20 max-h-full overflow-y-auto windowMainScreen" + (this.state.setDarkBg ? " bg-ub-drk-abrgn " : " bg-ub-cool-grey")}>
-                {this.props.screen()}
+            <div className={"w-full flex-grow z-20 max-h-full " + disableScrolling + " windowMainScreen" + (this.state.setDarkBg ? " bg-ub-drk-abrgn " : " bg-ub-cool-grey")}>
+                {screen()}
             </div>
         )
     }

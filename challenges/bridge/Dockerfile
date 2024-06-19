@@ -1,3 +1,5 @@
+#docker buildx build --platform linux/amd64,linux/arm64 -t gcr.io/edurangectf/bridge . --push
+
 FROM python:3.9-slim
 
 # Install dependencies

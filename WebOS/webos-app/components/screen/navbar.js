@@ -3,12 +3,7 @@ import Clock from '@/components/util-components/clock';
 import Countdown from '@/components/util-components/countdown';
 
 export default class Navbar extends Component {
-	constructor() {
-		super();
-		this.state = {
-			status_card: false
-		};
-	}
+
 
 	render() {
 		return (
@@ -17,7 +12,7 @@ export default class Navbar extends Component {
 				<div
 					tabIndex="0"
 					className={
-						'pl-3 pr-3 outline-none transition duration-100 ease-in-out border-b-2 border-transparent focus:border-ubb-orange py-1 '
+						'pl-3 pr-3 outline-none transition duration-100 ease-in-out border-b-2 border-transparent focus:border-purple-800 py-1 '
 					}
 				>
 					Edurange WebOS
@@ -26,7 +21,7 @@ export default class Navbar extends Component {
 				<div
 					tabIndex="0"
 					className={
-						'pl-2 pr-2 text-xs md:text-sm outline-none transition duration-100 ease-in-out border-b-2 border-transparent focus:border-ubb-orange py-1'
+						'pl-2 pr-2 text-xs md:text-sm outline-none transition duration-100 ease-in-out border-b-2 border-transparent focus:purple-800 py-1'
 					}
 				>
 					<div>
@@ -43,7 +38,7 @@ export default class Navbar extends Component {
 					}}
 
 					className={
-						'relative pr-3 pl-3 outline-none transition duration-100 ease-in-out border-b-2 border-transparent focus:border-ubb-orange py-1 '
+						'relative pr-3 pl-3 outline-none transition duration-100 ease-in-out border-b-2 border-transparent focus:border-purple-800 py-1 '
 					}
 				>
 					<Clock/>

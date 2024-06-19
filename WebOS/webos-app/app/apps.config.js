@@ -2,7 +2,6 @@ import displayCodeEditor from '@/components/apps/code_editor';
 import { displayTerminal } from '@/components/apps/terminal';
 import { displaySettings } from '@/components/apps/settings';
 import { displayChrome } from '@/components/apps/browser';
-
 import { displayTerminalCalc } from '@/components/apps/calc';
 import { displayDoom } from '@/components/apps/doom';
 import Cyberchef from "@/components/apps/cyberchef";
@@ -16,8 +15,8 @@ const apps = [
         favourite: true,
         desktop_shortcut: true,
         screen: displayChrome,
-        width: 70,  // example width percentage
-        height: 80  // example height percentage
+        width: 70,
+        height: 80
     },
     {
         id: "calc",
@@ -27,8 +26,8 @@ const apps = [
         favourite: true,
         desktop_shortcut: false,
         screen: displayTerminalCalc,
-        width: 5,  // example width percentage
-        height: 50  // example height percentage
+        width: 5,
+        height: 50
     },
     {
         id: "codeeditor",
@@ -38,8 +37,8 @@ const apps = [
         favourite: true,
         desktop_shortcut: false,
         screen: displayCodeEditor,
-        width: 60,  // example width percentage
-        height: 75  // example height percentage
+        width: 60,
+        height: 75
     },
     {
         id: "terminal",
@@ -49,8 +48,9 @@ const apps = [
         favourite: true,
         desktop_shortcut: false,
         screen: displayTerminal,
-        width: 60,  // example width percentage
-        height: 50  // example height percentage
+        width: 60,
+        height: 55,
+        disableScrolling: true // New property to disable scrolling
     },
     {
         id: "settings",
@@ -60,8 +60,8 @@ const apps = [
         favourite: true,
         desktop_shortcut: false,
         screen: displaySettings,
-        width: 50,  // example width percentage
-        height: 60  // example height percentage
+        width: 50,
+        height: 60
     },
     {
         id: "doom",
@@ -71,8 +71,8 @@ const apps = [
         favourite: true,
         desktop_shortcut: true,
         screen: displayDoom,
-        width: 80,  // example width percentage
-        height: 90  // example height percentage
+        width: 80,
+        height: 90
     },
     {
         id: "cyberchef",
@@ -82,8 +82,8 @@ const apps = [
         favourite: true,
         desktop_shortcut: true,
         screen: Cyberchef,
-        width: 75,  // example width percentage
-        height: 85  // example height percentage
+        width: 75,
+        height: 85
     },
 ]
 

@@ -22,17 +22,16 @@ spec:
     env:
     - name: CHALLENGE_CONTAINER_NAME
       value: "challenge-container"
-
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: bridge-service
+  name: challenge-service
 spec:
   selector:
     app: challenge
   ports:
   - protocol: TCP
     port: 80
-    targetPort: 5000
-  type: NodePort
+    targetPort: 3000  # Expose the WebOS container
+  type: LoadBalancer

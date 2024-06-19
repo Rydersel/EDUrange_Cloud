@@ -18,7 +18,8 @@ app.config['SECRET_KEY'] = 'secret!'
 socketio = SocketIO(app, cors_allowed_origins="*")
 
 # Get the name of the challenge container from the environment variable
-challenge_container_name = os.getenv('CHALLENGE_CONTAINER_NAME')
+challenge_pod_name = os.getenv('CHALLENGE_POD_NAME')
+challenge_container_name = "challenge-container"
 
 sessions = {}
 
@@ -29,7 +30,7 @@ def run_command(command, cwd):
 
     try:
         exec_response = stream.stream(v1.connect_get_namespaced_pod_exec,
-                                      name='challenge-pod',
+                                      name=challenge_pod_name,
                                       namespace='default',
                                       command=exec_command,
                                       container=challenge_container_name,

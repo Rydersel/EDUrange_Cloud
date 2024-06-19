@@ -1,10 +1,9 @@
 import logging
 import requests
 from flask import Flask, request, jsonify
-from kubernetes import client, config
-from kubernetes.config import load_incluster_config
 from flask_cors import CORS
-from challenge_utils.prod import create_challenge_deployment, delete_challenge_deployment, load_config, create_webos
+from kubernetes import client, config
+from challenge_utils.prod import create_pod_and_service, delete_challenge_pod, load_config
 
 # Initialize logging
 logging.basicConfig(level=logging.DEBUG)
@@ -13,7 +12,6 @@ app = Flask(__name__)
 CORS(app)
 
 load_config()  # Initialize Kubernetes client configuration
-
 
 @app.route('/api/start-challenge', methods=['POST'])
 def start_challenge():
@@ -24,45 +22,23 @@ def start_challenge():
         logging.error(f"Missing key in JSON payload: {e}")
         return jsonify({"error": f"Missing key in JSON payload: {e}"}), 400
 
-    webos_url = f"http://{create_webos(user_id)}"
-    logging.debug(f"Received webos_url: {webos_url}")
+    deployment_name, challenge_url = create_pod_and_service(user_id, challenge_image, 'challenge-template.yaml', True)
 
-    deployment_name, challenge_url = create_challenge_deployment(user_id, challenge_image, 'challenge-template.yaml',
-                                                                 True)
-    challenge_url = f"{challenge_url}/execute"
-
-    if not webos_url or not challenge_url:
+    if not challenge_url:
         response = jsonify({"error": "Invalid URL provided"}), 400
-        logging.error(f"Invalid URL provided: webos_url={webos_url}, challenge_url={challenge_url}")
+        logging.error(f"Invalid URL provided: challenge_url={challenge_url}")
         return response
 
-    try:
-        logging.debug(f"Sending POST request to {webos_url}/api/load-chal with payload: {{'ip': '{challenge_url}'}}")
-        response = requests.post(f"{webos_url}/api/load-chal", json={"ip": challenge_url})
-        response.raise_for_status()
-        return jsonify({"success": True}), 200
-    except requests.exceptions.ConnectionError as e:
-        logging.error(f"Connection error: {e}")
-        return jsonify({"error": "Failed to connect to WebOS API", "details": str(e)}), 500
-    except requests.exceptions.HTTPError as e:
-        logging.error(f"HTTP error: {e}")
-        return jsonify({"error": "HTTP error occurred while sending challenge IP to WebOS", "details": str(e)}), 500
-    except requests.exceptions.RequestException as e:
-        logging.error(f"Request exception: {e}")
-        return jsonify({"error": "Failed to send challenge IP to WebOS", "details": str(e)}), 500
-
+    return jsonify({"success": True, "challenge_url": challenge_url}), 200
 
 @app.route('/api/end-challenge', methods=['POST'])
 def end_challenge():
     try:
-        deployment_name = request.json['deployment_name']
+        pod_name = request.json['deployment_name']
     except KeyError as e:
         logging.error(f"Missing key in JSON payload: {e}")
         return jsonify({"error": f"Missing key in JSON payload: {e}"}), 400
 
-    delete_challenge_deployment(deployment_name)
+    delete_challenge_pod(pod_name)
     return jsonify({"message": "Challenge ended"})
 
-
-if __name__ == '__main__':
-    app.run(debug=True)

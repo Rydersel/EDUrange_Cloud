@@ -1,4 +1,3 @@
-# Use a smaller base image
 FROM debian:bullseye-slim
 
 # Install basic utilities in a single RUN command and clean up afterwards to reduce image size

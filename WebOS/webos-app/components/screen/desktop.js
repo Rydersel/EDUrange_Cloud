@@ -8,7 +8,6 @@ import Window from '../base/window';
 import App from '../base/base_app';
 import ControlCenter from './control_center';
 import DesktopMenu from '../context menus/desktop-menu';
-import DefaultMenu from '../context menus/default';
 import $ from 'jquery';
 import ReactGA from 'react-ga4';
 
@@ -105,9 +104,7 @@ export class Desktop extends Component {
     checkContextMenu = (e) => {
         e.preventDefault();
         this.hideAllContextMenu();
-        const context = e.target.dataset.context === "desktop-area" ? "desktop" : "default";
-        ReactGA.event({ category: `Context Menu`, action: `Opened ${context === "desktop" ? "Desktop" : "Default"} Context Menu` });
-        this.showContextMenu(e, context);
+        this.showContextMenu(e, "desktop");
     }
 
     showContextMenu = (e, menuName) => {
@@ -299,7 +296,6 @@ export class Desktop extends Component {
                 />
                 {this.renderDesktopApps()}
                 <DesktopMenu active={this.state.context_menus.desktop} openApp={this.openApp} />
-                <DefaultMenu active={this.state.context_menus.default} />
                 {this.state.controlCenterVisible && (
                     <ControlCenter
                         apps={apps}

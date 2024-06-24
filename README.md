@@ -4,7 +4,7 @@
 
 The EDURANGE CTF Module is a dynamic, Kubernetes-powered platform designed to host and manage Capture The Flag (CTF) challenges. It provides an automated system for deploying individual challenge instances, ensuring a unique and isolated environment for each participant.
 
-### For detailed documentation visit [Documentation](https://github.com/Rydersel/EDURANGE_CTF_Module/wiki)
+### For detailed documentation visit [Documentation](https://edurange.atlassian.net/wiki/external/MzllMDZhYTFhMTMyNDE0Zjg0NmE0ZjI2Mzc0ZGQ3NWI)
 
 ## Features:
 

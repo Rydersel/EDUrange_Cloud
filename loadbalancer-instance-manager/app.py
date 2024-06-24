@@ -3,7 +3,7 @@ import requests
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from kubernetes import client, config
-from challenge_utils.prod import create_pod_and_service, delete_challenge_pod, load_config
+from challenge_utils.loadbalancer import create_pod_and_service, delete_challenge_pod, load_config
 
 # Initialize logging
 logging.basicConfig(level=logging.DEBUG)
@@ -29,7 +29,7 @@ def start_challenge():
         logging.error(f"Invalid URL provided: challenge_url={challenge_url}")
         return response
 
-    return jsonify({"success": True, "challenge_url": challenge_url}), 200
+    return jsonify({"success": True, "challenge_url": challenge_url, "deployment_name": deployment_name}), 200
 
 @app.route('/api/end-challenge', methods=['POST'])
 def end_challenge():

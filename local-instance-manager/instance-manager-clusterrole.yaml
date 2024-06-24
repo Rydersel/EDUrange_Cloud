@@ -1,8 +1,0 @@
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
-metadata:
-  name: instance-manager-clusterrole
-rules:
-- apiGroups: [""]
-  resources: ["services", "pods", "pods/portforward"]
-  verbs: ["get", "list", "create", "delete"]

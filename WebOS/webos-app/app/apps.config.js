@@ -10,7 +10,7 @@ const apps = [
     {
         id: "chrome",
         title: "Browser",
-        icon: './icons/browser.svg',
+        icon: `./icons/browser.svg`,
         disabled: false,
         favourite: true,
         desktop_shortcut: true,

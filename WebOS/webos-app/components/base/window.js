@@ -241,45 +241,48 @@ export class WindowXBorder extends Component {
 }
 
 // Window's Edit Buttons
+// components/WindowEditButtons.js
 export function WindowEditButtons(props) {
-    return (
-        <div className="absolute select-none right-0 top-0 mt-1 mr-1 flex justify-center items-center">
-            <span className="mx-1.5 bg-white bg-opacity-0 hover:bg-opacity-10 rounded-full flex justify-center mt-1 h-5 w-5 items-center" onClick={props.minimize}>
-                <img
-                    src="./icons/window/window-minimize.svg"
-                    alt="ubuntu window minimize"
-                    className="h-5 w-5 inline"
-                />
-            </span>
-            {
-                (props.isMaximized
-                    ?
-                    <span className="mx-2 bg-white bg-opacity-0 hover:bg-opacity-10 rounded-full flex justify-center mt-1 h-5 w-5 items-center" onClick={props.maximize}>
-                        <img
-                            src="./icons/window/window-restore.svg"
-                            alt="ubuntu window restore"
-                            className="h-5 w-5 inline"
-                        />
-                    </span>
-                    :
-                    <span className="mx-2 bg-white bg-opacity-0 hover:bg-opacity-10 rounded-full flex justify-center mt-1 h-5 w-5 items-center" onClick={props.maximize}>
-                        <img
-                            src="./icons/window/window-maximize.svg"
-                            alt="ubuntu window maximize"
-                            className="h-5 w-5 inline"
-                        />
-                    </span>
-                )
-            }
-            <button tabIndex="-1" id={`close-${props.id}`} className="mx-1.5 focus:outline-none cursor-default bg-ub-orange bg-opacity-90 hover:bg-opacity-100 rounded-full flex justify-center mt-1 h-5 w-5 items-center" onClick={props.close}>
-                <img
-                    src="./icons/window/window-close.svg"
-                    alt="ubuntu window close"
-                    className="h-5 w-5 inline"
-                />
-            </button>
-        </div>
-    )
+  const basePath = process.env.NEXT_PUBLIC_BASE_PATH;
+
+  return (
+    <div className="absolute select-none right-0 top-0 mt-1 mr-1 flex justify-center items-center">
+      <span className="mx-1.5 bg-white bg-opacity-0 hover:bg-opacity-10 rounded-full flex justify-center mt-1 h-5 w-5 items-center" onClick={props.minimize}>
+        <img
+          src={`./icons/window/window-minimize.svg`}
+          alt="ubuntu window minimize"
+          className="h-5 w-5 inline"
+        />
+      </span>
+      {
+        (props.isMaximized
+          ?
+          <span className="mx-2 bg-white bg-opacity-0 hover:bg-opacity-10 rounded-full flex justify-center mt-1 h-5 w-5 items-center" onClick={props.maximize}>
+            <img
+              src={`./icons/window/window-restore.svg`}
+              alt="ubuntu window restore"
+              className="h-5 w-5 inline"
+            />
+          </span>
+          :
+          <span className="mx-2 bg-white bg-opacity-0 hover:bg-opacity-10 rounded-full flex justify-center mt-1 h-5 w-5 items-center" onClick={props.maximize}>
+            <img
+              src={`./icons/window/window-maximize.svg`}
+              alt="ubuntu window maximize"
+              className="h-5 w-5 inline"
+            />
+          </span>
+        )
+      }
+      <button tabIndex="-1" id={`close-${props.id}`} className="mx-1.5 focus:outline-none cursor-default bg-ub-orange bg-opacity-90 hover:bg-opacity-100 rounded-full flex justify-center mt-1 h-5 w-5 items-center" onClick={props.close}>
+        <img
+          src={`./icons/window/window-close.svg`}
+          alt="ubuntu window close"
+          className="h-5 w-5 inline"
+        />
+      </button>
+    </div>
+  )
 }
 
 // Window's Main Screen

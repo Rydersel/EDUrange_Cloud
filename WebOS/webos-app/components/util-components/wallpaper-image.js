@@ -1,6 +1,6 @@
 import React from 'react'
 
-export default function BackgroundImage(props) {
+export default function WallpaperImage(props) {
     const bg_images = {
         "wall-1": "./images/wallpapers/wall-1.webp",
         "wall-2": "./images/wallpapers/wall-2.webp",

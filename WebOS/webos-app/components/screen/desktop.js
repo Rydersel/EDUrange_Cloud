@@ -1,7 +1,7 @@
 
 
 import React, { Component } from 'react';
-import BackgroundImage from '@/components/util-components/background-image';
+import WallpaperImage from '@/components/util-components/wallpaper-image';
 import Dock from './dock';
 import apps from '../../app/apps.config';
 import Window from '../base/window';
@@ -281,7 +281,7 @@ export class Desktop extends Component {
                 <div className="absolute h-full w-full bg-transparent" data-context="desktop-area">
                     {this.renderWindows()}
                 </div>
-                <BackgroundImage img={this.props.bg_image_name} />
+                <WallpaperImage img={this.props.bg_image_name} />
                 <Dock
                     apps={apps}
                     hide={this.state.controlCenterVisible} // Hide dock when control center is visible

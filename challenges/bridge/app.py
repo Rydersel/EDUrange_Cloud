@@ -4,7 +4,7 @@
 # kubectl port-forward svc/bridge-service 5000:80
 import os
 from kubernetes import client, config, stream
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, json
 from flask_cors import CORS
 from flask_socketio import SocketIO, emit
 
@@ -133,6 +133,14 @@ def execute_command():
             return jsonify({"output": exec_instance + '\n'})
     return jsonify({"error": "Command is required"}), 400
 
+@app.route('/config', methods=['GET'])
+def get_config():
+    config = os.getenv('NEXT_PUBLIC_APPS_CONFIG', '[]')
+    try:
+        config_json = json.loads(config)
+        return jsonify(config_json)
+    except json.JSONDecodeError:
+        return jsonify({"error": "Failed to parse config"}), 500
 
 @app.route('/')
 def index():

@@ -1,0 +1,30 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: authentik-ingress
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/proxy-redirect-from: http
+    nginx.ingress.kubernetes.io/proxy-redirect-to: https
+    nginx.ingress.kubernetes.io/proxy-http-version: "1.1"
+    nginx.ingress.kubernetes.io/proxy-set-headers: |
+      {
+        "X-Forwarded-Proto": "https",
+        "X-Forwarded-For": "$proxy_add_x_forwarded_for",
+        "Host": "$http_host",
+        "Upgrade": "$http_upgrade",
+        "Connection": "upgrade"
+      }
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: eductf.rydersel.cloud
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: authentik-server
+            port:
+              number: 9000

@@ -1,9 +1,7 @@
-
-
 import React, { Component } from 'react';
 import WallpaperImage from '@/components/util-components/wallpaper-image';
 import Dock from './dock';
-import apps from '../../app/apps.config';
+import getAppsConfig from '../../app/apps.config';
 import Window from '../base/window';
 import App from '../base/base_app';
 import ControlCenter from './control_center';
@@ -15,6 +13,7 @@ export class Desktop extends Component {
     constructor() {
         super();
         this.state = {
+            apps: [],
             focused_windows: {},
             closed_windows: {},
             allAppsView: false,
@@ -34,8 +33,9 @@ export class Desktop extends Component {
         this.initFavourite = {};
     }
 
-    componentDidMount() {
-        this.fetchAppsData();
+    async componentDidMount() {
+        const apps = await getAppsConfig();
+        this.setState({ apps }, this.fetchAppsData);
         this.setContextListeners();
     }
 
@@ -54,7 +54,7 @@ export class Desktop extends Component {
             desktop_apps: [],
         };
 
-        apps.forEach(app => {
+        this.state.apps.forEach(app => {
             initialData.focused_windows[app.id] = false;
             initialData.closed_windows[app.id] = true;
             initialData.disabled_apps[app.id] = app.disabled;
@@ -78,7 +78,7 @@ export class Desktop extends Component {
             desktop_apps: [],
         };
 
-        apps.forEach(app => {
+        this.state.apps.forEach(app => {
             updatedData.focused_windows[app.id] = this.state.focused_windows[app.id] || false;
             updatedData.closed_windows[app.id] = this.state.closed_windows[app.id] !== undefined ? this.state.closed_windows[app.id] : true;
             updatedData.disabled_apps[app.id] = app.disabled;
@@ -238,7 +238,7 @@ export class Desktop extends Component {
     renderDesktopApps = () => {
         if (Object.keys(this.state.closed_windows).length === 0) return;
         let appsJsx = [];
-        apps.forEach((app, index) => {
+        this.state.apps.forEach((app, index) => {
             if (this.state.desktop_apps.includes(app.id)) {
 
                 const props = {
@@ -257,7 +257,7 @@ export class Desktop extends Component {
     }
 
 
-    renderWindows = () => apps.map((app, index) => !this.state.closed_windows[app.id] && (
+    renderWindows = () => this.state.apps.map((app, index) => !this.state.closed_windows[app.id] && (
         <Window
             key={index}
             title={app.title}
@@ -272,6 +272,7 @@ export class Desktop extends Component {
             minimized={this.state.minimized_windows[app.id]}
             changeBackgroundImage={this.props.changeBackgroundImage}
             bg_image_name={this.props.bg_image_name}
+            apps={this.state.apps} // Pass apps to Window component
         />
     ));
 
@@ -283,7 +284,7 @@ export class Desktop extends Component {
                 </div>
                 <WallpaperImage img={this.props.bg_image_name} />
                 <Dock
-                    apps={apps}
+                    apps={this.state.apps}
                     hide={this.state.controlCenterVisible} // Hide dock when control center is visible
                     hideDock={this.hideDock}
                     favourite_apps={this.state.favourite_apps}
@@ -298,7 +299,7 @@ export class Desktop extends Component {
                 <DesktopMenu active={this.state.context_menus.desktop} openApp={this.openApp} />
                 {this.state.controlCenterVisible && (
                     <ControlCenter
-                        apps={apps}
+                        apps={this.state.apps}
                         recentApps={this.app_stack}
                         openApp={this.openApp}
                         toggleControlCenter={this.toggleControlCenter}

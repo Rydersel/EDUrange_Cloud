@@ -81,7 +81,7 @@ def read_yaml_file(yaml_path):
         logging.error(f"Error loading YAML file: {e}")
         raise
 
-def create_challenge_pod(user_id, challenge_image, yaml_path, run_as_root):
+def create_challenge_pod(user_id, challenge_image, yaml_path, run_as_root, apps_config):
     logging.info("Starting create_challenge_pod")
     logging.debug(f"Received parameters: user_id={user_id}, challenge_image={challenge_image}, yaml_path={yaml_path}, run_as_root={run_as_root}")
 
@@ -109,16 +109,18 @@ def create_challenge_pod(user_id, challenge_image, yaml_path, run_as_root):
         if container['name'] == 'challenge-container':
             container['image'] = challenge_image
 
-
     # Add CHALLENGE_POD_NAME environment variable to the bridge container
     for container in pod_spec['spec']['containers']:
         if container['name'] == 'bridge':
             container['env'].append({"name": "CHALLENGE_POD_NAME", "value": instance_name})
 
-        # Add FLAG_SECRET_NAME environment variable to all containers
+    # Add FLAG_SECRET_NAME environment variable to all containers
     for container in pod_spec['spec']['containers']:
         if container['name'] == 'bridge':
             container['env'].append({"name": "flag_secret_name", "value": secret_name})
+            container['env'].append({"name": "NEXT_PUBLIC_APPS_CONFIG", "value": apps_config})
+
+
 
     pod = client.V1Pod(
         api_version="v1",
@@ -149,11 +151,11 @@ def create_challenge_pod(user_id, challenge_image, yaml_path, run_as_root):
 
     return pod, service, ingress, secret_name
 
-def create_pod_service_and_ingress(user_id, challenge_image, yaml_path, run_as_root):
+def create_pod_service_and_ingress(user_id, challenge_image, yaml_path, run_as_root, apps_config):
     logging.info("Starting create_pod_service_and_ingress")
     logging.debug(f"Received parameters: user_id={user_id}, challenge_image={challenge_image}, yaml_path={yaml_path}, run_as_root={run_as_root}")
 
-    pod, service, ingress, secret_name = create_challenge_pod(user_id, challenge_image, yaml_path, run_as_root)
+    pod, service, ingress, secret_name = create_challenge_pod(user_id, challenge_image, yaml_path, run_as_root, apps_config)
 
     try:
         core_api = client.CoreV1Api()

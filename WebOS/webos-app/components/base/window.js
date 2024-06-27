@@ -2,7 +2,6 @@ import React, { Component } from 'react';
 import Draggable from 'react-draggable';
 import Settings from '../apps/settings';
 import ReactGA from 'react-ga4';
-import apps from '../../app/apps.config';
 import TerminalComponent from '../../components/apps/terminal';
 
 export class Window extends Component {
@@ -39,7 +38,7 @@ export class Window extends Component {
     }
 
     setDefaultWindowDimension = () => {
-        const appConfig = apps.find(app => app.id === this.props.id);
+        const appConfig = this.props.apps.find(app => app.id === this.props.id);
         if (appConfig) {
             this.setState({ width: appConfig.width, height: appConfig.height }, this.resizeBoundaries);
         } else {
@@ -162,7 +161,7 @@ export class Window extends Component {
     }
 
     render() {
-        const appConfig = apps.find(app => app.id === this.props.id);
+        const appConfig = this.props.apps.find(app => app.id === this.props.id);
         const disableScrolling = appConfig && appConfig.disableScrolling ? 'overflow-hidden' : 'overflow-y-auto';
 
         return (
@@ -178,7 +177,7 @@ export class Window extends Component {
                 defaultPosition={{ x: this.startX, y: this.startY }}
                 bounds={{ left: 0, top: 0, right: this.state.parentSize.width, bottom: this.state.parentSize.height }}
             >
-                <div style={{ width: `${this.state.width}%`, height: `${this.state.height}%` }}
+                <div style={{ width: `${this.state.width}%`, height: `${this.state.height}%`, backgroundColor: 'transparent' }}
                     className={this.state.cursorType + " " + (this.state.closed ? " closed-window " : "") + (this.state.maximized ? " duration-300 rounded-none" : " rounded-lg rounded-b-none") + (this.props.minimized ? " opacity-0 invisible duration-200 " : "") + (this.props.isFocused ? " z-30 " : " z-20 notFocused") + " opened-window overflow-hidden min-w-1/4 min-h-1/4 main-window absolute window-shadow border-black border-opacity-40 border border-t-0 flex flex-col"}
                     id={this.id}
                 >
@@ -301,7 +300,7 @@ export class WindowMainScreen extends Component {
     render() {
         const { screen, disableScrolling } = this.props;
         return (
-            <div className={"w-full flex-grow z-20 max-h-full " + disableScrolling + " windowMainScreen" + (this.state.setDarkBg ? " bg-ub-drk-abrgn " : " bg-ub-cool-grey")}>
+            <div className={"w-full flex-grow z-20 max-h-full " + disableScrolling + " windowMainScreen" + (this.state.setDarkBg ? " bg-black opacity-100 " : "opacity-100")}>
                 {screen()}
             </div>
         )

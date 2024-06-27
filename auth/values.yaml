@@ -1,0 +1,39 @@
+authentik:
+  secret_key: "gFXzQybseMu6Zfhd3Tm1iTmGqFe9ZH7RsG0QYkYvA5vBckHDK1
+MSU8RHmt7viBo840d28w7AsnTs4IoEQQo1CzIEnpluaiPubCBA
+TJzm1y5M7gG0gc4T4sF7leE1LINsdyjyCIH9gGD6zKCefUdKtb
+Wr7rKgzVuY6mU2pV8x2BMFmMyiB6a3cnu9Q90jCFZf8mogQYuX
+Sy97cb6FryxuRU07xPqCLzgkE9uF94ifrvqZgCezce0jkAaPN46zKCeDvE"
+  # This sends anonymous usage-data, stack traces on errors and
+  # performance data to sentry.io, and is fully opt-in
+  error_reporting:
+    enabled: true
+  postgresql:
+    host: "tcp-postgresql"  # This should match the service name of your PostgreSQL database
+    port: 5432
+    user: "admin"   # Ensure this user exists in your PostgreSQL database
+    name: "postgres"
+    password: "rydersel1927"
+  redis:
+    host: "authentik-redis-master"  # Ensure this matches the Redis service name
+    port: 6379
+
+server:
+  ingress:
+    # Specify kubernetes ingress controlkuler class name
+    ingressClassName: nginx
+    enabled: true
+    hosts:
+      - eductf.rydersel.cloud
+
+postgresql:
+  enabled: true
+  auth:
+    username: "admin"  # Ensure this matches the user specified in `authentik.database.user`
+    password: "rydersel1927"
+  global:
+    postgresql:
+      auth:
+        postgresPassword: "rydersel1927"
+redis:
+  enabled: true

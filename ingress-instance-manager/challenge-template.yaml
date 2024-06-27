@@ -30,6 +30,7 @@ spec:
     env:
     - name: CHALLENGE_API_URL
       value: "http://localhost:5000/execute"
+
 ---
 apiVersion: v1
 kind: Service

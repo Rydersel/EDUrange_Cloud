@@ -133,6 +133,7 @@ def execute_command():
             return jsonify({"output": exec_instance + '\n'})
     return jsonify({"error": "Command is required"}), 400
 
+
 @app.route('/config', methods=['GET'])
 def get_config():
     config = os.getenv('NEXT_PUBLIC_APPS_CONFIG', '[]')
@@ -142,8 +143,10 @@ def get_config():
     except json.JSONDecodeError:
         return jsonify({"error": "Failed to parse config"}), 500
 
+
+
+
+
 @app.route('/')
 def index():
     return "WebSocket Server for Docker Commands"
-
-

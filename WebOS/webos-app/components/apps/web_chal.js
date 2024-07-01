@@ -1,7 +1,6 @@
 import React from 'react';
 
-export default function WebChal() {
-    const url = 'http://34.127.89.131:8080/'
+export default function WebChal({ url }) {
     const openInNewTab = () => {
         window.open(url, '_blank');
     };
@@ -17,11 +16,11 @@ export default function WebChal() {
                     Open in New Tab
                 </button>
             </div>
-            <iframe src= {url}  frameBorder="0" title="Web Challenge" className="flex-grow"></iframe>
+            <iframe src={url} frameBorder="0" title="Web Challenge" className="flex-grow"></iframe>
         </div>
     );
 }
 
-export const displayWebChal = () => {
-    return <WebChal />;
+export const displayWebChal = (props) => {
+    return <WebChal {...props} />;
 };

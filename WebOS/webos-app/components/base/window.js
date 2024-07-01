@@ -1,8 +1,9 @@
+// components/base/window.js
+
 import React, { Component } from 'react';
 import Draggable from 'react-draggable';
 import Settings from '../apps/settings';
 import ReactGA from 'react-ga4';
-import TerminalComponent from '../../components/apps/terminal';
 
 export class Window extends Component {
     constructor() {
@@ -163,6 +164,8 @@ export class Window extends Component {
     render() {
         const appConfig = this.props.apps.find(app => app.id === this.props.id);
         const disableScrolling = appConfig && appConfig.disableScrolling ? 'overflow-hidden' : 'overflow-y-auto';
+        const ScreenComponent = this.props.screen;
+        const extraProps = appConfig ? { ...appConfig } : {};
 
         return (
             <Draggable
@@ -188,7 +191,7 @@ export class Window extends Component {
                     {this.id === "settings" ? (
                         <Settings changeBackgroundImage={this.props.changeBackgroundImage} currBgImgName={this.props.bg_image_name} />
                     ) : (
-                        <WindowMainScreen screen={this.props.screen} title={this.props.title}
+                        <WindowMainScreen screen={() => <ScreenComponent {...extraProps} />} title={this.props.title}
                             addFolder={this.props.id === "terminal" ? this.props.addFolder : null}
                             openApp={this.props.openApp}
                             disableScrolling={disableScrolling} />

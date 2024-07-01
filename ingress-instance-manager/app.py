@@ -3,8 +3,9 @@ import requests
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from kubernetes import client, config
-from challenge_utils.ingress import create_pod_service_and_ingress, delete_challenge_pod, load_config, wait_for_url, \
+from challenge_utils.utils import create_pod_service_and_ingress, delete_challenge_pod, load_config, wait_for_url, \
     get_secret, decode_secret_data
+from challenges import FullOsChallenge, WebChallenge
 
 # Initialize logging
 logging.basicConfig(level=logging.DEBUG)
@@ -20,28 +21,34 @@ def start_challenge():
     try:
         user_id = request.json['user_id']
         challenge_image = request.json['challenge_image']
+        apps_config = request.json.get('apps_config', None)
+        chal_type = request.json.get('chal_type')
+
+
     except KeyError as e:
         logging.error(f"Missing key in JSON payload: {e}")
         return jsonify({"error": f"Missing key in JSON payload: {e}"}), 400
-    apps_config = ('[{"id":"chrome","title":"Browser","icon":"./icons/browser.svg","disabled":false,"favourite":true,' #temp hardcoded
-                   '"desktop_shortcut":false,"screen":"displayChrome","width":70,"height":80},{"id":"calc",'
-                   '"title":"Calculator","icon":"./icons/calculator.svg","disabled":false,"favourite":true,'
-                   '"desktop_shortcut":false,"screen":"displayTerminalCalc","width":5,"height":50},'
-                   '{"id":"codeeditor","title":"Code Editor","icon":"./icons/code-editor.svg","disabled":false,'
-                   '"favourite":true,"desktop_shortcut":false,"screen":"displayCodeEditor","width":60,"height":75},'
-                   '{"id":"terminal","title":"Terminal","icon":"./icons/Remote-Terminal.svg","disabled":false,'
-                   '"favourite":true,"desktop_shortcut":false,"screen":"displayTerminal","width":60,"height":55,'
-                   '"disableScrolling":true},{"id":"settings","title":"Settings","icon":"./icons/settings.svg",'
-                   '"disabled":false,"favourite":true,"desktop_shortcut":false,"screen":"displaySettings","width":50,'
-                   '"height":60},{"id":"doom","title":"Doom","icon":"./icons/doom.svg","disabled":false,'
-                   '"favourite":true,"desktop_shortcut":true,"screen":"displayDoom","width":80,"height":90},'
-                   '{"id":"cyberchef","title":"Cyber Chef","icon":"./icons/cyberchef.svg","disabled":false,'
-                   '"favourite":true,"desktop_shortcut":true,"screen":"Cyberchef","width":75,"height":85},'
-                   '{"id":"web_chal","title":"Web Challenge","icon":"./icons/browser.svg","disabled":false,'
-                   '"favourite":true,"desktop_shortcut":true,"screen":"displayWebChal","width":70,"height":80}]')
 
+    if chal_type == 'fullos':
+        full_os_challenge = FullOsChallenge(
+            user_id=user_id,
+            challenge_image=challenge_image,
+            yaml_path='templates/full-os-challenge-template.yaml',
+            run_as_root=True,
+            apps_config=apps_config
+        )
+        deployment_name, challenge_url, secret_name = full_os_challenge.create_pod_service_and_ingress()
+    elif chal_type == 'web':
+        web_challenge = WebChallenge(
+            user_id=user_id,
+            challenge_image=challenge_image,
+            yaml_path='templates/web-challenge-template.yaml',
+            apps_config=apps_config
+        )
+        deployment_name, challenge_url, secret_name = web_challenge.create_pod_service_and_ingress()
+    else:
+        return jsonify({"error": "Invalid challenge type"}), 400
 
-    deployment_name, challenge_url, secret_name = create_pod_service_and_ingress(user_id, challenge_image,'challenge-template.yaml', True, apps_config)
 
     if not challenge_url:
         response = jsonify({"error": "Invalid URL provided"}), 400
@@ -49,11 +56,10 @@ def start_challenge():
         return response
 
     # Wait until the challenge URL stops giving a 503 status
-   # while not wait_for_url(challenge_url):
-       # logging.info(f"Waiting for challenge URL {challenge_url} to stop giving a 503 status")
-    #if wait_for_url(challenge_url):
+    # while not wait_for_url(challenge_url):
+    # logging.info(f"Waiting for challenge URL {challenge_url} to stop giving a 503 status")
+    # if wait_for_url(challenge_url):
     return jsonify({"success": True, "challenge_url": challenge_url, "deployment_name": deployment_name}), 200
-
 
 
 @app.route('/api/end-challenge', methods=['POST'])
@@ -89,13 +95,14 @@ def list_challenge_pods():
                                 break
 
                 challenge_url = f"http://{pod.metadata.name}.rydersel.cloud"
-
+                creation_time = pod.metadata.creation_timestamp
                 challenge_pods.append({
                     "pod_name": pod.metadata.name,
                     "user_id": user_id,
                     "challenge_image": challenge_image,
                     "challenge_url": challenge_url,
-                    "flag_secret_name": flag_secret_name
+                    "flag_secret_name": flag_secret_name,
+                    "creation_time": creation_time
                 })
 
         return jsonify({"challenge_pods": challenge_pods}), 200
@@ -104,7 +111,7 @@ def list_challenge_pods():
         return jsonify({"error": "Error listing challenge pods"}), 500
 
 
-@app.route('/api/get-secret', methods=['POST'])
+@app.route('/api/get-secret', methods=['POST'])  # Will add auth later
 def get_secret_value():
     try:
         secret_name = request.json['secret_name']

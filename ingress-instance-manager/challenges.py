@@ -3,6 +3,7 @@ import uuid
 from kubernetes import client
 from challenge_utils.utils import generate_unique_flag, create_flag_secret, read_yaml_file
 
+
 # Alot of code repitition here, will fix later
 
 class FullOsChallenge:
@@ -15,7 +16,8 @@ class FullOsChallenge:
 
     def create_pod_service_and_ingress(self):
         logging.info("Starting create_pod_service_and_ingress")
-        logging.debug(f"Received parameters: user_id={self.user_id}, challenge_image={self.challenge_image}, yaml_path={self.yaml_path}, run_as_root={self.run_as_root}")
+        logging.debug(
+            f"Received parameters: user_id={self.user_id}, challenge_image={self.challenge_image}, yaml_path={self.yaml_path}, run_as_root={self.run_as_root}")
 
         pod, service, ingress, secret_name = self.create_challenge_pod()
 
@@ -51,7 +53,8 @@ class FullOsChallenge:
 
     def create_challenge_pod(self):
         logging.info("Starting create_challenge_pod")
-        logging.debug(f"Received parameters: user_id={self.user_id}, challenge_image={self.challenge_image}, yaml_path={self.yaml_path}, run_as_root={self.run_as_root}")
+        logging.debug(
+            f"Received parameters: user_id={self.user_id}, challenge_image={self.challenge_image}, yaml_path={self.yaml_path}, run_as_root={self.run_as_root}")
 
         flag = generate_unique_flag(self.user_id)
         secret_name = create_flag_secret(self.user_id, flag)
@@ -118,7 +121,6 @@ class FullOsChallenge:
         return pod, service, ingress, secret_name
 
 
-
 class WebChallenge:
     def __init__(self, user_id, challenge_image, yaml_path, apps_config):
         self.user_id = user_id
@@ -128,7 +130,8 @@ class WebChallenge:
 
     def create_pod_service_and_ingress(self):
         logging.info("Starting create_pod_service_and_ingress")
-        logging.debug(f"Received parameters: user_id={self.user_id}, challenge_image={self.challenge_image}, yaml_path={self.yaml_path}")
+        logging.debug(
+            f"Received parameters: user_id={self.user_id}, challenge_image={self.challenge_image}, yaml_path={self.yaml_path}")
 
         pod, service, ingress, secret_name = self.create_challenge_pod()
 
@@ -164,7 +167,8 @@ class WebChallenge:
 
     def create_challenge_pod(self):
         logging.info("Starting create_challenge_pod")
-        logging.debug(f"Received parameters: user_id={self.user_id}, challenge_image={self.challenge_image}, yaml_path={self.yaml_path}")
+        logging.debug(
+            f"Received parameters: user_id={self.user_id}, challenge_image={self.challenge_image}, yaml_path={self.yaml_path}")
 
         flag = generate_unique_flag(self.user_id)
         secret_name = create_flag_secret(self.user_id, flag)
@@ -184,13 +188,6 @@ class WebChallenge:
         ingress_spec['metadata']['name'] = f"ingress-{instance_name}"
         ingress_spec['spec']['rules'][0]['host'] = f"{instance_name}.rydersel.cloud"
         ingress_spec['spec']['rules'][0]['http']['paths'][0]['backend']['service']['name'] = f"service-{instance_name}"
-
-
-
-        # Add CHALLENGE_POD_NAME environment variable to the bridge container
-        for container in pod_spec['spec']['containers']:
-            if container['name'] == 'bridge':
-                container['env'].append({"name": "WEB_CHAL_LINK", "value": "https://www.google.com/"})
 
         # Add FLAG_SECRET_NAME environment variable to all containers
         for container in pod_spec['spec']['containers']:

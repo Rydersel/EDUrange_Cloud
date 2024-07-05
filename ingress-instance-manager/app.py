@@ -128,5 +128,34 @@ def get_secret_value():
     return jsonify({"secret_value": secret_value})
 
 
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=8000)
+@app.route('/api/get-pod-status', methods=['GET'])
+def get_pod_status():
+    try:
+        pod_name = request.args.get('pod_name')
+        if not pod_name:
+            return jsonify({"error": "Missing pod_name parameter"}), 400
+
+        v1 = client.CoreV1Api()
+        pod = v1.read_namespaced_pod(name=pod_name, namespace='default')
+
+        if pod.metadata.deletion_timestamp: # Work around for deleting status not showing up
+            status = 'deleting'
+        elif pod.status.phase == 'Pending':
+            status = 'creating'
+        elif pod.status.phase == 'Running':
+            status = 'active'
+        elif pod.status.phase == 'Failed':
+            status = 'error'
+        elif pod.status.phase == 'Succeeded':
+            status = 'deleting'
+        else:
+            status = pod.status.phase
+
+        return jsonify({"pod_name": pod_name, "status": status}), 200
+    except client.exceptions.ApiException as e:
+        logging.error(f"API Exception: {e}")
+        return jsonify({"error": "Error fetching pod status"}), 500
+    except Exception as e:
+        logging.error(f"Error fetching pod status: {e}")
+        return jsonify({"error": "Error fetching pod status"}), 500
+

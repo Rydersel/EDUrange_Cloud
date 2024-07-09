@@ -6,4 +6,4 @@ echo $FLAG > /home/challengeuser/-
 # Prevent use of debuggers to pull env value (hopefully)
 unset FLAG
 
-./.cleanup.sh
+/home/challengeuser/.cleanup.sh

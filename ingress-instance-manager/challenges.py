@@ -70,7 +70,9 @@ class FullOsChallenge:
         ingress_spec = documents[2]
 
         pod_spec['metadata']['name'] = instance_name  # Set the instance name here
+        pod_spec['metadata']['labels']['app'] = instance_name
         service_spec['metadata']['name'] = f"service-{instance_name}"
+        service_spec['spec']['selector']['app'] = instance_name
         ingress_spec['metadata']['name'] = f"ingress-{instance_name}"
         ingress_spec['spec']['rules'][0]['host'] = f"{instance_name}.rydersel.cloud"
         ingress_spec['spec']['rules'][0]['http']['paths'][0]['backend']['service']['name'] = f"service-{instance_name}"
@@ -94,7 +96,7 @@ class FullOsChallenge:
         pod = client.V1Pod(
             api_version="v1",
             kind="Pod",
-            metadata=client.V1ObjectMeta(name=instance_name, labels={"app": "challenge", "user": sanitized_user_id}),
+            metadata=client.V1ObjectMeta(name=instance_name, labels={"app": instance_name, "user": sanitized_user_id}),
             spec=pod_spec['spec']
         )
 
@@ -103,7 +105,7 @@ class FullOsChallenge:
             kind="Service",
             metadata=client.V1ObjectMeta(name=service_spec['metadata']['name']),
             spec=client.V1ServiceSpec(
-                selector={"app": "challenge", "user": sanitized_user_id},
+                selector={"app": instance_name, "user": sanitized_user_id},
                 ports=[client.V1ServicePort(protocol="TCP", port=80, target_port=3000)],
                 type="ClusterIP"
             )
@@ -184,7 +186,9 @@ class WebChallenge:
         ingress_spec = documents[2]
 
         pod_spec['metadata']['name'] = instance_name  # Set the instance name here
+        pod_spec['metadata']['labels']['app'] = instance_name
         service_spec['metadata']['name'] = f"service-{instance_name}"
+        service_spec['spec']['selector']['app'] = instance_name
         ingress_spec['metadata']['name'] = f"ingress-{instance_name}"
         ingress_spec['spec']['rules'][0]['host'] = f"{instance_name}.rydersel.cloud"
         ingress_spec['spec']['rules'][0]['http']['paths'][0]['backend']['service']['name'] = f"service-{instance_name}"
@@ -198,7 +202,7 @@ class WebChallenge:
         pod = client.V1Pod(
             api_version="v1",
             kind="Pod",
-            metadata=client.V1ObjectMeta(name=instance_name, labels={"app": "challenge", "user": sanitized_user_id}),
+            metadata=client.V1ObjectMeta(name=instance_name, labels={"app": instance_name, "user": sanitized_user_id}),
             spec=pod_spec['spec']
         )
 
@@ -207,7 +211,7 @@ class WebChallenge:
             kind="Service",
             metadata=client.V1ObjectMeta(name=service_spec['metadata']['name']),
             spec=client.V1ServiceSpec(
-                selector={"app": "challenge", "user": sanitized_user_id},
+                selector={"app": instance_name, "user": sanitized_user_id},
                 ports=[client.V1ServicePort(protocol="TCP", port=80, target_port=3000)],
                 type="ClusterIP"
             )
@@ -223,3 +227,4 @@ class WebChallenge:
         logging.info("Constructed Kubernetes Pod, Service, and Ingress objects")
 
         return pod, service, ingress, secret_name
+

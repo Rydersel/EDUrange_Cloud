@@ -11,7 +11,6 @@ generator client {
 model ChallengeType {
   id               String          @id @default(cuid())
   name             String
-  AppsConfig        Json            @default("{}")
   challenges       Challenges[]
 }
 
@@ -19,6 +18,7 @@ model Challenges {
   id              String        @id @default(cuid())
   name            String
   challengeImage  String
+  AppsConfig        Json            @default("{}")
   challengeTypeId String
   challengeType   ChallengeType @relation(fields: [challengeTypeId], references: [id], onDelete: Cascade)
 }
@@ -37,7 +37,23 @@ model User {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
   points        Int @default(0)
+  challengeInstances ChallengeInstance[]
 }
+
+model ChallengeInstance {
+  id                String   @id @default(uuid())
+  challengeId       String
+  userId            String
+  challengeImage    String
+  challengeUrl      String
+  creationTime      DateTime @default(now())
+  status            String
+  flagSecretName     String
+  flag               String
+
+  user              User     @relation(fields: [userId], references: [id])
+}
+
 
 model Account {
   userId            String

@@ -16,7 +16,7 @@ spec:
       serviceAccountName: default
       containers:
       - name: instance-manager
-        image: gcr.io/edurangectf/instance-manager-ingress
+        image: registry.rydersel.cloud/instance-manager-ingress
         ports:
         - containerPort: 8000
 ---
@@ -58,3 +58,4 @@ spec:
             name: instance-manager
             port:
               number: 80
+

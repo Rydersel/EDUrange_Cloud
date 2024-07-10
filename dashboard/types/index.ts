@@ -30,3 +30,14 @@ export interface FooterItem {
 export type MainNavItem = NavItemWithOptionalChildren;
 
 export type SidebarNavItem = NavItemWithChildren;
+
+export interface Question {
+  id: string;
+  content: string;
+  points: number;
+}
+
+export interface Page {
+  instructions: string;
+  questions: Question[];
+}

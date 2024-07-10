@@ -1,5 +1,3 @@
-// components/base/window.js
-
 import React, { Component } from 'react';
 import Draggable from 'react-draggable';
 import Settings from '../apps/settings';
@@ -30,12 +28,16 @@ export class Window extends Component {
 
         // on window resize, resize boundary
         window.addEventListener('resize', this.resizeBoundaries);
+
+
     }
 
     componentWillUnmount() {
         ReactGA.send({ hitType: "pageview", page: "/desktop", title: "Custom Title" });
 
         window.removeEventListener('resize', this.resizeBoundaries);
+
+        // Remove click listener
     }
 
     setDefaultWindowDimension = () => {
@@ -183,6 +185,7 @@ export class Window extends Component {
                 <div style={{ width: `${this.state.width}%`, height: `${this.state.height}%`, backgroundColor: 'transparent' }}
                     className={this.state.cursorType + " " + (this.state.closed ? " closed-window " : "") + (this.state.maximized ? " duration-300 rounded-none" : " rounded-lg rounded-b-none") + (this.props.minimized ? " opacity-0 invisible duration-200 " : "") + (this.props.isFocused ? " z-30 " : " z-20 notFocused") + " opened-window overflow-hidden min-w-1/4 min-h-1/4 main-window absolute window-shadow border-black border-opacity-40 border border-t-0 flex flex-col"}
                     id={this.id}
+                    onClick={this.focusWindow}
                 >
                     <WindowYBorder resize={this.handleHorizontalResize} />
                     <WindowXBorder resize={this.handleVerticalResize} />
@@ -192,7 +195,6 @@ export class Window extends Component {
                         <Settings changeBackgroundImage={this.props.changeBackgroundImage} currBgImgName={this.props.bg_image_name} />
                     ) : (
                         <WindowMainScreen screen={() => <ScreenComponent {...extraProps} />} title={this.props.title}
-                            addFolder={this.props.id === "terminal" ? this.props.addFolder : null}
                             openApp={this.props.openApp}
                             disableScrolling={disableScrolling} />
                     )}

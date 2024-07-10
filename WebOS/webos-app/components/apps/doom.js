@@ -5,7 +5,7 @@ export default function Doom() {
     return (
 
 
-        <iframe src="http://34.127.89.131:8080/" frameBorder="0" title="Doom" className="h-full w-full bg-ub-grey"></iframe>
+        <iframe src="http://doom.rydersel.cloud/" frameBorder="0" title="Doom" className="h-full w-full bg-ub-grey"></iframe>
     );
 }
 

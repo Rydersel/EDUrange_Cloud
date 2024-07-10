@@ -5,7 +5,9 @@ export async function POST(req) {
     const body = await req.json();
     const { command } = body;
 
-    const response = await fetch('http://localhost:5000/execute', {
+    console.log('Sending command to bridge:', command);
+
+    const response = await fetch('http://127.0.0.1:5000/execute', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -13,9 +15,16 @@ export async function POST(req) {
       body: JSON.stringify({ command }),
     });
 
+    console.log('Bridge response status:', response.status);
+
+    if (!response.ok) {
+      console.log('Bridge response text:', await response.text());
+    }
+
     const data = await response.json();
     return NextResponse.json(data, { status: response.status });
   } catch (error) {
+    console.error('Failed to execute command:', error);
     return NextResponse.json({ error: 'Failed to execute command', details: error.message }, { status: 500 });
   }
 }

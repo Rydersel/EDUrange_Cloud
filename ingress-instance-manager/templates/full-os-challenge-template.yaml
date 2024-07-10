@@ -7,7 +7,7 @@ metadata:
 spec:
   containers:
   - name: challenge-container
-    image: gcr.io/edurangectf/debiantest  # Gets overwritten anyway
+    image: registry.rydersel.cloud/debiantest   # Gets overwritten anyway
     ports:
     - containerPort: 22
       name: ssh
@@ -15,7 +15,7 @@ spec:
       runAsUser: 0  # Run as root user
       privileged: false
   - name: bridge
-    image: gcr.io/edurangectf/bridge:latest
+    image: registry.rydersel.cloud/bridge
     ports:
     - containerPort: 5000
       name: http
@@ -23,7 +23,7 @@ spec:
     - name: CHALLENGE_CONTAINER_NAME
       value: "challenge-container"
   - name: webos
-    image: gcr.io/edurangectf/webos
+    image: registry.rydersel.cloud/webos
     ports:
     - containerPort: 3000
       name: http

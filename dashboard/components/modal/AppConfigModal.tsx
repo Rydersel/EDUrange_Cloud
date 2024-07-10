@@ -39,7 +39,7 @@ export const AppConfigModal: React.FC<AppConfigModalProps> = ({
       isOpen={isOpen}
       onClose={onClose}
     >
-      <div className="space-y-4">
+      <div className="space-y-4 max-h-[70vh] overflow-y-auto"> {/* Added max-height and overflow styles */}
         {appsConfig.map((app, index) => (
           <div
             key={app.id}
@@ -130,16 +130,66 @@ export const AppConfigModal: React.FC<AppConfigModalProps> = ({
                     className="bg-gray-700 text-white"
                   />
                 </div>
-                {app.id === 'web_chal' && (
-                  <div className="flex flex-col">
-                    <label htmlFor={`url-${index}`}>URL</label>
-                    <input
-                      id={`url-${index}`}
-                      value={app.url || ''}
-                      onChange={(e) => onInputChange(index, 'url', e.target.value)}
-                      className="bg-gray-700 text-white"
-                    />
-                  </div>
+                {app.id === 'challenge_prompt' && (
+                  <>
+                    <div className="flex flex-col col-span-2">
+                      <label htmlFor={`description-${index}`}>Description</label>
+                      <textarea
+                        id={`description-${index}`}
+                        value={app.description || ''}
+                        onChange={(e) => onInputChange(index, 'description', e.target.value)}
+                        className="bg-gray-700 text-white"
+                      />
+                    </div>
+                    {app.pages.map((page, pageIndex) => (
+                      <div key={pageIndex} className="col-span-2 border p-2 rounded-md mt-2">
+                        <div className="flex flex-col mb-2">
+                          <label htmlFor={`instructions-${index}-${pageIndex}`}>Instructions (Page {pageIndex + 1})</label>
+                          <textarea
+                            id={`instructions-${index}-${pageIndex}`}
+                            value={page.instructions}
+                            onChange={(e) => {
+                              const newPages = [...app.pages];
+                              newPages[pageIndex].instructions = e.target.value;
+                              onInputChange(index, 'pages', newPages);
+                            }}
+                            className="bg-gray-700 text-white"
+                          />
+                        </div>
+                        {page.questions.map((question, questionIndex) => (
+                          <div key={questionIndex} className="border p-2 rounded-md mt-2">
+                            <div className="flex flex-col mb-2">
+                              <label htmlFor={`question-content-${index}-${pageIndex}-${questionIndex}`}>Question (Page {pageIndex + 1}, Question {questionIndex + 1})</label>
+                              <input
+                                id={`question-content-${index}-${pageIndex}-${questionIndex}`}
+                                value={question.content}
+                                onChange={(e) => {
+                                  const newPages = [...app.pages];
+                                  newPages[pageIndex].questions[questionIndex].content = e.target.value;
+                                  onInputChange(index, 'pages', newPages);
+                                }}
+                                className="bg-gray-700 text-white"
+                              />
+                            </div>
+                            <div className="flex flex-col mb-2">
+                              <label htmlFor={`question-points-${index}-${pageIndex}-${questionIndex}`}>Points</label>
+                              <input
+                                id={`question-points-${index}-${pageIndex}-${questionIndex}`}
+                                type="number"
+                                value={question.points}
+                                onChange={(e) => {
+                                  const newPages = [...app.pages];
+                                  newPages[pageIndex].questions[questionIndex].points = parseInt(e.target.value, 10);
+                                  onInputChange(index, 'pages', newPages);
+                                }}
+                                className="bg-gray-700 text-white"
+                              />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ))}
+                  </>
                 )}
               </div>
             )}

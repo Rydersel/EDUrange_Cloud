@@ -15,6 +15,7 @@ export class Terminal extends Component {
 
     componentDidMount() {
         this.initializeTerminal();
+        this.addClickListener();
     }
 
     componentDidUpdate() {
@@ -24,6 +25,7 @@ export class Terminal extends Component {
 
     componentWillUnmount() {
         clearInterval(this.cursorInterval);
+        this.removeClickListener();
     }
 
     initializeTerminal = () => {
@@ -35,7 +37,9 @@ export class Terminal extends Component {
     addTerminalRow = () => {
         const { terminalRows } = this.state;
         terminalRows.push(this.renderTerminalRow(this.terminalRowCount));
-        this.setState({ terminalRows });
+        this.setState({ terminalRows }, () => {
+            this.focusCursor(this.terminalRowCount - 2); // Focus the new terminal row input
+        });
         this.terminalRowCount += 2;
     }
 
@@ -44,13 +48,12 @@ export class Terminal extends Component {
             <React.Fragment key={id}>
                 <div className="flex w-full h-5">
                     <div className="flex">
-
                         <div className="text-green-600 mx-px font-medium mr-2">$</div>
                     </div>
-                    <div id="cmd" onClick={this.focusCursor} className="bg-transparent relative flex-1 overflow-hidden">
+                    <div id="cmd" className="bg-transparent relative flex-1 overflow-hidden">
                         <span id={`show-${id}`} className="float-left whitespace-pre pb-1 opacity-100 font-normal tracking-wider"></span>
                         <div id={`cursor-${id}`} className="float-left mt-1 w-1.5 h-3.5 bg-white opacity-75"></div>
-                        <input id={`terminal-input-${id}`} data-row-id={id} onKeyDown={this.handleKeyDown} onBlur={this.blurCursor} className="absolute top-0 left-0 w-full opacity-0 outline-none bg-transparent" spellCheck={false} autoFocus autoComplete="off" type="text" />
+                        <input id={`terminal-input-${id}`} data-row-id={id} onKeyDown={this.handleKeyDown} onBlur={this.blurCursor} className="absolute top-0 left-0 w-full opacity-0 outline-none bg-transparent" spellCheck={false} autoComplete="off" type="text" />
                     </div>
                 </div>
                 <div id={`row-result-${id}`} className="my-2 font-normal"></div>
@@ -58,9 +61,14 @@ export class Terminal extends Component {
         );
     }
 
-    focusCursor = (e) => {
+    focusCursor = (id) => {
         clearInterval(this.cursorInterval);
-        this.startCursorBlink($(e.target).data("row-id"));
+        const input = $(`input#terminal-input-${id}`);
+        input.focus();
+        input.on("input", function () {
+            $(`#cmd span#show-${id}`).text($(this).val());
+        });
+        this.startCursorBlink(id);
     }
 
     blurCursor = (e) => {
@@ -69,12 +77,6 @@ export class Terminal extends Component {
 
     startCursorBlink = (id) => {
         clearInterval(this.cursorInterval);
-        $(`input#terminal-input-${id}`).trigger("focus");
-
-        $(`input#terminal-input-${id}`).on("input", function () {
-            $(`#cmd span#show-${id}`).text($(this).val());
-        });
-
         this.cursorInterval = window.setInterval(() => {
             const cursor = $(`#cursor-${id}`);
             cursor.css({ visibility: cursor.css('visibility') === 'visible' ? 'hidden' : 'visible' });
@@ -167,6 +169,19 @@ export class Terminal extends Component {
         }
     }
 
+    addClickListener = () => {
+        document.getElementById('terminal-body').addEventListener('click', this.handleTerminalClick);
+    }
+
+    removeClickListener = () => {
+        document.getElementById('terminal-body').removeEventListener('click', this.handleTerminalClick);
+    }
+
+    handleTerminalClick = () => {
+        const lastInputId = this.terminalRowCount - 2;
+        this.focusCursor(lastInputId);
+    }
+
     render() {
         return (
             <div className="h-full w-full bg-black opacity-100 text-white text-sm" id="terminal-body">
@@ -179,5 +194,5 @@ export class Terminal extends Component {
 export default Terminal;
 
 export const displayTerminal = () => {
-    return <Terminal/>;
+    return <Terminal />;
 }

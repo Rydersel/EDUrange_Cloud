@@ -6,6 +6,7 @@ import { displayTerminalCalc } from '@/components/apps/calc';
 import { displayDoom } from '@/components/apps/doom';
 import Cyberchef from "@/components/apps/cyberchef";
 import { displayWebChal } from '@/components/apps/web_chal';
+import { displayChallengePrompt } from "@/components/apps/challenge_prompt";
 
 const fetchConfig = async () => {
   try {
@@ -14,6 +15,7 @@ const fetchConfig = async () => {
       throw new Error('Failed to fetch config');
     }
     const config = await response.json();
+    console.log(config)
     return config;
   } catch (error) {
     console.error("Failed to fetch apps config:", error);
@@ -30,6 +32,7 @@ const screenMap = {
   displayDoom,
   Cyberchef,
   displayWebChal,
+  displayChallengePrompt,
 };
 
 const getAppsConfig = async () => {
@@ -40,8 +43,6 @@ const getAppsConfig = async () => {
     screen: screenMap[app.screen], // Map the screen string to the actual function
     icon: app.icon.startsWith('/') ? app.icon : `/${app.icon}` // Ensure the icon path is correct
   }));
-
-  console.log('Apps:', apps);
 
   return apps;
 };

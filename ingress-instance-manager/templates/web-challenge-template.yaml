@@ -7,12 +7,12 @@ metadata:
 spec:
   containers:
   - name: webos
-    image: gcr.io/edurangectf/webos
+    image: registry.rydersel.cloud/webos
     ports:
     - containerPort: 3000
       name: http
   - name: bridge
-    image: gcr.io/edurangectf/bridge:latest
+    image: registry.rydersel.cloud/bridge
     ports:
       - containerPort: 5000
         name: http

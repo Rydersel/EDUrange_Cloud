@@ -27,8 +27,8 @@ export const getColumns = (
     enableHiding: false
   },
   {
-    accessorKey: 'user_id',
-    header: 'USER ID'
+    accessorKey: 'userEmail',
+    header: 'USER EMAIL'
   },
   {
     accessorKey: 'challenge_image',
@@ -47,23 +47,23 @@ export const getColumns = (
     accessorKey: 'status',
     header: 'STATUS',
     cell: ({ row }) => {
-  const status = row.original.status;
-  let statusClass = '';
+      const status = row.original.status;
+      let statusClass = '';
 
-  if (status === 'creating') {
-    statusClass = 'text-green-600';
-  } else if (status === 'deleting') {
-    statusClass = 'text-red-600';
-  } else if (status === 'error') {
-    statusClass = 'text-yellow-600';
-  } else if (status === 'active') {
-    statusClass = 'text-green-300';
-  } else {
-    statusClass = 'text-gray-600';
-  }
+      if (status === 'creating') {
+        statusClass = 'text-green-600';
+      } else if (status === 'deleting') {
+        statusClass = 'text-red-600';
+      } else if (status === 'error') {
+        statusClass = 'text-yellow-600';
+      } else if (status === 'active') {
+        statusClass = 'text-green-300';
+      } else {
+        statusClass = 'text-gray-600';
+      }
 
-  return <span className={statusClass}>{status}</span>;
-}
+      return <span className={statusClass}>{status}</span>;
+    }
   },
   {
     id: 'actions',

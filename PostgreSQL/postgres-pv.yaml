@@ -4,8 +4,10 @@ metadata:
   name: postgres-pv
 spec:
   capacity:
-    storage: 1Gi
+    storage: 10Gi
   accessModes:
     - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: manual
   hostPath:
-    path: "/mnt/data"  # Adjust this path based on your Kubernetes setup
+    path: "/mnt/data/postgres"

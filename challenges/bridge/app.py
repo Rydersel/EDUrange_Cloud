@@ -1,7 +1,3 @@
-# kubectl apply -f challenge-pod.yaml
-# kubectl apply -f bridge-service.yaml
-# kubectl apply -f network-policy.yaml
-# kubectl port-forward svc/bridge-service 5000:80
 import os
 from kubernetes import client, config, stream
 from flask import Flask, request, jsonify, json
@@ -17,41 +13,41 @@ CORS(app)
 app.config['SECRET_KEY'] = 'secret!'
 socketio = SocketIO(app, cors_allowed_origins="*")
 
-# Get the name of the challenge container from the environment variable
+# Get the name of the challenge pod and container from the environment variable
 challenge_pod_name = os.getenv('CHALLENGE_POD_NAME')
 challenge_container_name = "challenge-container"
 
 sessions = {}
 
 
-def run_command(command, cwd):
-    full_command = f'cd {cwd} && {command}'
-    exec_command = ['/bin/sh', '-c', full_command]
+class PodExecutor:
+    def __init__(self, pod_name, container_name, namespace='default'):
+        self.pod_name = pod_name
+        self.container_name = container_name
+        self.namespace = namespace
 
-    try:
-        exec_response = stream.stream(v1.connect_get_namespaced_pod_exec,
-                                      name=challenge_pod_name,
-                                      namespace='default',
-                                      command=exec_command,
-                                      container=challenge_container_name,
-                                      stderr=True, stdin=False,
-                                      stdout=True, tty=False)
-        return exec_response
-    except client.ApiException as e:
-        return f"Exception when calling CoreV1Api->connect_get_namespaced_pod_exec: {e}"
+    def execute(self, command, cwd):
+        full_command = f'cd {cwd} && {command}'
+        exec_command = ['/bin/sh', '-c', full_command]
+
+        try:
+            exec_response = stream.stream(v1.connect_get_namespaced_pod_exec,
+                                          name=self.pod_name,
+                                          namespace=self.namespace,
+                                          command=exec_command,
+                                          container=self.container_name,
+                                          stderr=True, stdin=False,
+                                          stdout=True, tty=False)
+            return exec_response
+        except client.ApiException as e:
+            return f"Exception when calling CoreV1Api->connect_get_namespaced_pod_exec: {e}"
 
 
-def filter_writable_directories(directories, cwd):
+def filter_writable_directories(directories, cwd, executor):
     writable_dirs = []
     for directory in directories:
-        exec_check_command = f'cd {cwd} && [ -w {directory} ] && echo "writable" || echo "not writable"'
-        check_response = stream.stream(v1.connect_get_namespaced_pod_exec,
-                                       name='challenge-pod',
-                                       namespace='default',
-                                       command=['/bin/sh', '-c', exec_check_command],
-                                       container=challenge_container_name,
-                                       stderr=True, stdin=False,
-                                       stdout=True, tty=False)
+        exec_check_command = f'[ -w {directory} ] && echo "writable" || echo "not writable"'
+        check_response = executor.execute(exec_check_command, cwd)
         if "writable" in check_response:
             writable_dirs.append(directory)
     return writable_dirs
@@ -78,24 +74,29 @@ def handle_command(data):
     if command:
         if sid in sessions:
             cwd = sessions[sid]['cwd']
+            executor = PodExecutor(challenge_pod_name, challenge_container_name)
+
             if command.startswith('cd'):
-                parts = command.split()
-                if len(parts) == 1 or parts[1] == '~':
-                    sessions[sid]['cwd'] = '/'
-                else:
-                    new_dir = os.path.normpath(os.path.join(cwd, parts[1]))
-                    exec_result = run_command(f'cd {new_dir} && pwd', cwd)
-                    if "Exception" not in exec_result:
-                        sessions[sid]['cwd'] = new_dir.strip()
-                        response = exec_result + '\n'
-                    else:
-                        response = f"cd: no such file or directory: {parts[1]}\n"
-                    emit('response', response, room=sid)
-                    return
+                response = change_directory(command, cwd, executor)
+                sessions[sid]['cwd'] = response['cwd']
             else:
-                exec_result = run_command(command, cwd)
-                response = exec_result + '\n'
-                emit('response', response, room=sid)
+                exec_result = executor.execute(command, cwd)
+                response = {'output': exec_result + '\n'}
+
+            emit('response', response['output'], room=sid)
+
+
+def change_directory(command, cwd, executor):
+    parts = command.split()
+    if len(parts) == 1 or parts[1] == '~':
+        new_cwd = '/'
+    else:
+        new_cwd = os.path.normpath(os.path.join(cwd, parts[1]))
+        exec_result = executor.execute(f'cd {new_cwd} && pwd', cwd)
+        if "Exception" in exec_result:
+            return {'output': f"cd: no such file or directory: {parts[1]}\n", 'cwd': cwd}
+
+    return {'output': f'{new_cwd}\n', 'cwd': new_cwd}
 
 
 @app.route('/execute', methods=['POST'])
@@ -107,28 +108,20 @@ def execute_command():
     if sid not in sessions:
         sessions[sid] = {'cwd': '/'}
     cwd = sessions[sid]['cwd']
+    executor = PodExecutor(challenge_pod_name, challenge_container_name)
+
     if command:
         if command.startswith('cd'):
-            parts = command.split()
-            if len(parts) == 1 or parts[1] == '~':
-                sessions[sid]['cwd'] = '/'
-                response = '/'
-            else:
-                new_dir = os.path.normpath(os.path.join(cwd, parts[1]))
-                exec_result = run_command(f'cd {new_dir} && pwd', cwd)
-                if "Exception" not in exec_result:
-                    sessions[sid]['cwd'] = new_dir.strip()
-                    response = exec_result + '\n'
-                else:
-                    response = f"cd: no such file or directory: {parts[1]}\n"
-            return jsonify({"output": response})
+            response = change_directory(command, cwd, executor)
+            sessions[sid]['cwd'] = response['cwd']
+            return jsonify({"output": response['output']})
         else:
-            exec_instance = run_command(command, cwd)
+            exec_instance = executor.execute(command, cwd)
             # Normalize output for ls
             if command.strip() == 'ls':
                 directories = exec_instance.split()
                 if show_writable_only:
-                    directories = filter_writable_directories(directories, cwd)
+                    directories = filter_writable_directories(directories, cwd, executor)
                 exec_instance = " ".join(directories)
             return jsonify({"output": exec_instance + '\n'})
     return jsonify({"error": "Command is required"}), 400
@@ -144,9 +137,10 @@ def get_config():
         return jsonify({"error": "Failed to parse config"}), 500
 
 
-
-
-
 @app.route('/')
 def index():
     return "WebSocket Server for Docker Commands"
+
+
+if __name__ == '__main__':
+    socketio.run(app, host='0.0.0.0', port=5000)

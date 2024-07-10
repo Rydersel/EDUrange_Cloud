@@ -46,24 +46,44 @@ export const ChallengesClient: React.FC<ChallengesClientProps> = ({ data }) => {
   const [selectedChallenge, setSelectedChallenge] = useState<Challenge | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
+  const fetchUserEmail = async (userId: string) => {
+    try {
+      const response = await fetch(`/api/users/${userId}`);
+      if (response.ok) {
+        const user = await response.json();
+        return user.email;
+      }
+      return 'Unknown Email';
+    } catch (error) {
+      console.error(`Error fetching email for user ${userId}:`, error);
+      return 'Unknown Email';
+    }
+  };
+
   const fetchChallenges = async () => {
     const response = await fetch('https://eductf.rydersel.cloud/instance-manager/api/list-challenge-pods');
     const result = await response.json();
     if (response.ok) {
-      const challengePods = result.challenge_pods.map((challenge: any) => ({
-        id: challenge.pod_name,
-        time_alive: timeSince(new Date(challenge.creation_time)),
-        user_id: challenge.user_id,
-        challenge_image: challenge.challenge_image,
-        challenge_url: challenge.challenge_url,
-        status: 'Loading...', // Initial status value
-        flag_secret_name: challenge.flag_secret_name,
-        flag: 'Loading...' // Initial flag value
-      }));
+      const challengePods = await Promise.all(
+        result.challenge_pods.map(async (challenge: any) => {
+          const userEmail = await fetchUserEmail(challenge.user_id);
+          return {
+            id: challenge.pod_name,
+            time_alive: timeSince(new Date(challenge.creation_time)),
+            user_id: challenge.user_id,
+            userEmail,
+            challenge_image: challenge.challenge_image,
+            challenge_url: challenge.challenge_url,
+            status: 'Loading...', // Initial status value
+            flag_secret_name: challenge.flag_secret_name,
+            flag: 'Loading...' // Initial flag value
+          };
+        })
+      );
 
       // Fetch flags and statuses for each challenge
       const challengesWithFlagsAndStatus = await Promise.all(
-        challengePods.map(async (challenge: { id: string; flag_secret_name: string; flag: string; status: string; }) => {
+        challengePods.map(async (challenge) => {
           // Fetch flag
           const flagResponse = await fetch('https://eductf.rydersel.cloud/instance-manager/api/get-secret', {
             method: 'POST',
@@ -123,7 +143,7 @@ export const ChallengesClient: React.FC<ChallengesClientProps> = ({ data }) => {
 
     const intervalId = setInterval(() => {
       refreshStatus();
-    }, 2500); // Refresh status every 5 seconds
+    }, 2500); // Refresh status every 2.5 seconds
 
     return () => clearInterval(intervalId); // Cleanup interval on component unmount
   }, []);
@@ -157,7 +177,7 @@ export const ChallengesClient: React.FC<ChallengesClientProps> = ({ data }) => {
       </div>
       <Separator />
       <DataTable
-        searchKey="user_id"
+        searchKey="userEmail"
         columns={getColumns(updateChallengeStatus)}
         data={challenges}
         onRowClick={handleRowClick}

@@ -37,6 +37,7 @@ export class Desktop extends Component {
         const apps = await getAppsConfig();
         this.setState({ apps }, this.fetchAppsData);
         this.setContextListeners();
+        this.launchStartupApps(apps); // Launch apps on startup
     }
 
     componentWillUnmount() {
@@ -66,6 +67,18 @@ export class Desktop extends Component {
 
         this.setState(initialData);
         this.initFavourite = { ...initialData.favourite_apps };
+    }
+
+    launchStartupApps = (apps) => {
+        apps.forEach(app => {
+            if (app.launch_on_startup) {
+                this.setState(prevState => ({
+                    closed_windows: { ...prevState.closed_windows, [app.id]: false }
+                }), () => {
+                    this.openApp(app.id);
+                });
+            }
+        });
     }
 
     updateAppsData = () => {

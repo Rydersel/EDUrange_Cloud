@@ -1,6 +1,6 @@
 # EDURANGE Cloud (WORK IN PROGRESS)
 
-## [Public Documentation]([https://edurange.atlassian.net/wiki/external/MzllMDZhYTFhMTMyNDE0Zjg0NmE0ZjI2Mzc0ZGQ3NWI](https://github.com/Rydersel/EDUrange_Cloud/wiki))
+## [Public Documentation](https://github.com/Rydersel/EDUrange_Cloud/wiki)
 
 ## [Developer Documentation](https://edurange.atlassian.net/wiki/external/MzllMDZhYTFhMTMyNDE0Zjg0NmE0ZjI2Mzc0ZGQ3NWI)
 

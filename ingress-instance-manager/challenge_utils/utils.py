@@ -81,7 +81,7 @@ def read_yaml_file(yaml_path):
         logging.error(f"Error loading YAML file: {e}")
         raise
 
-def create_challenge_pod(user_id, challenge_image, yaml_path, run_as_root, apps_config):
+def create_challenge_pod(user_id, challenge_image, yaml_path, run_as_root, apps_config, flag):
     logging.info("Starting create_challenge_pod")
     logging.debug(f"Received parameters: user_id={user_id}, challenge_image={challenge_image}, yaml_path={yaml_path}, run_as_root={run_as_root}")
 
@@ -108,6 +108,7 @@ def create_challenge_pod(user_id, challenge_image, yaml_path, run_as_root, apps_
     for container in pod_spec['spec']['containers']:
         if container['name'] == 'challenge-container':
             container['image'] = challenge_image
+
 
     # Add CHALLENGE_POD_NAME environment variable to the bridge container
     for container in pod_spec['spec']['containers']:

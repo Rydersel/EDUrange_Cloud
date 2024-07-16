@@ -7,7 +7,8 @@ from challenge_utils.utils import create_pod_service_and_ingress, delete_challen
     get_secret, decode_secret_data
 from challenges import FullOsChallenge, WebChallenge
 
-# Initialize logging
+logging.basicConfig(level=logging.DEBUG)
+
 
 app = Flask(__name__)
 CORS(app)

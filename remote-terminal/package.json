@@ -1,0 +1,20 @@
+{
+  "name": "k8-terminal",
+  "version": "1.0.0",
+  "description": "",
+  "main": "test.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "browserify frontend/main.js -o public/static/bundle.js",
+    "dev": "npm run build && node server/index.js"
+  },
+  "dependencies": {
+    "copy-to-clipboard": "^3.3.3",
+    "dotenv": "^8.2.0",
+    "express": "^4.17.1",
+    "ws": "^7.5.10",
+    "xterm": "^4.9.0",
+    "xterm-addon-attach": "^0.6.0",
+    "xterm-addon-fit": "^0.4.0"
+  }
+}

@@ -7,7 +7,10 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "export": "next export"
+    "export": "next export",
+    "serve": "node server/index.js",
+    "dev-serve": "concurrently \"npm run dev\" \"npm run serve\"",
+    "start-serve": "concurrently \"npm run start\" \"npm run serve\""
   },
   "engines": {
     "node": ">=16.x"
@@ -24,12 +27,15 @@
     "axios": "^1.7.2",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.1",
+    "copy-to-clipboard": "^3.3.3",
     "dotenv": "^16.4.5",
     "eslint-config-next": "^14.2.3",
     "expr-eval": "^2.0.2",
     "express": "^4.19.2",
     "fs": "^0.0.1-security",
     "http-proxy-middleware": "^3.0.0",
+    "https-proxy-agent": "^7.0.5",
+    "isomorphic-ws": "^5.0.0",
     "jquery": "^3.6.3",
     "lucide-react": "^0.395.0",
     "next": "^14.2.3",
@@ -49,6 +55,12 @@
     "tailwind-merge": "^2.3.0",
     "tailwindcss": "^3.2.4",
     "tailwindcss-animate": "^1.0.7",
-    "xterm": "^5.3.0"
+    "ws": "^7.5.10",
+    "xterm": "^5.3.0",
+    "xterm-addon-attach": "^0.9.0",
+    "xterm-addon-fit": "^0.8.0"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
   }
 }

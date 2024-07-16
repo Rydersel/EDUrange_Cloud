@@ -1,3 +1,6 @@
+# docker buildx build --platform linux/amd64,linux/arm64 -t registry.rydersel.cloud/bandit3 . --push
+
+
 FROM debian:bullseye-slim
 
 # Install basic utilities in a single RUN command and clean up afterwards to reduce image size
@@ -15,14 +18,14 @@ RUN apt-get update && \
 
 # Create a user and set up directory structure in a single RUN command
 RUN useradd -m -s /bin/bash challengeuser
-    
+
 # Provide Starting Hints
 COPY readme /home/challengeuser/
-    
+
 # Copy the entrypoint and cleanup scripts
 COPY entrypoint.sh /home/challengeuser/entrypoint.sh
 COPY cleanup.sh /home/challengeuser/.cleanup.sh
-RUN chmod +x /home/challengeuser/entrypoint.sh && \ 
+RUN chmod +x /home/challengeuser/entrypoint.sh && \
     chmod +x /home/challengeuser/.cleanup.sh
 
 # Switch to the new user

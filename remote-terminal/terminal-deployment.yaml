@@ -1,40 +1,12 @@
 apiVersion: v1
 kind: Pod
 metadata:
-  name: challenge-pod
+  name: terminal-test-pod1
   labels:
-    app: challenge
+    app: terminal-test1
 spec:
-  serviceAccountName: terminal-account  # Ensure the correct service account is used
   containers:
-  - name: challenge-container
-    image: registry.rydersel.cloud/debiantest   # Gets overwritten anyway
-    ports:
-    - containerPort: 22
-      name: ssh
-    securityContext:
-      runAsUser: 0  # Run as root user
-      privileged: false
-    env:
-    - name: FLAG
-      value: "flag"
-  - name: bridge
-    image: registry.rydersel.cloud/bridge
-    ports:
-    - containerPort: 5000
-      name: http
-    env:
-    - name: CHALLENGE_CONTAINER_NAME
-      value: "challenge-container"
-  - name: webos
-    image: registry.rydersel.cloud/webos
-    ports:
-    - containerPort: 3000
-      name: webos-http
-    env:
-    - name: CHALLENGE_API_URL
-      value: "http://localhost:5000/execute"
-  - name: terminal
+  - name: terminal-container
     image: registry.rydersel.cloud/terminal
     ports:
     - containerPort: 3001
@@ -47,62 +19,45 @@ spec:
     - name: KUBERNETES_SERVICE_ACCOUNT_TOKEN
       value: "eyJhbGciOiJSUzI1NiIsImtpZCI6IjRNOU1rRFh3SlVVb1FGLWpJX3BobjZJMkFkYUhNdHZFRmdzUGJPRDV1ZzQifQ.eyJhdWQiOlsia3ViZXJuZXRlcy5kZWZhdWx0LnN2YyJdLCJleHAiOjE3NTY4MzQ1ODEsImlhdCI6MTcyMDgzODE4MSwiaXNzIjoiaHR0cHM6Ly9rdWJlcm5ldGVzLmRlZmF1bHQuc3ZjLmNsdXN0ZXIubG9jYWwiLCJqdGkiOiI5NmY4N2E4My1iZjNhLTQyOWItYTVkMy03YjNkNTQ5MDIyNWUiLCJrdWJlcm5ldGVzLmlvIjp7Im5hbWVzcGFjZSI6ImRlZmF1bHQiLCJzZXJ2aWNlYWNjb3VudCI6eyJuYW1lIjoidGVybWluYWwtYWNjb3VudCIsInVpZCI6IjE2OTcyN2JmLTUyNGEtNGE1Zi1hMWNlLTJiNTgxNTFjMGY4YiJ9fSwibmJmIjoxNzIwODM4MTgxLCJzdWIiOiJzeXN0ZW06c2VydmljZWFjY291bnQ6ZGVmYXVsdDp0ZXJtaW5hbC1hY2NvdW50In0.uukNAgl0b6lGbFNBy3ak6XRf5NiviHnvQf0xV2Vbs_vh57GMvzy1L7ZY2-KIQKQar5YeaYp8lfnzsF_bRS6315c_8cTWMuxZdnECd7GfSCyQYph1gZrz_oXMqB16891d5dHSVrdXKiYN4-916ddxNSPExZzwQ-MUPKw5KRHgFMF3R2uofVnhwxLaDzbVsmwnNx4y0QTJNKstVc4eWJdhdJ2QDOC0uW8vnoCJob4IthXWxqkBdf1Z63pNH4BcrM9N3hix_ltOnw1wla_OAHxPnY0w6MHHtZWzOolboFUU6SvJHSfeZQRQIR8keAJAuJWl1VAwXoDXrKZ59dluKLDIqA"
     - name: POD_NAME
-      value: "alpine-deployment-7fccf844b5-drwr5"
+      value: "ctfchal-clyf1mbf50000u87dl8tvhhvh-ffc0"
     - name: CONTAINER_NAME
       value: "challenge-container"
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: challenge-service
+  name: terminal-test-service
 spec:
   selector:
-    app: challenge
+    app: terminal-test1
   ports:
   - protocol: TCP
     port: 80
-    targetPort: 3000
-    name: webos-http
-  - protocol: TCP
-    port: 3001
     targetPort: 3001
-    name: terminal-http
-  type: ClusterIP  # Changed to ClusterIP for internal routing
+    name: http
+  type: ClusterIP
 ---
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: challenge-ingress
+  name: terminal-test-ingress
   annotations:
     nginx.ingress.kubernetes.io/use-regex: "true"
-    cert-manager.io/cluster-issuer: "letsencrypt-prod"  # Add this annotation
+    cert-manager.io/cluster-issuer: "letsencrypt-prod" # or your issuer name
 spec:
   ingressClassName: nginx
-  tls:
-  - hosts:
-    - instance-name.rydersel.cloud
-    secretName: instance-name-tls
-  - hosts:
-    - terminal.instance-name.rydersel.cloud
-    secretName: terminal-instance-name-tls
   rules:
-  - host: instance-name.rydersel.cloud
+  - host: terminal.rydersel.cloud
     http:
       paths:
       - path: /
         pathType: ImplementationSpecific
         backend:
           service:
-            name: challenge-service
+            name: terminal-test-service
             port:
               number: 80
-  - host: terminal.instance-name.rydersel.cloud
-    http:
-      paths:
-      - path: /
-        pathType: ImplementationSpecific
-        backend:
-          service:
-            name: challenge-service
-            port:
-              number: 3001
+  tls:
+  - hosts:
+    - terminal.rydersel.cloud
+    secretName: terminal-test-tls # cert-manager will store the TLS certificate in this secret

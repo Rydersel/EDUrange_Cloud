@@ -1,0 +1,22 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: pod-exec-role
+rules:
+- apiGroups: [""]
+  resources: ["pods/exec"]
+  verbs: ["create", "get", "list", "watch"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: pod-exec-binding
+subjects:
+- kind: ServiceAccount
+  name: terminal-account  # Change this to your service account name
+  namespace: default
+roleRef:
+  kind: ClusterRole
+  name: pod-exec-role
+  apiGroup: rbac.authorization.k8s.io

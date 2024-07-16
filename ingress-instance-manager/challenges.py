@@ -4,8 +4,6 @@ from kubernetes import client
 from challenge_utils.utils import generate_unique_flag, create_flag_secret, read_yaml_file
 
 
-# Alot of code repitition here, will fix later
-
 class FullOsChallenge:
     def __init__(self, user_id, challenge_image, yaml_path, run_as_root, apps_config):
         self.user_id = user_id
@@ -46,10 +44,12 @@ class FullOsChallenge:
 
         logging.info(f"Creating challenge {pod.metadata.name} for user {self.user_id}")
 
-        challenge_url = f"http://{pod.metadata.name}.rydersel.cloud"
+        challenge_url = f"https://{pod.metadata.name}.rydersel.cloud"
+        terminal_url = f"https://terminal.{pod.metadata.name}.rydersel.cloud"
         logging.info(f"Assigned challenge URL: {challenge_url}")
+        logging.info(f"Assigned terminal URL: {terminal_url}")
 
-        return pod.metadata.name, challenge_url, secret_name
+        return pod.metadata.name, challenge_url, terminal_url, secret_name
 
     def create_challenge_pod(self):
         logging.info("Starting create_challenge_pod")
@@ -69,29 +69,66 @@ class FullOsChallenge:
         service_spec = documents[1]
         ingress_spec = documents[2]
 
-        pod_spec['metadata']['name'] = instance_name  # Set the instance name here
+        pod_spec['metadata']['name'] = instance_name  # Set the instance name
         pod_spec['metadata']['labels']['app'] = instance_name
         service_spec['metadata']['name'] = f"service-{instance_name}"
         service_spec['spec']['selector']['app'] = instance_name
         ingress_spec['metadata']['name'] = f"ingress-{instance_name}"
+        ingress_spec['spec']['tls'] = [
+            {
+                "hosts": [f"{instance_name}.rydersel.cloud"],
+                "secretName": f"{instance_name}-tls"
+            },
+            {
+                "hosts": [f"terminal.{instance_name}.rydersel.cloud"],
+                "secretName": f"terminal-{instance_name}-tls"
+            }
+        ]
         ingress_spec['spec']['rules'][0]['host'] = f"{instance_name}.rydersel.cloud"
         ingress_spec['spec']['rules'][0]['http']['paths'][0]['backend']['service']['name'] = f"service-{instance_name}"
+        ingress_spec['spec']['rules'].append({
+            "host": f"terminal.{instance_name}.rydersel.cloud",
+            "http": {
+                "paths": [{
+                    "path": "/",
+                    "pathType": "ImplementationSpecific",
+                    "backend": {
+                        "service": {
+                            "name": f"service-{instance_name}",
+                            "port": {
+                                "number": 3001
+                            }
+                        }
+                    }
+                }]
+            }
+        })
 
         # Dynamically set the challenge image
         for container in pod_spec['spec']['containers']:
             if container['name'] == 'challenge-container':
                 container['image'] = self.challenge_image
+                container['env'].append({"name": "FLAG", "value": flag})
 
-        # Add CHALLENGE_POD_NAME environment variable to the bridge container
-        for container in pod_spec['spec']['containers']:
-            if container['name'] == 'bridge':
-                container['env'].append({"name": "CHALLENGE_POD_NAME", "value": instance_name})
-
-        # Add FLAG_SECRET_NAME environment variable to all containers
         for container in pod_spec['spec']['containers']:
             if container['name'] == 'bridge':
                 container['env'].append({"name": "flag_secret_name", "value": secret_name})
                 container['env'].append({"name": "NEXT_PUBLIC_APPS_CONFIG", "value": self.apps_config})
+                container['env'].append({"name": "CHALLENGE_POD_NAME", "value": instance_name})
+
+            if container['name'] == 'terminal':
+                container['env'] = [
+                    {"name": "CONTAINER_NAME",
+                     "value": "challenge-container"},
+                    {"name": "POD_NAME",
+                     "value": instance_name},
+                    {"name": "KUBERNETES_HOST",
+                    "value": "b5c39586-ba37-4e81-8e40-910d6880ff14.us-ord-1.linodelke.net:443"},
+                    {"name": "KUBERNETES_NAMESPACE", "value": "default"},
+                    {"name": "KUBERNETES_SERVICE_ACCOUNT_TOKEN",
+                    "value": "eyJhbGciOiJSUzI1NiIsImtpZCI6IjRNOU1rRFh3SlVVb1FGLWpJX3BobjZJMkFkYUhNdHZFRmdzUGJPRDV1ZzQifQ.eyJhdWQiOlsia3ViZXJuZXRlcy5kZWZhdWx0LnN2YyJdLCJleHAiOjE3NTY4MzQ1ODEsImlhdCI6MTcyMDgzODE4MSwiaXNzIjoiaHR0cHM6Ly9rdWJlcm5ldGVzLmRlZmF1bHQuc3ZjLmNsdXN0ZXIubG9jYWwiLCJqdGkiOiI5NmY4N2E4My1iZjNhLTQyOWItYTVkMy03YjNkNTQ5MDIyNWUiLCJrdWJlcm5ldGVzLmlvIjp7Im5hbWVzcGFjZSI6ImRlZmF1bHQiLCJzZXJ2aWNlYWNjb3VudCI6eyJuYW1lIjoidGVybWluYWwtYWNjb3VudCIsInVpZCI6IjE2OTcyN2JmLTUyNGEtNGE1Zi1hMWNlLTJiNTgxNTFjMGY4YiJ9fSwibmJmIjoxNzIwODM4MTgxLCJzdWIiOiJzeXN0ZW06c2VydmljZWFjY291bnQ6ZGVmYXVsdDp0ZXJtaW5hbC1hY2NvdW50In0.uukNAgl0b6lGbFNBy3ak6XRf5NiviHnvQf0xV2Vbs_vh57GMvzy1L7ZY2-KIQKQar5YeaYp8lfnzsF_bRS6315c_8cTWMuxZdnECd7GfSCyQYph1gZrz_oXMqB16891d5dHSVrdXKiYN4-916ddxNSPExZzwQ-MUPKw5KRHgFMF3R2uofVnhwxLaDzbVsmwnNx4y0QTJNKstVc4eWJdhdJ2QDOC0uW8vnoCJob4IthXWxqkBdf1Z63pNH4BcrM9N3hix_ltOnw1wla_OAHxPnY0w6MHHtZWzOolboFUU6SvJHSfeZQRQIR8keAJAuJWl1VAwXoDXrKZ59dluKLDIqA"},
+            ]
+
 
         pod = client.V1Pod(
             api_version="v1",
@@ -106,7 +143,10 @@ class FullOsChallenge:
             metadata=client.V1ObjectMeta(name=service_spec['metadata']['name']),
             spec=client.V1ServiceSpec(
                 selector={"app": instance_name, "user": sanitized_user_id},
-                ports=[client.V1ServicePort(protocol="TCP", port=80, target_port=3000)],
+                ports=[
+                    client.V1ServicePort(protocol="TCP", port=80, target_port=3000, name="webos-http"),
+                    client.V1ServicePort(protocol="TCP", port=3001, target_port=3001, name="terminal-http")
+                ],
                 type="ClusterIP"
             )
         )
@@ -114,7 +154,7 @@ class FullOsChallenge:
         ingress = client.V1Ingress(
             api_version="networking.k8s.io/v1",
             kind="Ingress",
-            metadata=client.V1ObjectMeta(name=ingress_spec['metadata']['name']),
+            metadata=client.V1ObjectMeta(name=ingress_spec['metadata']['name'], annotations=ingress_spec['metadata'].get('annotations', {})),
             spec=ingress_spec['spec']
         )
 
@@ -162,7 +202,7 @@ class WebChallenge:
 
         logging.info(f"Creating challenge {pod.metadata.name} for user {self.user_id}")
 
-        challenge_url = f"http://{pod.metadata.name}.rydersel.cloud"
+        challenge_url = f"http://terminal.{pod.metadata.name}.rydersel.cloud"
         logging.info(f"Assigned challenge URL: {challenge_url}")
 
         return pod.metadata.name, challenge_url, secret_name
@@ -190,10 +230,21 @@ class WebChallenge:
         service_spec['metadata']['name'] = f"service-{instance_name}"
         service_spec['spec']['selector']['app'] = instance_name
         ingress_spec['metadata']['name'] = f"ingress-{instance_name}"
-        ingress_spec['spec']['rules'][0]['host'] = f"{instance_name}.rydersel.cloud"
+        ingress_spec['spec']['rules'][0]['host'] = f"terminal.{instance_name}.rydersel.cloud"
         ingress_spec['spec']['rules'][0]['http']['paths'][0]['backend']['service']['name'] = f"service-{instance_name}"
+        ingress_spec['spec']['rules'][0]['http']['paths'].append({
+            "path": "/terminal",
+            "pathType": "ImplementationSpecific",
+            "backend": {
+                "service": {
+                    "name": f"service-{instance_name}",
+                    "port": {
+                        "number": 3001
+                    }
+                }
+            }
+        })
 
-        # Add FLAG_SECRET_NAME environment variable to all containers
         for container in pod_spec['spec']['containers']:
             if container['name'] == 'bridge':
                 container['env'].append({"name": "flag_secret_name", "value": secret_name})
@@ -212,7 +263,10 @@ class WebChallenge:
             metadata=client.V1ObjectMeta(name=service_spec['metadata']['name']),
             spec=client.V1ServiceSpec(
                 selector={"app": instance_name, "user": sanitized_user_id},
-                ports=[client.V1ServicePort(protocol="TCP", port=80, target_port=3000)],
+                ports=[
+                    client.V1ServicePort(protocol="TCP", port=80, target_port=3000, name="webos-http"),
+                    client.V1ServicePort(protocol="TCP", port=3001, target_port=3001, name="terminal-http")
+                ],
                 type="ClusterIP"
             )
         )
@@ -227,4 +281,3 @@ class WebChallenge:
         logging.info("Constructed Kubernetes Pod, Service, and Ingress objects")
 
         return pod, service, ingress, secret_name
-

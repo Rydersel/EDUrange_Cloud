@@ -1,7 +1,8 @@
-import React from 'react';
+import React, {useState} from 'react';
 
 export default function Terminal() {
-    let terminal_url = `https://terminal.${window.location.host}`
+
+    let terminal_url = `https://terminal-${window.location.host}`
     console.log(terminal_url)
     return (
 

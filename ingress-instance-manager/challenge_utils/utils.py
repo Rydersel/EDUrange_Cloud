@@ -34,10 +34,8 @@ def generate_unique_flag(user_id):
     shortened_hash = full_hash[:8]  # Take the first 8 characters of the hash (full_hash is way too long)
     return f"EDU-CTF-{{{shortened_hash}}}"
 
-def create_flag_secret(user_id, flag):
-    sanitized_user_id = user_id.replace("_", "-").lower()
-    timestamp = str(int(time.time()))
-    secret_name = f"flag-secret-{sanitized_user_id}-{timestamp}"  # Unique name
+def create_flag_secret(instance_name, flag):
+    secret_name = f"flag-secret-{instance_name}"
     body = client.V1Secret(
         metadata=client.V1ObjectMeta(name=secret_name),
         string_data={"flag": flag}
@@ -197,6 +195,10 @@ def delete_challenge_pod(pod_name):
     )
     core_api.delete_namespaced_service(
         name=f"service-{pod_name}",
+        namespace="default",
+    )
+    core_api.delete_namespaced_secret(  # Delete secret storing flag
+        name=f"flag-secret-{pod_name}",
         namespace="default",
     )
     networking_v1 = client.NetworkingV1Api()

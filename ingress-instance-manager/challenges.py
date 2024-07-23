@@ -45,7 +45,7 @@ class FullOsChallenge:
         logging.info(f"Creating challenge {pod.metadata.name} for user {self.user_id}")
 
         challenge_url = f"https://{pod.metadata.name}.rydersel.cloud"
-        terminal_url = f"https://terminal.{pod.metadata.name}.rydersel.cloud"
+        terminal_url = f"https://terminal-{pod.metadata.name}.rydersel.cloud"
         logging.info(f"Assigned challenge URL: {challenge_url}")
         logging.info(f"Assigned terminal URL: {terminal_url}")
 
@@ -57,10 +57,9 @@ class FullOsChallenge:
             f"Received parameters: user_id={self.user_id}, challenge_image={self.challenge_image}, yaml_path={self.yaml_path}, run_as_root={self.run_as_root}")
 
         flag = generate_unique_flag(self.user_id)
-        secret_name = create_flag_secret(self.user_id, flag)
         sanitized_user_id = self.user_id.replace("_", "-").lower()
         instance_name = f"ctfchal-{sanitized_user_id}-{str(uuid.uuid4())[:4]}".lower()
-
+        secret_name = create_flag_secret(instance_name, flag)
         logging.info("Generated instance name and sanitized user ID")
         logging.info(f"Instance name: {instance_name}, Sanitized user ID: {sanitized_user_id}")
 
@@ -74,20 +73,10 @@ class FullOsChallenge:
         service_spec['metadata']['name'] = f"service-{instance_name}"
         service_spec['spec']['selector']['app'] = instance_name
         ingress_spec['metadata']['name'] = f"ingress-{instance_name}"
-        ingress_spec['spec']['tls'] = [
-            {
-                "hosts": [f"{instance_name}.rydersel.cloud"],
-                "secretName": f"{instance_name}-tls"
-            },
-            {
-                "hosts": [f"terminal.{instance_name}.rydersel.cloud"],
-                "secretName": f"terminal-{instance_name}-tls"
-            }
-        ]
         ingress_spec['spec']['rules'][0]['host'] = f"{instance_name}.rydersel.cloud"
         ingress_spec['spec']['rules'][0]['http']['paths'][0]['backend']['service']['name'] = f"service-{instance_name}"
         ingress_spec['spec']['rules'].append({
-            "host": f"terminal.{instance_name}.rydersel.cloud",
+            "host": f"terminal-{instance_name}.rydersel.cloud",
             "http": {
                 "paths": [{
                     "path": "/",
@@ -103,6 +92,16 @@ class FullOsChallenge:
                 }]
             }
         })
+
+        # Add the TLS section to use the wildcard certificate
+        # Remember the secret name is wildcard-domain-certificate NOT wildcard-certificate-prod
+        ingress_spec['spec']['tls'] = [{
+            "hosts": [
+                f"{instance_name}.rydersel.cloud",
+                f"terminal-{instance_name}.rydersel.cloud"
+            ],
+            "secretName": "wildcard-domain-certificate"
+        }]
 
         # Dynamically set the challenge image
         for container in pod_spec['spec']['containers']:
@@ -202,7 +201,7 @@ class WebChallenge:
 
         logging.info(f"Creating challenge {pod.metadata.name} for user {self.user_id}")
 
-        challenge_url = f"http://terminal.{pod.metadata.name}.rydersel.cloud"
+        challenge_url = f"http://terminal-{pod.metadata.name}.rydersel.cloud"
         logging.info(f"Assigned challenge URL: {challenge_url}")
 
         return pod.metadata.name, challenge_url, secret_name
@@ -230,7 +229,7 @@ class WebChallenge:
         service_spec['metadata']['name'] = f"service-{instance_name}"
         service_spec['spec']['selector']['app'] = instance_name
         ingress_spec['metadata']['name'] = f"ingress-{instance_name}"
-        ingress_spec['spec']['rules'][0]['host'] = f"terminal.{instance_name}.rydersel.cloud"
+        ingress_spec['spec']['rules'][0]['host'] = f"terminal-{instance_name}.rydersel.cloud"
         ingress_spec['spec']['rules'][0]['http']['paths'][0]['backend']['service']['name'] = f"service-{instance_name}"
         ingress_spec['spec']['rules'][0]['http']['paths'].append({
             "path": "/terminal",
@@ -279,5 +278,6 @@ class WebChallenge:
         )
 
         logging.info("Constructed Kubernetes Pod, Service, and Ingress objects")
+        logging.info(ingress)
 
         return pod, service, ingress, secret_name

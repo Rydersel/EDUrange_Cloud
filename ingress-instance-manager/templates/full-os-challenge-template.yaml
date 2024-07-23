@@ -75,16 +75,14 @@ metadata:
   name: challenge-ingress
   annotations:
     nginx.ingress.kubernetes.io/use-regex: "true"
-    cert-manager.io/cluster-issuer: "letsencrypt-prod"  # Add this annotation
+    cert-manager.io/cluster-issuer: "cert-clusterissuer"  # Use the correct cluster issuer
 spec:
   ingressClassName: nginx
   tls:
   - hosts:
     - instance-name.rydersel.cloud
-    secretName: instance-name-tls
-  - hosts:
-    - terminal.instance-name.rydersel.cloud
-    secretName: terminal-instance-name-tls
+    - terminal-instance-name.rydersel.cloud
+    secretName: wildcard-domain-certificate
   rules:
   - host: instance-name.rydersel.cloud
     http:
@@ -96,7 +94,7 @@ spec:
             name: challenge-service
             port:
               number: 80
-  - host: terminal.instance-name.rydersel.cloud
+  - host: terminal-instance-name.rydersel.cloud
     http:
       paths:
       - path: /

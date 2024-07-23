@@ -12,7 +12,7 @@ let socket = null;
 
 
 const podExec = (pod, container) => {
-  // If active socket in use, close connection and remove terminal view
+  // If active socket in use, close connection
   if (socket !== null) {
     terminalComponent.innerHTML = "";
     socket.close();

@@ -58,4 +58,8 @@ spec:
             name: instance-manager
             port:
               number: 80
+  tls:
+    - hosts:
+        - eductf.rydersel.cloud
+      secretName: wildcard-domain-certificate
 

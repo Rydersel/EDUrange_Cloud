@@ -1,5 +1,7 @@
 import base64
 import logging
+import random
+
 import yaml
 from kubernetes import client, config
 import time
@@ -8,10 +10,10 @@ import hashlib
 import requests
 
 # Configure logging
-logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-logger = logging.getLogger(__name__)
 
-def wait_for_url(url, timeout=120, interval=5):  # Waits for url to not return 404 Ingress not found or 503 Ingress temp not available
+
+def wait_for_url(url, timeout=120,
+                 interval=5):  # Waits for url to not return 404 Ingress not found or 503 Ingress temp not available
     start_time = time.time()
     while time.time() - start_time < timeout:
         try:
@@ -27,12 +29,32 @@ def wait_for_url(url, timeout=120, interval=5):  # Waits for url to not return 4
 def load_config():
     config.load_incluster_config()
 
-def generate_unique_flag(user_id):
-    secret_salt = "test123" # temp
-    secret_salt = "test123"  # temp
-    full_hash = hashlib.sha256((user_id + secret_salt).encode()).hexdigest()
-    shortened_hash = full_hash[:8]  # Take the first 8 characters of the hash (full_hash is way too long)
-    return f"EDU-CTF-{{{shortened_hash}}}"
+
+# With current wordlists there are 25 million possible flags
+def generate_unique_flag():
+    adjectives_file = 'challenge_utils/wordlists/adjectives.txt'
+    nouns_file = 'challenge_utils/wordlists/nouns.txt'
+
+    # Load words from file
+    def load_words(filename):
+        with open(filename, 'r') as file:
+            words = file.read().splitlines()
+        return words
+
+    # Load adjectives and nouns from wordlists
+    adjectives = load_words(adjectives_file)
+    nouns = load_words(nouns_file)
+
+    # Generate a random word pair
+    adjective = random.choice(adjectives)
+    noun = random.choice(nouns)
+    random_word_pair = f"{adjective}-{noun}"
+
+    random_number = random.randint(1000, 9999)
+
+    unique_flag = f"EDU-{{{random_word_pair}{random_number}}}"
+    return unique_flag
+
 
 def create_flag_secret(instance_name, flag):
     secret_name = f"flag-secret-{instance_name}"
@@ -43,6 +65,7 @@ def create_flag_secret(instance_name, flag):
     core_api = client.CoreV1Api()
     core_api.create_namespaced_secret(namespace="default", body=body)
     return secret_name
+
 
 def get_secret(secret_name, namespace='default'):
     # Load Kubernetes configuration
@@ -58,6 +81,7 @@ def get_secret(secret_name, namespace='default'):
     except client.ApiException as e:
         print(f"Exception when reading secret: {e}")
         return None
+
 
 def decode_secret_data(secret):
     if secret is None:
@@ -79,9 +103,11 @@ def read_yaml_file(yaml_path):
         logging.error(f"Error loading YAML file: {e}")
         raise
 
+
 def create_challenge_pod(user_id, challenge_image, yaml_path, run_as_root, apps_config, flag):
     logging.info("Starting create_challenge_pod")
-    logging.debug(f"Received parameters: user_id={user_id}, challenge_image={challenge_image}, yaml_path={yaml_path}, run_as_root={run_as_root}")
+    logging.debug(
+        f"Received parameters: user_id={user_id}, challenge_image={challenge_image}, yaml_path={yaml_path}, run_as_root={run_as_root}")
 
     flag = generate_unique_flag(user_id)
     secret_name = create_flag_secret(user_id, flag)
@@ -107,7 +133,6 @@ def create_challenge_pod(user_id, challenge_image, yaml_path, run_as_root, apps_
         if container['name'] == 'challenge-container':
             container['image'] = challenge_image
 
-
     # Add CHALLENGE_POD_NAME environment variable to the bridge container
     for container in pod_spec['spec']['containers']:
         if container['name'] == 'bridge':
@@ -118,8 +143,6 @@ def create_challenge_pod(user_id, challenge_image, yaml_path, run_as_root, apps_
         if container['name'] == 'bridge':
             container['env'].append({"name": "flag_secret_name", "value": secret_name})
             container['env'].append({"name": "NEXT_PUBLIC_APPS_CONFIG", "value": apps_config})
-
-
 
     pod = client.V1Pod(
         api_version="v1",
@@ -150,11 +173,14 @@ def create_challenge_pod(user_id, challenge_image, yaml_path, run_as_root, apps_
 
     return pod, service, ingress, secret_name
 
+
 def create_pod_service_and_ingress(user_id, challenge_image, yaml_path, run_as_root, apps_config):
     logging.info("Starting create_pod_service_and_ingress")
-    logging.debug(f"Received parameters: user_id={user_id}, challenge_image={challenge_image}, yaml_path={yaml_path}, run_as_root={run_as_root}")
+    logging.debug(
+        f"Received parameters: user_id={user_id}, challenge_image={challenge_image}, yaml_path={yaml_path}, run_as_root={run_as_root}")
 
-    pod, service, ingress, secret_name = create_challenge_pod(user_id, challenge_image, yaml_path, run_as_root, apps_config)
+    pod, service, ingress, secret_name = create_challenge_pod(user_id, challenge_image, yaml_path, run_as_root,
+                                                              apps_config)
 
     try:
         core_api = client.CoreV1Api()
@@ -186,6 +212,7 @@ def create_pod_service_and_ingress(user_id, challenge_image, yaml_path, run_as_r
 
     return pod.metadata.name, challenge_url, secret_name
 
+
 def delete_challenge_pod(pod_name):
     core_api = client.CoreV1Api()
     core_api.delete_namespaced_pod(
@@ -206,3 +233,20 @@ def delete_challenge_pod(pod_name):
         name=f"ingress-{pod_name}",
         namespace="default",
     )
+
+    # Get status of pod
+
+
+def get_pod_status_logic(pod):
+    if pod.metadata.deletion_timestamp:  # Work around for deleting status not showing up
+        return 'deleting'
+    elif pod.status.phase == 'Pending':
+        return 'creating'
+    elif pod.status.phase == 'Running':
+        return 'active'
+    elif pod.status.phase == 'Failed':
+        return 'error'
+    elif pod.status.phase == 'Succeeded':
+        return 'deleting'
+    else:
+        return pod.status.phase

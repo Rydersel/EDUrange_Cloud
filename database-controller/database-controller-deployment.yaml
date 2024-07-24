@@ -1,0 +1,20 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: database-controller
+  labels:
+    app: database-controller
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: database-controller
+  template:
+    metadata:
+      labels:
+        app: database-controller
+    spec:
+      containers:
+      - name: database-controller
+        image: registry.rydersel.cloud/database-controller
+        imagePullPolicy: Always

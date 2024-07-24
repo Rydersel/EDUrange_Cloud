@@ -5,8 +5,8 @@ import { Heading } from '@/components/ui/heading';
 import { Separator } from '@/components/ui/separator';
 import { PrismaClient } from '@prisma/client';
 import { redirect } from 'next/navigation';
-import { session } from 'next-auth/core/routes';
-
+// @ts-ignore
+import {session} from "next-auth/core/routes";
 const prisma = new PrismaClient();
 
 const breadcrumbItems = [{ title: 'Users', link: '/dashboard/users' }];
@@ -32,9 +32,9 @@ export default async function Page({ searchParams }: paramsProps) {
 
   const user = await prisma.user.findUnique({ where: { email: session.user.email } });
 
-  if (!session || !user.admin) {
-    redirect('/invalid-permission'); // Redirect if not admin
-  }
+  if (!session || !user || !user.admin) {
+  redirect('/invalid-permission');
+}
 
   const totalUsers = await prisma.user.count();
   const pageCount = Math.ceil(totalUsers / pageLimit);

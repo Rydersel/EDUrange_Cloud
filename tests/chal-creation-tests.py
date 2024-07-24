@@ -3,7 +3,7 @@ import requests
 
 
 class TestInstanceManagerAPI(unittest.TestCase):
-    BASE_URL = "http://34.83.141.170/api"  # Change this to your Flask app URL
+    BASE_URL = "https://eductf.rydersel.cloud/instance-manager/api"
 
     def test_start_challenge(self):
         payload = {

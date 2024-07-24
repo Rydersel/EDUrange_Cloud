@@ -1,41 +1,37 @@
 'use client';
-import { useState, useEffect } from 'react';
-import { Button } from '@/components/ui/button';
-import { DataTable } from '@/components/ui/data-table';
-import { Heading } from '@/components/ui/heading';
-import { Separator } from '@/components/ui/separator';
-import { Challenge } from '@/constants/data';
-import { Plus } from 'lucide-react';
-import { useRouter } from 'next/navigation';
-import { getColumns } from './columns';
-import { ChallengeDetailsModal } from '@/components/modal/challenge-details-modal';
+import {useEffect, useState} from 'react';
+import {Button} from '@/components/ui/button';
+import {DataTable} from '@/components/ui/data-table';
+import {Heading} from '@/components/ui/heading';
+import {Separator} from '@/components/ui/separator';
+import {Challenge} from '@/constants/data';
+import {Plus} from 'lucide-react';
+import {useRouter} from 'next/navigation';
+import {getColumns} from './columns';
+import {ChallengeDetailsModal} from '@/components/modal/challenge-details-modal';
 
-function timeSince(date: Date) {
+function calcTimeSince(date: Date) {
   const seconds = Math.floor((new Date().getTime() - date.getTime()) / 1000);
-  let interval = seconds / 31536000;
+  const intervals = [
+    { interval: 31536000, label: 'years' },
+    { interval: 2592000, label: 'months' },
+    { interval: 86400, label: 'days' },
+    { interval: 3600, label: 'hours' },
+    { interval: 60, label: 'minutes' },
+  ];
 
-  if (interval > 1) {
-    return Math.floor(interval) + ' years ago';
+  for (const { interval, label } of intervals) {
+    if (seconds / interval >= 1) {
+      return Math.floor(seconds / interval) + ' ' + label + ' ago';
+    }
   }
-  interval = seconds / 2592000;
-  if (interval > 1) {
-    return Math.floor(interval) + ' months ago';
+
+  if (seconds < 60) {
+    return 'less than a minute ago';
   }
-  interval = seconds / 86400;
-  if (interval > 1) {
-    return Math.floor(interval) + ' days ago';
-  }
-  interval = seconds / 3600;
-  if (interval > 1) {
-    return Math.floor(interval) + ' hours ago';
-  }
-  interval = seconds / 60;
-  if (interval > 1) {
-    return Math.floor(interval) + ' minutes ago';
-  }
+
   return Math.floor(seconds) + ' seconds ago';
 }
-
 interface ChallengesClientProps {
   data: Challenge[];
 }
@@ -55,7 +51,6 @@ export const ChallengesClient: React.FC<ChallengesClientProps> = ({ data }) => {
       }
       return 'Unknown Email';
     } catch (error) {
-      console.error(`Error fetching email for user ${userId}:`, error);
       return 'Unknown Email';
     }
   };
@@ -69,7 +64,7 @@ export const ChallengesClient: React.FC<ChallengesClientProps> = ({ data }) => {
           const userEmail = await fetchUserEmail(challenge.user_id);
           return {
             id: challenge.pod_name,
-            time_alive: timeSince(new Date(challenge.creation_time)),
+            time_alive: calcTimeSince(new Date(challenge.creation_time)),
             user_id: challenge.user_id,
             userEmail,
             challenge_image: challenge.challenge_image,
@@ -82,37 +77,38 @@ export const ChallengesClient: React.FC<ChallengesClientProps> = ({ data }) => {
       );
 
       // Fetch flags and statuses for each challenge
-      const challengesWithFlagsAndStatus = await Promise.all(
-        challengePods.map(async (challenge) => {
-          // Fetch flag
-          const flagResponse = await fetch('https://eductf.rydersel.cloud/instance-manager/api/get-secret', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ secret_name: challenge.flag_secret_name })
-          });
-          const flagResult = await flagResponse.json();
-          if (flagResponse.ok) {
-            challenge.flag = flagResult.secret_value;
-          } else {
-            challenge.flag = 'Error fetching flag';
-          }
+      return await Promise.all(
+          challengePods.map(async (challenge) => {
+            // Fetch flag
+            const flagResponse = await fetch('https://eductf.rydersel.cloud/instance-manager/api/get-secret', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({secret_name: challenge.flag_secret_name})
+            });
+            if (!flagResponse.ok) {
+              throw new Error('Failed to fetch flag');
+            }
+            const flagResult = await flagResponse.json();
+            if (flagResponse.ok) {
+              challenge.flag = flagResult.secret_value;
+            } else {
+              challenge.flag = 'Error fetching flag';
+            }
 
-          // Fetch status
-          const statusResponse = await fetch(`https://eductf.rydersel.cloud/instance-manager/api/get-pod-status?pod_name=${challenge.id}`);
-          const statusResult = await statusResponse.json();
-          if (statusResponse.ok) {
-            challenge.status = statusResult.status;
-          } else {
-            challenge.status = 'Error fetching status';
-          }
+            // Fetch status
+            const statusResponse = await fetch(`https://eductf.rydersel.cloud/instance-manager/api/get-pod-status?pod_name=${challenge.id}`);
+            const statusResult = await statusResponse.json();
+            if (statusResponse.ok) {
+              challenge.status = statusResult.status;
+            } else {
+              challenge.status = 'Error fetching status';
+            }
 
-          return challenge;
-        })
+            return challenge;
+          })
       );
-
-      return challengesWithFlagsAndStatus;
     } else {
       alert(result.error || 'Error fetching challenges');
     }

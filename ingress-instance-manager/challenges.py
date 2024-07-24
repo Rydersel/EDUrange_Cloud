@@ -56,7 +56,7 @@ class FullOsChallenge:
         logging.debug(
             f"Received parameters: user_id={self.user_id}, challenge_image={self.challenge_image}, yaml_path={self.yaml_path}, run_as_root={self.run_as_root}")
 
-        flag = generate_unique_flag(self.user_id)
+        flag = generate_unique_flag()
         sanitized_user_id = self.user_id.replace("_", "-").lower()
         instance_name = f"ctfchal-{sanitized_user_id}-{str(uuid.uuid4())[:4]}".lower()
         secret_name = create_flag_secret(instance_name, flag)
@@ -211,7 +211,7 @@ class WebChallenge:
         logging.debug(
             f"Received parameters: user_id={self.user_id}, challenge_image={self.challenge_image}, yaml_path={self.yaml_path}")
 
-        flag = generate_unique_flag(self.user_id)
+        flag = generate_unique_flag()
         secret_name = create_flag_secret(self.user_id, flag)
         sanitized_user_id = self.user_id.replace("_", "-").lower()
         instance_name = f"ctfchal-{sanitized_user_id}-{str(uuid.uuid4())[:4]}".lower()

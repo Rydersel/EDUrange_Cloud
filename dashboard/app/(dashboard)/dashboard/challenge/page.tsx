@@ -14,6 +14,7 @@ export default async function ChallengesPage() {
     redirect('/'); // Redirect to sign-in page if not authenticated
   }
 
+  // @ts-ignore
   const user = await prisma.user.findUnique({ where: { email: session.user.email } });
 
   if (!user  || !user.admin) {

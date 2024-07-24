@@ -3,12 +3,11 @@ import requests
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from kubernetes import client, config
-from challenge_utils.utils import create_pod_service_and_ingress, delete_challenge_pod, load_config, wait_for_url, \
-    get_secret, decode_secret_data
+from challenge_utils.utils import delete_challenge_pod, load_config, get_pod_status_logic, get_secret, \
+    decode_secret_data
 from challenges import FullOsChallenge, WebChallenge
 
-logging.basicConfig(level=logging.DEBUG)
-
+logging.basicConfig(level=logging.INFO)
 
 app = Flask(__name__)
 CORS(app)
@@ -48,7 +47,6 @@ def start_challenge():
         deployment_name, challenge_url, secret_name = web_challenge.create_pod_service_and_ingress()
     else:
         return jsonify({"error": "Invalid challenge type"}), 400
-
 
     if not challenge_url:
         response = jsonify({"error": "Invalid URL provided"}), 400
@@ -94,22 +92,24 @@ def list_challenge_pods():
                                 flag_secret_name = env_var.value
                                 break
 
-                challenge_url = f"http://{pod.metadata.name}.rydersel.cloud"
+                challenge_url = f"https://{pod.metadata.name}.rydersel.cloud"
                 creation_time = pod.metadata.creation_timestamp
+                status = get_pod_status_logic(pod)
+
                 challenge_pods.append({
                     "pod_name": pod.metadata.name,
                     "user_id": user_id,
                     "challenge_image": challenge_image,
                     "challenge_url": challenge_url,
                     "flag_secret_name": flag_secret_name,
-                    "creation_time": creation_time
+                    "creation_time": creation_time,
+                    "status": status
                 })
 
         return jsonify({"challenge_pods": challenge_pods}), 200
     except Exception as e:
         logging.error(f"Error listing challenge pods: {e}")
         return jsonify({"error": "Error listing challenge pods"}), 500
-
 
 @app.route('/api/get-secret', methods=['POST'])  # Will add auth later
 def get_secret_value():
@@ -138,7 +138,7 @@ def get_pod_status():
         v1 = client.CoreV1Api()
         pod = v1.read_namespaced_pod(name=pod_name, namespace='default')
 
-        if pod.metadata.deletion_timestamp: # Work around for deleting status not showing up
+        if pod.metadata.deletion_timestamp:  # Work around for deleting status not showing up
             status = 'deleting'
         elif pod.status.phase == 'Pending':
             status = 'creating'
@@ -158,4 +158,3 @@ def get_pod_status():
     except Exception as e:
         logging.error(f"Error fetching pod status: {e}")
         return jsonify({"error": "Error fetching pod status"}), 500
-

@@ -4,7 +4,6 @@ import { prisma } from '@/lib/prisma';
 import BreadCrumb from '@/components/breadcrumb';
 import NewChallengeForm from '@/components/forms/NewChallengeForm'; // Import the client component
 import authConfig from '@/auth.config';
-
 const breadcrumbItems = [
   { title: 'Challenges', link: '/dashboard/challenge' },
   { title: 'Create', link: '/dashboard/challenge/new' }
@@ -17,6 +16,7 @@ export default async function NewChallengePage() {
     redirect('/'); // Redirect to sign-in page if not authenticated
   }
 
+  // @ts-ignore
   const user = await prisma.user.findUnique({ where: { email: session.user.email } });
 
   if (!user  || !user.admin) {

@@ -15,6 +15,76 @@ spec:
         app: database-controller
     spec:
       containers:
-      - name: database-controller
-        image: registry.rydersel.cloud/database-controller
+      - name: database-api
+        image: registry.rydersel.cloud/database-api
         imagePullPolicy: Always
+        ports:
+        - containerPort: 8000
+        env:
+        - name: POSTGRES_HOST
+          value: "172.232.19.52"
+        - name: POSTGRES_NAME
+          value: "postgres"
+        - name: POSTGRES_USER
+          value: "admin"
+        - name: POSTGRES_PASSWORD
+          value: "rydersel1927"
+        - name: DATABASE_URL
+          value: "postgresql://admin:rydersel1927@172.232.19.52:5432/postgres?schema=public"
+      - name: database-sync
+        image: registry.rydersel.cloud/database-sync
+        imagePullPolicy: Always
+        env:
+        - name: POSTGRES_HOST
+          value: "172.232.19.52"
+        - name: POSTGRES_NAME
+          value: "postgres"
+        - name: POSTGRES_USER
+          value: "admin"
+        - name: POSTGRES_PASSWORD
+          value: "rydersel1927"
+        - name: DATABASE_URL
+          value: "postgresql://admin:rydersel1927@172.232.19.52:5432/postgres?schema=public"
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: database-api-service
+  labels:
+    app: database-controller
+spec:
+  selector:
+    app: database-controller
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 8000
+  type: ClusterIP
+
+---
+
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: database-api-ingress
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: database.rydersel.cloud
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: database-api-service
+            port:
+              number: 80
+  tls:
+    - hosts:
+        - database.rydersel.cloud
+      secretName: wildcard-domain-certificate

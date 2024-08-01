@@ -1,5 +1,6 @@
 import logging
 import uuid
+import json
 from kubernetes import client
 from challenge_utils.utils import generate_unique_flag, create_flag_secret, read_yaml_file
 
@@ -94,6 +95,7 @@ class FullOsChallenge:
         })
 
         # Add the TLS section to use the wildcard certificate
+
         # Remember the secret name is wildcard-domain-certificate NOT wildcard-certificate-prod
         ingress_spec['spec']['tls'] = [{
             "hosts": [
@@ -112,7 +114,15 @@ class FullOsChallenge:
         for container in pod_spec['spec']['containers']:
             if container['name'] == 'bridge':
                 container['env'].append({"name": "flag_secret_name", "value": secret_name})
-                container['env'].append({"name": "NEXT_PUBLIC_APPS_CONFIG", "value": self.apps_config})
+
+                # Update the NEXT_PUBLIC_APPS_CONFIG with the correct flag secret name
+                updated_apps_config = json.loads(self.apps_config)
+                for app in updated_apps_config:
+                    if app["id"] == "challenge-prompt" and "challenge" in app:
+                        app["challenge"]["flagSecretName"] = secret_name
+                updated_apps_config_str = json.dumps(updated_apps_config)
+
+                container['env'].append({"name": "NEXT_PUBLIC_APPS_CONFIG", "value": updated_apps_config_str})
                 container['env'].append({"name": "CHALLENGE_POD_NAME", "value": instance_name})
 
             if container['name'] == 'terminal':
@@ -122,12 +132,11 @@ class FullOsChallenge:
                     {"name": "POD_NAME",
                      "value": instance_name},
                     {"name": "KUBERNETES_HOST",
-                    "value": "b5c39586-ba37-4e81-8e40-910d6880ff14.us-ord-1.linodelke.net:443"},
+                     "value": "b5c39586-ba37-4e81-8e40-910d6880ff14.us-ord-1.linodelke.net:443"},
                     {"name": "KUBERNETES_NAMESPACE", "value": "default"},
                     {"name": "KUBERNETES_SERVICE_ACCOUNT_TOKEN",
-                    "value": "eyJhbGciOiJSUzI1NiIsImtpZCI6IjRNOU1rRFh3SlVVb1FGLWpJX3BobjZJMkFkYUhNdHZFRmdzUGJPRDV1ZzQifQ.eyJhdWQiOlsia3ViZXJuZXRlcy5kZWZhdWx0LnN2YyJdLCJleHAiOjE3NTY4MzQ1ODEsImlhdCI6MTcyMDgzODE4MSwiaXNzIjoiaHR0cHM6Ly9rdWJlcm5ldGVzLmRlZmF1bHQuc3ZjLmNsdXN0ZXIubG9jYWwiLCJqdGkiOiI5NmY4N2E4My1iZjNhLTQyOWItYTVkMy03YjNkNTQ5MDIyNWUiLCJrdWJlcm5ldGVzLmlvIjp7Im5hbWVzcGFjZSI6ImRlZmF1bHQiLCJzZXJ2aWNlYWNjb3VudCI6eyJuYW1lIjoidGVybWluYWwtYWNjb3VudCIsInVpZCI6IjE2OTcyN2JmLTUyNGEtNGE1Zi1hMWNlLTJiNTgxNTFjMGY4YiJ9fSwibmJmIjoxNzIwODM4MTgxLCJzdWIiOiJzeXN0ZW06c2VydmljZWFjY291bnQ6ZGVmYXVsdDp0ZXJtaW5hbC1hY2NvdW50In0.uukNAgl0b6lGbFNBy3ak6XRf5NiviHnvQf0xV2Vbs_vh57GMvzy1L7ZY2-KIQKQar5YeaYp8lfnzsF_bRS6315c_8cTWMuxZdnECd7GfSCyQYph1gZrz_oXMqB16891d5dHSVrdXKiYN4-916ddxNSPExZzwQ-MUPKw5KRHgFMF3R2uofVnhwxLaDzbVsmwnNx4y0QTJNKstVc4eWJdhdJ2QDOC0uW8vnoCJob4IthXWxqkBdf1Z63pNH4BcrM9N3hix_ltOnw1wla_OAHxPnY0w6MHHtZWzOolboFUU6SvJHSfeZQRQIR8keAJAuJWl1VAwXoDXrKZ59dluKLDIqA"},
-            ]
-
+                     "value": "eyJhbGciOiJSUzI1NiIsImtpZCI6IjRNOU1rRFh3SlVVb1FGLWpJX3BobjZJMkFkYUhNdHZFRmdzUGJPRDV1ZzQifQ.eyJhdWQiOlsia3ViZXJuZXRlcy5kZWZhdWx0LnN2YyJdLCJleHAiOjE3NTY4MzQ1ODEsImlhdCI6MTcyMDgzODE4MSwiaXNzIjoiaHR0cHM6Ly9rdWJlcm5ldGVzLmRlZmF1bHQuc3ZjLmNsdXN0ZXIubG9jYWwiLCJqdGkiOiI5NmY4N2E4My1iZjNhLTQyOWItYTVkMy03YjNkNTQ5MDIyNWUiLCJrdWJlcm5ldGVzLmlvIjp7Im5hbWVzcGFjZSI6ImRlZmF1bHQiLCJzZXJ2aWNlYWNjb3VudCI6eyJuYW1lIjoidGVybWluYWwtYWNjb3VudCIsInVpZCI6IjE2OTcyN2JmLTUyNGEtNGE1Zi1hMWNlLTJiNTgxNTFjMGY4YiJ9fSwibmJmIjoxNzIwODM4MTgxLCJzdWIiOiJzeXN0ZW06c2VydmljZWFjY291bnQ6ZGVmYXVsdDp0ZXJtaW5hbC1hY2NvdW50In0.uukNAgl0b6lGbFNBy3ak6XRf5NiviHnvQf0xV2Vbs_vh57GMvzy1L7ZY2-KIQKQar5YeaYp8lfnzsF_bRS6315c_8cTWMuxZdnECd7GfSCyQYph1gZrz_oXMqB16891d5dHSVrdXKiYN4-916ddxNSPExZzwQ-MUPKw5KRHgFMF3R2uofVnhwxLaDzbVsmwnNx4y0QTJNKstVc4eWJdhdJ2QDOC0uW8vnoCJob4IthXWxqkBdf1Z63pNH4BcrM9N3hix_ltOnw1wla_OAHxPnY0w6MHHtZWzOolboFUU6SvJHSfeZQRQIR8keAJAuJWl1VAwXoDXrKZ59dluKLDIqA"},
+                ]
 
         pod = client.V1Pod(
             api_version="v1",
@@ -153,7 +162,8 @@ class FullOsChallenge:
         ingress = client.V1Ingress(
             api_version="networking.k8s.io/v1",
             kind="Ingress",
-            metadata=client.V1ObjectMeta(name=ingress_spec['metadata']['name'], annotations=ingress_spec['metadata'].get('annotations', {})),
+            metadata=client.V1ObjectMeta(name=ingress_spec['metadata']['name'],
+                                         annotations=ingress_spec['metadata'].get('annotations', {})),
             spec=ingress_spec['spec']
         )
 
@@ -247,7 +257,15 @@ class WebChallenge:
         for container in pod_spec['spec']['containers']:
             if container['name'] == 'bridge':
                 container['env'].append({"name": "flag_secret_name", "value": secret_name})
-                container['env'].append({"name": "NEXT_PUBLIC_APPS_CONFIG", "value": self.apps_config})
+
+                # Update the NEXT_PUBLIC_APPS_CONFIG with the correct flag secret name
+                updated_apps_config = json.loads(self.apps_config)
+                for app in updated_apps_config:
+                    if app["id"] == "challenge-prompt" and "challenge" in app:
+                        app["challenge"]["flagSecretName"] = secret_name
+                updated_apps_config_str = json.dumps(updated_apps_config)
+
+                container['env'].append({"name": "NEXT_PUBLIC_APPS_CONFIG", "value": updated_apps_config_str})
 
         pod = client.V1Pod(
             api_version="v1",

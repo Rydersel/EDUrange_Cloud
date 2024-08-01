@@ -107,18 +107,21 @@ const defaultConfig = [
     favourite: true,
     desktop_shortcut: true,
     screen: "displayChallengePrompt",
-    width: 30,
-    height: 60,
+    width: 70,
+    height: 80,
     description: "Default description for the challenge prompt",
     launch_on_startup: false,
     challenge: {
-      type: "single", // we can eventually add more question types
+      type: "single",
+      title: "Cyber Security Challenge",
+      description: "Complete the following questions to test your knowledge.",
+      flagSecretName: "flag-secret-ctfchal-clyf1mbf50000u87dl8tvhhvh-8672",
       pages: [
         {
           instructions: "Read the following instructions carefully to complete the challenge.",
           questions: [
             {
-              type: "text",
+              type: "flag",
               content: "What is the flag?",
               id: "flag",
               points: 10
@@ -127,7 +130,8 @@ const defaultConfig = [
               type: "text",
               content: "What is the IP of the malicious server?",
               id: "ip_address",
-              points: 5
+              points: 5,
+              answer: "idk"
             }
           ]
         },
@@ -138,7 +142,8 @@ const defaultConfig = [
               type: "text",
               content: "What is the name of the malware?",
               id: "malware_name",
-              points: 15
+              points: 15,
+              answer: "WannaCry"
             }
           ]
         }
@@ -146,6 +151,8 @@ const defaultConfig = [
     }
   },
 ];
+
+let config = null;
 
 export async function GET(req) {
   try {
@@ -161,13 +168,62 @@ export async function GET(req) {
     }
 
     const data = await response.json();
+    config = data;
     return NextResponse.json(data, { status: response.status });
   } catch (error) {
     console.warn("Failed to fetch config, using default config:", error.message);
+    config = defaultConfig;
     return NextResponse.json(defaultConfig, { status: 200 });
   }
 }
 
-export async function POST() {
-  return NextResponse.json({ error: 'Method Not Allowed', details: 'Use GET to fetch config' }, { status: 405 });
+export async function POST(req) {
+  try {
+    const { questionId, answer } = await req.json();
+
+    // Use the fetched config if available, otherwise use the default config
+    const currentConfig = config || defaultConfig;
+
+    // Find the question in the config
+    const challengeConfig = currentConfig.find(app => app.id === "challenge-prompt").challenge;
+    let question;
+    for (const page of challengeConfig.pages) {
+      question = page.questions.find(q => q.id === questionId);
+      if (question) break;
+    }
+
+    if (!question) {
+      return NextResponse.json({ error: 'Question not found' }, { status: 404 });
+    }
+
+    if (question.type === 'flag') {
+      // Verify flag using the provided API
+      const flagResponse = await fetch('https://eductf.rydersel.cloud/instance-manager/api/get-secret', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          secret_name: challengeConfig.flagSecretName,
+          namespace: 'default'
+        }),
+      });
+
+      if (!flagResponse.ok) {
+        throw new Error('Failed to fetch flag');
+      }
+
+      const { secret_value } = await flagResponse.json();
+      const isCorrect = answer === secret_value;
+
+      return NextResponse.json({ isCorrect }, { status: 200 });
+    } else {
+      // For non-flag questions, check against the hardcoded answer
+      const isCorrect = answer === question.answer;
+      return NextResponse.json({ isCorrect }, { status: 200 });
+    }
+  } catch (error) {
+    console.error("Error verifying answer:", error);
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+  }
 }

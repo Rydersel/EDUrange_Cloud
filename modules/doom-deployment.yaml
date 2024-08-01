@@ -1,0 +1,57 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: doom
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: doom
+  template:
+    metadata:
+      labels:
+        app: doom
+    spec:
+      serviceAccountName: default
+      containers:
+      - name: doom
+        image: registry.rydersel.cloud/doom
+        ports:
+        - containerPort: 8000
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: doom-service
+  namespace: default
+spec:
+  type: ClusterIP
+  selector:
+    app: doom
+  ports:
+    - port: 80
+      targetPort: 8080
+      protocol: TCP
+
+---
+
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: doom-ingress
+  annotations:
+    nginx.ingress.kubernetes.io/use-regex: "true"
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: doom.rydersel.cloud
+    http:
+      paths:
+      - path:
+        pathType: ImplementationSpecific
+        backend:
+          service:
+            name: doom-service
+            port:
+              number: 80

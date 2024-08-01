@@ -1,0 +1,24 @@
+# docker buildx build -f dockerfile.sync --platform linux/amd64,linux/arm64 -t registry.rydersel.cloud/database-sync . --push
+
+# Use an official Python runtime as a parent image
+FROM python:3.10-slim
+
+# Set the working directory in the container
+WORKDIR /app
+
+# Copy the sync directory contents into the container at /app
+COPY sync/ .
+
+# Copy shared files into the container
+COPY .env .env
+COPY schema.prisma schema.prisma
+COPY requirements.txt requirements.txt
+
+# Install any needed packages specified in requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Generate Python Prisma client
+RUN prisma generate --generator client_py
+
+# Run sync.py when the container launches
+CMD ["python", "sync.py"]

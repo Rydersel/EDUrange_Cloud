@@ -1,13 +1,11 @@
 import requests
-import time
-import json
 import asyncio
 import logging
 from datetime import datetime
 from prisma import Prisma
 from dotenv import load_dotenv
 
-load_dotenv()  #load enviromental variables
+load_dotenv()  # Load enviromental variables
 
 logging.basicConfig(level=logging.DEBUG)
 

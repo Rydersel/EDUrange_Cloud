@@ -1,0 +1,26 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: docker-registry-1720377429
+  namespace: default
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: "1000m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "6000"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "6000"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - registry.rydersel.cloud
+      secretName: letsencrypt-secret-prod
+  rules:
+    - host: registry.rydersel.cloud
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: docker-registry-1720377429
+                port:
+                  number: 5000

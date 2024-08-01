@@ -1,0 +1,23 @@
+ingress:
+  enabled: true
+  hosts:
+    - registry.rydersel.cloud
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/proxy-body-size: "0"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "6000"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "6000"
+  tls:
+    - secretName: letsencrypt-secret-prod
+      hosts:
+        - registry.rydersel.cloud
+storage: s3
+secrets:
+  s3:
+    accessKey: "1ECUL1X34BP7ECGLDK5T"
+    secretKey: "HGE0l2qYkWNVaO2Vf1dYQ6KRdP4P8rGbupkS7Aeq"
+s3:
+  region: us-ord-1
+  regionEndpoint: us-ord-1.linodeobjects.com
+  secure: true
+  bucket: registry

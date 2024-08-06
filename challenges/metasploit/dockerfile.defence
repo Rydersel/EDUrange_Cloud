@@ -1,0 +1,21 @@
+FROM ubuntu:20.04
+
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    socat \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY vuln.c /vuln.c
+RUN gcc -o /vuln -fno-stack-protector -z execstack /vuln.c && \
+    chmod +s /vuln && \
+    rm /vuln.c
+
+RUN useradd -m user
+USER user
+WORKDIR /home/user
+
+RUN echo "CTF{stack_overflow_exploited}" > /home/user/flag.txt
+
+EXPOSE 4444
+
+CMD ["socat", "TCP-LISTEN:4444,reuseaddr,fork", "EXEC:/vuln"]

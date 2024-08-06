@@ -5,7 +5,7 @@ from flask_cors import CORS
 from kubernetes import client, config
 from challenge_utils.utils import delete_challenge_pod, load_config, get_pod_status_logic, get_secret, \
     decode_secret_data
-from challenges import FullOsChallenge, WebChallenge
+from challenges import FullOsChallenge, WebChallenge, MetasploitChallenge
 
 logging.basicConfig(level=logging.INFO)
 
@@ -45,6 +45,15 @@ def start_challenge():
             apps_config=apps_config
         )
         deployment_name, challenge_url, secret_name = web_challenge.create_pod_service_and_ingress()
+    elif chal_type == 'metasploit':
+        metasploit_challenge = MetasploitChallenge(
+            user_id=user_id,
+            attack_image=f"{challenge_image}-attack",
+            defence_image=f"{challenge_image}-defence",
+            yaml_path='templates/metasploit-challenge-template.yaml',
+            apps_config=apps_config
+        )
+        deployment_name, challenge_url, terminal_url, secret_name = metasploit_challenge.create_pod_service_and_ingress()
     else:
         return jsonify({"error": "Invalid challenge type"}), 400
 

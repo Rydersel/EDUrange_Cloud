@@ -4,7 +4,7 @@ import Settings from '../apps/settings';
 import ReactGA from 'react-ga4';
 
 export class Window extends Component {
-    constructor() {
+    constructor(props) {
         super();
         this.id = null;
         this.startX = 60;
@@ -20,6 +20,9 @@ export class Window extends Component {
                 width: 100
             }
         }
+        this.defaultPosition = props.defaultPosition || { x: Math.floor(Math.random() * (400 - 10 + 1)) + 10, y: Math.floor(Math.random() * (100 - 10 + 1)) + 10 }; // Makes app instances spawn in random location to avoid overlap
+
+
     }
 
     componentDidMount() {
@@ -164,7 +167,7 @@ export class Window extends Component {
     }
 
     render() {
-        const appConfig = this.props.apps.find(app => app.id === this.props.id);
+        const appConfig = this.props.apps.find(app => app.id === this.props.id.split('-')[0]);
         const disableScrolling = appConfig && appConfig.disableScrolling ? 'overflow-hidden' : 'overflow-y-auto';
         const ScreenComponent = this.props.screen;
         const extraProps = appConfig ? { ...appConfig } : {};
@@ -179,7 +182,7 @@ export class Window extends Component {
                 onStop={this.changeCursorToDefault}
                 onDrag={this.checkOverlap}
                 allowAnyClick={false}
-                defaultPosition={{ x: this.startX, y: this.startY }}
+                defaultPosition={this.defaultPosition}
                 bounds={{ left: 0, top: 0, right: this.state.parentSize.width, bottom: this.state.parentSize.height }}
             >
                 <div style={{ width: `${this.state.width}%`, height: `${this.state.height}%`, backgroundColor: 'transparent' }}
@@ -189,7 +192,7 @@ export class Window extends Component {
                 >
                     <WindowYBorder resize={this.handleHorizontalResize} />
                     <WindowXBorder resize={this.handleVerticalResize} />
-                    <WindowTopBar title={this.props.title} />
+                    <WindowTopBar title={`${this.props.title} ${this.props.id.includes('-') ? this.props.id.split('-')[1] : ''}`} />
                     <WindowEditButtons minimize={this.minimizeWindow} maximize={this.maximizeWindow} isMaximized={this.state.maximized} close={this.closeWindow} id={this.id} />
                     {this.id === "settings" ? (
                         <Settings changeBackgroundImage={this.props.changeBackgroundImage} currBgImgName={this.props.bg_image_name} />
@@ -202,6 +205,7 @@ export class Window extends Component {
             </Draggable>
         )
     }
+
 }
 
 export default Window

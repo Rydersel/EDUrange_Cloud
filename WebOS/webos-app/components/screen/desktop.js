@@ -28,9 +28,14 @@ export class Desktop extends Component {
                 default: false,
             },
             controlCenterVisible: false, // Add state for control center visibility
+            app_instances: {},
         };
         this.app_stack = [];
         this.initFavourite = {};
+        this.instanceCounter = {};
+        this.terminalOffsetX = 30;
+        this.terminalOffsetY = 30;
+        this.maxTerminalInstances = 5;
     }
 
     async componentDidMount() {
@@ -146,10 +151,15 @@ export class Desktop extends Component {
     }
 
     openApp = (objId) => {
-        ReactGA.event({ category: `Open App`, action: `Opened ${objId} window` });
+    ReactGA.event({ category: `Open App`, action: `Opened ${objId} window` });
 
-        if (this.state.disabled_apps[objId]) return;
+    if (this.state.disabled_apps[objId]) return;
 
+    if (objId === 'terminal') {
+        // For terminal, create a new instance
+        this.createNewAppInstance(objId);
+    } else {
+        // For other apps, use the existing logic
         if (this.state.minimized_windows[objId]) {
             this.focus(objId);
             const r = document.querySelector(`#${objId}`);
@@ -185,6 +195,7 @@ export class Desktop extends Component {
             });
         }
     }
+}
 
     closeApp = (objId) => {
         this.app_stack.splice(this.app_stack.indexOf(objId), 1);
@@ -268,26 +279,103 @@ export class Desktop extends Component {
         });
         return appsJsx;
     }
+     getOpenTerminalInstancesCount = () => {
+        return Object.keys(this.state.app_instances).filter(id =>
+            id.startsWith('terminal-') && !this.state.closed_windows[id]
+        ).length;
+    }
+      createNewAppInstance = (objId) => {
+        if (objId === 'terminal') {
+            const openTerminalInstances = this.getOpenTerminalInstancesCount();
+
+            if (openTerminalInstances >= this.maxTerminalInstances) {
+                console.log("Maximum number of open terminal instances reached");
+                return;
+            }
+        }
+
+        this.instanceCounter[objId] = (this.instanceCounter[objId] || 0) + 1;
+        const instanceId = `${objId}-${this.instanceCounter[objId]}`;
+
+        // Calculate new position
+        const openTerminalInstances = this.getOpenTerminalInstancesCount();
+        const offsetX = openTerminalInstances * this.terminalOffsetX;
+        const offsetY = openTerminalInstances * this.terminalOffsetY;
+
+        const newInstance = {
+            ...this.state.apps.find(app => app.id === objId),
+            id: instanceId,
+            defaultPosition: { x: offsetX, y: offsetY }
+        };
+
+        this.setState(prevState => ({
+            app_instances: {
+                ...prevState.app_instances,
+                [instanceId]: newInstance
+            },
+            favourite_apps: { ...prevState.favourite_apps, [instanceId]: true },
+            closed_windows: { ...prevState.closed_windows, [instanceId]: false },
+            allAppsView: false
+        }), () => {
+            this.focus(instanceId);
+            this.app_stack.push(instanceId);
+        });
+    }
+
+    closeApp = (objId) => {
+        this.app_stack.splice(this.app_stack.indexOf(objId), 1);
+        this.giveFocusToLastApp();
+        this.hideDock(null, false);
+
+        const favourite_apps = { ...this.state.favourite_apps };
+        const closed_windows = { ...this.state.closed_windows };
+
+        if (!this.initFavourite[objId.split('-')[0]]) favourite_apps[objId] = false;
+        closed_windows[objId] = true;
+
+        this.setState({ closed_windows, favourite_apps }, () => {
+            if (objId.startsWith('terminal-')) {
+                // Remove the closed terminal instance from app_instances
+                const app_instances = { ...this.state.app_instances };
+                delete app_instances[objId];
+                this.setState({ app_instances });
+            }
+        });
+    }
 
 
-    renderWindows = () => this.state.apps.map((app, index) => !this.state.closed_windows[app.id] && (
-        <Window
-            key={index}
-            title={app.title}
-            id={app.id}
-            screen={app.screen}
-            closed={this.closeApp}
-            openApp={this.openApp}
-            focus={this.focus}
-            isFocused={this.state.focused_windows[app.id]}
-            hideDock={this.hideDock}
-            hasMinimised={this.hasMinimised}
-            minimized={this.state.minimized_windows[app.id]}
-            changeBackgroundImage={this.props.changeBackgroundImage}
-            bg_image_name={this.props.bg_image_name}
-            apps={this.state.apps} // Pass apps to Window component
-        />
-    ));
+
+    renderWindows = () => {
+    const regularApps = this.state.apps.map((app, index) =>
+        !this.state.closed_windows[app.id] && this.renderWindow(app, index)
+    );
+
+    const terminalInstances = Object.values(this.state.app_instances).map((instance, index) =>
+        !this.state.closed_windows[instance.id] && this.renderWindow(instance, `instance-${index}`)
+    );
+
+    return [...regularApps, ...terminalInstances];
+}
+
+
+renderWindow = (app, key) => (
+    <Window
+        key={key}
+        title={app.title}
+        id={app.id}
+        screen={app.screen}
+        closed={this.closeApp}
+        openApp={this.openApp}
+        focus={this.focus}
+        isFocused={this.state.focused_windows[app.id]}
+        hideDock={this.hideDock}
+        hasMinimised={this.hasMinimised}
+        minimized={this.state.minimized_windows[app.id]}
+        changeBackgroundImage={this.props.changeBackgroundImage}
+        bg_image_name={this.props.bg_image_name}
+        apps={this.state.apps}
+    />
+)
 
     render() {
         return (

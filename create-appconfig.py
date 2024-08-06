@@ -111,11 +111,11 @@ defaultConfig = [
         "width": 70,
         "height": 80,
         "description": "Default description for the challenge prompt",
-        "launch_on_startup": False,
+        "launch_on_startup": True,
         "challenge": {
             "type": "single",
-            "title": "Cyber Security Challenge",
-            "description": "Complete the following questions to test your knowledge.",
+            "title": "Bandit-2",
+            "description": "The password for the next level is stored in a file called spaces in this filename located in the home directory",
             "flagSecretName": "flag-secret-ctfchal-clyf1mbf50000u87dl8tvhhvh-8672",
             "pages": [
                 {
@@ -127,27 +127,10 @@ defaultConfig = [
                             "id": "flag",
                             "points": 10
                         },
-                        {
-                            "type": "text",
-                            "content": "What is the IP of the malicious server?",
-                            "id": "ip_address",
-                            "points": 5,
-                            "answer": "idk"
-                        }
+
                     ]
                 },
-                {
-                    "instructions": "You have completed the first page. Now answer the following questions.",
-                    "questions": [
-                        {
-                            "type": "text",
-                            "content": "What is the name of the malware?",
-                            "id": "malware_name",
-                            "points": 15,
-                            "answer": "WannaCry"
-                        }
-                    ]
-                }
+
             ]
         }
     },

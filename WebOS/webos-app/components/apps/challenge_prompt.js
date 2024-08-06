@@ -62,7 +62,6 @@ const JumbledText = ({ text, isJumbling }) => {
 
 export default function ChallengePrompt() {
   const [challengeData, setChallengeData] = useState(null);
-  const [currentPage, setCurrentPage] = useState(0);
   const [currentQuestionId, setCurrentQuestionId] = useState(null);
   const [answers, setAnswers] = useState({});
   const [completedQuestions, setCompletedQuestions] = useState(() => {
@@ -118,8 +117,8 @@ export default function ChallengePrompt() {
     localStorage.setItem('completedQuestions', JSON.stringify(completedQuestions));
   }, [completedQuestions]);
 
-  const currentQuestion = challengeData?.pages[currentPage].questions.find(q => q.id === currentQuestionId);
   const allQuestions = challengeData?.pages.flatMap(page => page.questions) || [];
+  const currentQuestion = allQuestions.find(q => q.id === currentQuestionId);
   const allQuestionsCompleted = completedQuestions.length === allQuestions.length;
 
   const handleChange = (value) => {
@@ -274,6 +273,10 @@ export default function ChallengePrompt() {
     return <div className="text-green-400">Loading challenge data...</div>;
   }
 
+  const currentIndex = allQuestions.findIndex(q => q.id === currentQuestionId);
+  const hasPrevious = currentIndex > 0;
+  const hasNext = currentIndex < allQuestions.length - 1;
+
   return (
     <div className="flex flex-col md:flex-row h-full bg-black text-green-400 font-mono">
       <style jsx global>{`
@@ -307,7 +310,7 @@ export default function ChallengePrompt() {
                 <Info size={20} />
               </button>
             </div>
-            <p className="text-green-400 mb-4">{challengeData.pages[currentPage].instructions}</p>
+            <p className="text-green-400 mb-4">{challengeData.description}</p>
             <p className="text-sm text-green-600">
               {currentTime.toLocaleTimeString()}
             </p>
@@ -319,26 +322,24 @@ export default function ChallengePrompt() {
             <div className="flex justify-between">
               <button
                 onClick={() => {
-                  if (currentPage > 0) {
-                    setCurrentPage(currentPage - 1);
-                    setCurrentQuestionId(challengeData.pages[currentPage - 1].questions[0].id);
+                  if (hasPrevious) {
+                    setCurrentQuestionId(allQuestions[currentIndex - 1].id);
                   }
                 }}
                 className="bg-green-800 hover:bg-green-700 text-green-100 font-semibold py-2 px-4 rounded-md transition duration-300 ease-in-out flex items-center"
-                disabled={currentPage === 0}
+                disabled={!hasPrevious}
               >
                 <ArrowRight className="w-5 h-5 mr-2 transform rotate-180" />
                 <span>Previous</span>
               </button>
               <button
                 onClick={() => {
-                  if (currentPage < challengeData.pages.length - 1) {
-                    setCurrentPage(currentPage + 1);
-                    setCurrentQuestionId(challengeData.pages[currentPage + 1].questions[0].id);
+                  if (hasNext) {
+                    setCurrentQuestionId(allQuestions[currentIndex + 1].id);
                   }
                 }}
                 className="bg-green-800 hover:bg-green-700 text-green-100 font-semibold py-2 px-4 rounded-md transition duration-300 ease-in-out flex items-center"
-                disabled={currentPage === challengeData.pages.length - 1}
+                disabled={!hasNext}
               >
                 <span>Next</span>
                 <ArrowRight className="w-5 h-5 ml-2" />

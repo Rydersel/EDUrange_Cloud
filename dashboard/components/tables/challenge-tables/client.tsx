@@ -79,30 +79,35 @@ export const ChallengesClient: React.FC<ChallengesClientProps> = ({ data }) => {
       // Fetch flags and statuses for each challenge
       return await Promise.all(
           challengePods.map(async (challenge) => {
-            // Fetch flag
-            const flagResponse = await fetch('https://eductf.rydersel.cloud/instance-manager/api/get-secret', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({secret_name: challenge.flag_secret_name})
-            });
-            if (!flagResponse.ok) {
-              throw new Error('Failed to fetch flag');
-            }
-            const flagResult = await flagResponse.json();
-            if (flagResponse.ok) {
-              challenge.flag = flagResult.secret_value;
-            } else {
+            try {
+              // Fetch flag
+              const flagResponse = await fetch('https://eductf.rydersel.cloud/instance-manager/api/get-secret', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({secret_name: challenge.flag_secret_name})
+              });
+              if (flagResponse.ok) {
+                const flagResult = await flagResponse.json();
+                challenge.flag = flagResult.secret_value;
+              } else {
+                challenge.flag = 'Error fetching flag';
+              }
+            } catch (error) {
               challenge.flag = 'Error fetching flag';
             }
 
-            // Fetch status
-            const statusResponse = await fetch(`https://eductf.rydersel.cloud/instance-manager/api/get-pod-status?pod_name=${challenge.id}`);
-            const statusResult = await statusResponse.json();
-            if (statusResponse.ok) {
-              challenge.status = statusResult.status;
-            } else {
+            try {
+              // Fetch status
+              const statusResponse = await fetch(`https://eductf.rydersel.cloud/instance-manager/api/get-pod-status?pod_name=${challenge.id}`);
+              if (statusResponse.ok) {
+                const statusResult = await statusResponse.json();
+                challenge.status = statusResult.status;
+              } else {
+                challenge.status = 'Error fetching status';
+              }
+            } catch (error) {
               challenge.status = 'Error fetching status';
             }
 

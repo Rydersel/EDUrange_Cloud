@@ -1,18 +1,13 @@
-import React, {useState} from 'react';
+import React from 'react';
 
-export default function Terminal() {
-
-    let terminal_url = `https://terminal-${window.location.host}`
-    console.log(terminal_url)
+export default function Terminal({ id }) {
+    let terminal_url = `https://terminal-${window.location.host}`;
+    console.log(terminal_url);
     return (
-
-
-        <iframe src={terminal_url} frameBorder="0" title="Terminal" className="h-full w-full bg-ub-grey"></iframe>
-
+        <iframe src={terminal_url} frameBorder="0" title={`Terminal ${id.split('-')[1] || ''}`} className="h-full w-full bg-ub-grey"></iframe>
     );
 }
 
-export const displayTerminal = () => {
-    return   <Terminal/>
+export const displayTerminal = ({ id }) => {
+    return <Terminal id={id} />;
 }
-

@@ -2,9 +2,6 @@
 
 ## [Public Documentation](https://github.com/Rydersel/EDUrange_Cloud/wiki)
 
-## [Developer Documentation](https://edurange.atlassian.net/wiki/external/MzllMDZhYTFhMTMyNDE0Zjg0NmE0ZjI2Mzc0ZGQ3NWI)
-
-
 
 ### Introduction to EDUrange Cloud
 EDUrange Cloud is a Kubernetes-powered, cloud-based cybersecurity education platform and framework that allows users to easily and efficiently host their own cybersecurity competitions (CTFs) and exercises. Originally focused primarily on hosting capture the flag competitions (CTFs), the scope of EDUrange Cloud has evolved to include support for cybersecurity demos and other educational exercises. This evolution allows for a broader range of educational opportunities within the platform.

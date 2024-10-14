@@ -1,5 +1,8 @@
 # EDURANGE Cloud (WORK IN PROGRESS)
 
+![DEMO](https://raw.githubusercontent.com/Rydersel/EDUrange_Cloud/master/assets/edurange_metasploit.png)
+
+
 ## [Public Documentation](https://docs.rydersel.cloud/)
 
 

@@ -1,5 +1,5 @@
 'use client';
-import { OurFileRouter } from '@/app/api/uploadthing/core';
+// import { OurFileRouter } from '@/app/api/uploadthing/core';
 import { UploadDropzone } from '@uploadthing/react';
 import { Trash } from 'lucide-react';
 import Image from 'next/image';
@@ -12,6 +12,15 @@ interface ImageUploadProps {
   onChange?: any;
   onRemove: (value: UploadFileResponse[]) => void;
   value: UploadFileResponse[];
+}
+
+// Define a generic type for OurFileRouter
+interface OurFileRouter {
+  [key: string]: any;
+  endpoint: string;
+  config: {
+    mode: string;
+  };
 }
 
 export default function FileUpload({
@@ -65,7 +74,7 @@ export default function FileUpload({
             endpoint="imageUploader"
             config={{ mode: 'auto' }}
             content={{
-              allowedContent({ isUploading }) {
+              allowedContent({ isUploading }: { isUploading: boolean }) {
                 if (isUploading)
                   return (
                     <>
@@ -76,11 +85,9 @@ export default function FileUpload({
                   );
               }
             }}
-            onClientUploadComplete={(res) => {
-              // Do something with the response
-              const data: UploadFileResponse[] | undefined = res;
-              if (data) {
-                onUpdateFile(data);
+            onClientUploadComplete={(res?: UploadFileResponse[]) => {
+              if (res) {
+                onUpdateFile(res);
               }
             }}
             onUploadError={(error: Error) => {

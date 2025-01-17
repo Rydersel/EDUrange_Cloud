@@ -3,6 +3,7 @@ gunicorn==22.0.0
 Werkzeug==3.0.3
 flask_cors==3.0.10
 kubernetes==29.0.0
+python-dotenv
 eventlet
 
 

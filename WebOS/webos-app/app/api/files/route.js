@@ -1,5 +1,7 @@
 // app/api/files/route.js
 
+// Experimental code for persistant local file storage
+
 import { NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';

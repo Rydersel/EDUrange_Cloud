@@ -27,4 +27,8 @@ execute_and_exit_on_failure docker buildx build --platform linux/amd64,linux/arm
 
 execute_and_exit_on_failure kubectl apply -f instance-manager-deployment.yaml
 
+execute_and_exit_on_failure kubectl apply -f instance-manager-clusterrole.yaml
+
+execute_and_exit_on_failure kubectl apply -f instance-manager-clusterrolebinding.yaml
+
 echo "Success! Instance manager deployed to cluster"

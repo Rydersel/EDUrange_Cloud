@@ -1,7 +1,6 @@
 import base64
 import logging
 import random
-
 import yaml
 from kubernetes import client, config
 import time
@@ -9,7 +8,7 @@ import uuid
 import hashlib
 import requests
 
-# Configure logging
+
 
 
 def wait_for_url(url, timeout=120,
@@ -68,8 +67,7 @@ def create_flag_secret(instance_name, flag):
 
 
 def get_secret(secret_name, namespace='default'):
-    # Load Kubernetes configuration
-    load_config()
+    load_config()  # Load Kubernetes configuration
 
     # Create an API client
     v1 = client.CoreV1Api()

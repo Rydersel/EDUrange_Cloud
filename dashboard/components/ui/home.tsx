@@ -165,7 +165,7 @@ const ScoreBreakdownCard = ({ scores }) => {
               {Object.entries(scores).map(([category, points]) => (
                   <TableRow key={category}>
                     <TableCell style={{color: '#ffffff'}}>{category}</TableCell>
-                    <TableCell style={{color: '#39FF14'}}>{points}</TableCell>
+                    <TableCell style={{color: '#ffffff'}}>{points}</TableCell>
                   </TableRow>
               ))}
             </TableBody>
@@ -253,7 +253,7 @@ export function CTFHomePageClient() {
             CTF Challenges
           </h1>
           <p style={{ color: '#ffffff', maxWidth: '32rem' }}>
-            Navigate through our curated list of challenges and prove your hacking skills.
+            Navigate through our curated list of challenges and compete for a top spot on the leaderboard
           </p>
         </div>
 

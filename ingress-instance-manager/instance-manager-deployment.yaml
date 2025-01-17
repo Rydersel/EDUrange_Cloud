@@ -19,6 +19,10 @@ spec:
         image: registry.rydersel.cloud/instance-manager-ingress
         ports:
         - containerPort: 8000
+        env:
+          - name: INGRESS_URL
+            value: "rydersel.cloud"
+
 ---
 apiVersion: v1
 kind: Service
@@ -61,5 +65,5 @@ spec:
   tls:
     - hosts:
         - eductf.rydersel.cloud
-      secretName: wildcard-domain-certificate
+      secretName: wildcard-domain-certificate-prod
 

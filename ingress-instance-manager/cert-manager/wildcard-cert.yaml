@@ -4,7 +4,7 @@ metadata:
   name: wildcard-certificate-prod
   namespace: default
 spec:
-  secretName: wildcard-domain-certificate
+  secretName: wildcard-domain-certificate-prod
   issuerRef:
     name: cert-clusterissuer
     kind: ClusterIssuer

@@ -1,4 +1,4 @@
-# docker buildx build -f dockerfile.api --platform linux/amd64,linux/arm64 -t registry.rydersel.cloud/database-sync . --push
+# docker buildx build -f dockerfile.api --platform linux/amd64,linux/arm64 -t registry.rydersel.cloud/database-api . --push
 
 # Use an official Python runtime as a parent image
 FROM python:3.10-slim

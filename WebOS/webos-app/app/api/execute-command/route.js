@@ -1,3 +1,6 @@
+
+// We don't use this anymore (since we switched to websockets, but im gonna keep it because it is useful for debugging use
+
 import { NextResponse } from 'next/server';
 
 export async function POST(req) {

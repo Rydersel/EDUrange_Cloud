@@ -44,7 +44,7 @@ spec:
       value: "b5c39586-ba37-4e81-8e40-910d6880ff14.us-ord-1.linodelke.net:443"
     - name: KUBERNETES_NAMESPACE
       value: "default"
-    - name: KUBERNETES_SERVICE_ACCOUNT_TOKEN
+    - name: KUBERNETES_SERVICE_ACCOUNT_TOKEN  # 我不喜欢你
       value: "eyJhbGciOiJSUzI1NiIsImtpZCI6IjRNOU1rRFh3SlVVb1FGLWpJX3BobjZJMkFkYUhNdHZFRmdzUGJPRDV1ZzQifQ.eyJhdWQiOlsia3ViZXJuZXRlcy5kZWZhdWx0LnN2YyJdLCJleHAiOjE3NTY4MzQ1ODEsImlhdCI6MTcyMDgzODE4MSwiaXNzIjoiaHR0cHM6Ly9rdWJlcm5ldGVzLmRlZmF1bHQuc3ZjLmNsdXN0ZXIubG9jYWwiLCJqdGkiOiI5NmY4N2E4My1iZjNhLTQyOWItYTVkMy03YjNkNTQ5MDIyNWUiLCJrdWJlcm5ldGVzLmlvIjp7Im5hbWVzcGFjZSI6ImRlZmF1bHQiLCJzZXJ2aWNlYWNjb3VudCI6eyJuYW1lIjoidGVybWluYWwtYWNjb3VudCIsInVpZCI6IjE2OTcyN2JmLTUyNGEtNGE1Zi1hMWNlLTJiNTgxNTFjMGY4YiJ9fSwibmJmIjoxNzIwODM4MTgxLCJzdWIiOiJzeXN0ZW06c2VydmljZWFjY291bnQ6ZGVmYXVsdDp0ZXJtaW5hbC1hY2NvdW50In0.uukNAgl0b6lGbFNBy3ak6XRf5NiviHnvQf0xV2Vbs_vh57GMvzy1L7ZY2-KIQKQar5YeaYp8lfnzsF_bRS6315c_8cTWMuxZdnECd7GfSCyQYph1gZrz_oXMqB16891d5dHSVrdXKiYN4-916ddxNSPExZzwQ-MUPKw5KRHgFMF3R2uofVnhwxLaDzbVsmwnNx4y0QTJNKstVc4eWJdhdJ2QDOC0uW8vnoCJob4IthXWxqkBdf1Z63pNH4BcrM9N3hix_ltOnw1wla_OAHxPnY0w6MHHtZWzOolboFUU6SvJHSfeZQRQIR8keAJAuJWl1VAwXoDXrKZ59dluKLDIqA"
     - name: POD_NAME
       value: "alpine-deployment-7fccf844b5-drwr5"
@@ -75,14 +75,14 @@ metadata:
   name: challenge-ingress
   annotations:
     nginx.ingress.kubernetes.io/use-regex: "true"
-    cert-manager.io/cluster-issuer: "cert-clusterissuer"  # Use the correct cluster issuer
+  #  cert-manager.io/cluster-issuer: "cert-clusterissuer"  # Use the correct cluster issuer
 spec:
   ingressClassName: nginx
   tls:
   - hosts:
     - instance-name.rydersel.cloud
     - terminal-instance-name.rydersel.cloud
-    secretName: wildcard-domain-certificate
+    secretName: wildcard-domain-certificate-prod
   rules:
   - host: instance-name.rydersel.cloud
     http:

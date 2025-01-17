@@ -5,4 +5,4 @@ metadata:
 data:
   POSTGRES_DB: "postgres"
   POSTGRES_USER: "admin"
-  POSTGRES_PASSWORD: "rydersel1927"
+  POSTGRES_PASSWORD: "rydersel1927"  # Bad

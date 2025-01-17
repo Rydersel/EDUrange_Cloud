@@ -92,6 +92,12 @@ export const defaultAppsConfig: AppConfig[] = [
 
 export const navItems: NavItem[] = [
   {
+    title: 'Home',
+    href: '/dashboard/home',
+    icon: 'logo',
+    label: 'home'
+  },
+  {
     title: 'Dashboard',
     href: '/dashboard',
     icon: 'dashboard',
@@ -109,4 +115,5 @@ export const navItems: NavItem[] = [
     icon: 'user',
     label: 'users'
   }
+
 ];

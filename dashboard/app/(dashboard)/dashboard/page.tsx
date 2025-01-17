@@ -30,12 +30,9 @@ export default async function page() {
         <div className="flex-1 space-y-4 p-4 pt-6 md:p-8">
           <div className="flex items-center justify-between space-y-2">
             <h2 className="text-3xl font-bold tracking-tight">
-              Hi, Welcome back 👋
+              Dashboard
             </h2>
-            <div className="hidden items-center space-x-2 md:flex">
-              <CalendarDateRangePicker/>
-              <Button>Download</Button>
-            </div>
+
           </div>
           <Tabs defaultValue="overview" className="space-y-4">
             <TabsList>
@@ -49,7 +46,7 @@ export default async function page() {
                 <Card>
                   <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                     <CardTitle className="text-sm font-medium">
-                      Total Revenue
+                      Points
                     </CardTitle>
                     <svg
                         xmlns="http://www.w3.org/2000/svg"
@@ -65,16 +62,14 @@ export default async function page() {
                     </svg>
                   </CardHeader>
                   <CardContent>
-                    <div className="text-2xl font-bold">$45,231.89</div>
-                    <p className="text-xs text-muted-foreground">
-                      +20.1% from last month
-                    </p>
+                    <div className="text-2xl font-bold">9999</div>
+
                   </CardContent>
                 </Card>
                 <Card>
                   <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                     <CardTitle className="text-sm font-medium">
-                      Subscriptions
+                      Players
                     </CardTitle>
                     <svg
                         xmlns="http://www.w3.org/2000/svg"
@@ -92,15 +87,13 @@ export default async function page() {
                     </svg>
                   </CardHeader>
                   <CardContent>
-                    <div className="text-2xl font-bold">+2350</div>
-                    <p className="text-xs text-muted-foreground">
-                      +180.1% from last month
-                    </p>
+                    <div className="text-2xl font-bold">9999</div>
+
                   </CardContent>
                 </Card>
                 <Card>
                   <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">Sales</CardTitle>
+                    <CardTitle className="text-sm font-medium">Another Piece of Data</CardTitle>
                     <svg
                         xmlns="http://www.w3.org/2000/svg"
                         viewBox="0 0 24 24"
@@ -116,9 +109,9 @@ export default async function page() {
                     </svg>
                   </CardHeader>
                   <CardContent>
-                    <div className="text-2xl font-bold">+12,234</div>
+                    <div className="text-2xl font-bold">9999</div>
                     <p className="text-xs text-muted-foreground">
-                      +19% from last month
+                      This is some data
                     </p>
                   </CardContent>
                 </Card>
@@ -154,9 +147,9 @@ export default async function page() {
                 </Card>
                 <Card className="col-span-4 md:col-span-3">
                   <CardHeader>
-                    <CardTitle>Recent Sales</CardTitle>
+                    <CardTitle>Leaderboard</CardTitle>
                     <CardDescription>
-                      You made 265 sales this month.
+                      The leaderboard resets every month
                     </CardDescription>
                   </CardHeader>
                   <CardContent>

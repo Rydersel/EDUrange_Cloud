@@ -1,4 +1,8 @@
 import logging
+import os
+
+from dotenv import load_dotenv
+
 import requests
 from flask import Flask, request, jsonify
 from flask_cors import CORS
@@ -13,7 +17,8 @@ app = Flask(__name__)
 CORS(app)
 
 load_config()  # Initialize Kubernetes client configuration
-
+load_dotenv()  # Load environment variables
+url = os.getenv("INGRESS_URL")
 
 @app.route('/api/start-challenge', methods=['POST'])
 def start_challenge():
@@ -42,6 +47,7 @@ def start_challenge():
             user_id=user_id,
             challenge_image=challenge_image,
             yaml_path='templates/web-challenge-template.yaml',
+            # TODO switch to a hardcoded cdn link or something like that
             apps_config=apps_config
         )
         deployment_name, challenge_url, secret_name = web_challenge.create_pod_service_and_ingress()
@@ -49,7 +55,7 @@ def start_challenge():
         metasploit_challenge = MetasploitChallenge(
             user_id=user_id,
             attack_image=f"{challenge_image}-attack",
-            defence_image=f"{challenge_image}-defence",
+            defence_image=f"{challenge_image}-defence",  # Target System
             yaml_path='templates/metasploit-challenge-template.yaml',
             apps_config=apps_config
         )
@@ -62,10 +68,6 @@ def start_challenge():
         logging.error(f"Invalid URL provided: challenge_url={challenge_url}")
         return response
 
-    # Wait until the challenge URL stops giving a 503 status
-    # while not wait_for_url(challenge_url):
-    # logging.info(f"Waiting for challenge URL {challenge_url} to stop giving a 503 status")
-    # if wait_for_url(challenge_url):
     return jsonify({"success": True, "challenge_url": challenge_url, "deployment_name": deployment_name}), 200
 
 
@@ -88,7 +90,7 @@ def list_challenge_pods():
         pods = v1.list_pod_for_all_namespaces(watch=False)
         challenge_pods = []
 
-        for pod in pods.items:
+        for pod in pods.items:  # Probally fine
             if pod.metadata.name.startswith('ctfchal-'):
                 user_id = pod.metadata.labels.get('user', 'unknown')
                 challenge_image = 'unknown'
@@ -101,7 +103,7 @@ def list_challenge_pods():
                                 flag_secret_name = env_var.value
                                 break
 
-                challenge_url = f"https://{pod.metadata.name}.rydersel.cloud"
+                challenge_url = f"https://{pod.metadata.name}.{url}"
                 creation_time = pod.metadata.creation_timestamp
                 status = get_pod_status_logic(pod)
 
@@ -120,8 +122,9 @@ def list_challenge_pods():
         logging.error(f"Error listing challenge pods: {e}")
         return jsonify({"error": "Error listing challenge pods"}), 500
 
+
 @app.route('/api/get-secret', methods=['POST'])  # Will add auth later
-def get_secret_value():
+def get_secret_value(): # Evil ah endpoint
     try:
         secret_name = request.json['secret_name']
         namespace = request.json.get('namespace', 'default')

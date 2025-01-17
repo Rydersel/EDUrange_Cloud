@@ -85,14 +85,14 @@ metadata:
   name: metasploit-challenge-ingress
   annotations:
     nginx.ingress.kubernetes.io/use-regex: "true"
-    cert-manager.io/cluster-issuer: "cert-clusterissuer"
+  #  cert-manager.io/cluster-issuer: "cert-clusterissuer"
 spec:
   ingressClassName: nginx
   tls:
   - hosts:
     - instance-name.rydersel.cloud
     - terminal-instance-name.rydersel.cloud
-    secretName: wildcard-domain-certificate
+    secretName: wildcard-domain-certificate-prod
   rules:
   - host: instance-name.rydersel.cloud
     http:

@@ -22,7 +22,7 @@ spec:
         - containerPort: 8000
         env:
         - name: POSTGRES_HOST
-          value: "172.232.19.52"
+          value: "172.233.210.28"
         - name: POSTGRES_NAME
           value: "postgres"
         - name: POSTGRES_USER
@@ -30,13 +30,13 @@ spec:
         - name: POSTGRES_PASSWORD
           value: "rydersel1927"
         - name: DATABASE_URL
-          value: "postgresql://admin:rydersel1927@172.232.19.52:5432/postgres?schema=public"
+          value: "postgresql://admin:rydersel1927@172.233.210.28:5432/postgres?schema=public"
       - name: database-sync
         image: registry.rydersel.cloud/database-sync
         imagePullPolicy: Always
         env:
         - name: POSTGRES_HOST
-          value: "172.232.19.52"
+          value: "172.233.210.28"
         - name: POSTGRES_NAME
           value: "postgres"
         - name: POSTGRES_USER
@@ -44,7 +44,7 @@ spec:
         - name: POSTGRES_PASSWORD
           value: "rydersel1927"
         - name: DATABASE_URL
-          value: "postgresql://admin:rydersel1927@172.232.19.52:5432/postgres?schema=public"
+          value: "postgresql://admin:rydersel1927@172.233.210.28:5432/postgres?schema=public"
 
 ---
 
@@ -87,4 +87,4 @@ spec:
   tls:
     - hosts:
         - database.rydersel.cloud
-      secretName: wildcard-domain-certificate
+      secretName: wildcard-domain-certificate-prod

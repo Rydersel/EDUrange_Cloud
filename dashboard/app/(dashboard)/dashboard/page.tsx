@@ -1,8 +1,5 @@
-import { CalendarDateRangePicker } from '@/components/date-range-picker';
-import { Overview } from '@/components/overview';
 import { RecentSales } from '@/components/recent-sales';
 import { GlobePoints } from '@/components/ui/globe-points';
-import { Button } from '@/components/ui/button';
 import {
   Card,
   CardContent,

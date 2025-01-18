@@ -15,7 +15,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogClose } from "@/components/ui/dialog"
 import { Clock, Award, Shield, Bug, Cpu, X, Check, Zap, Lock, Globe, Terminal, Search, Radio } from 'lucide-react';
 
-const challengeCategories = {
+const challengeCategories: Record<string, { name: string; points: number }[]> = {
   'Web Exploitation': [
     { name: 'SQL Injection', points: 100 },
     { name: 'XSS Attack', points: 150 },
@@ -133,7 +133,7 @@ const challengePacks = [
   },
 ];
 
-const difficultyColors = {
+const difficultyColors: Record<string, { bg: string; text: string }> = {
   "Very Easy": { bg: '#1a472a', text: '#ffffff' },
   "Easy": { bg: '#2a623d', text: '#ffffff' },
   "Medium": { bg: '#397d49', text: '#ffffff' },
@@ -142,7 +142,7 @@ const difficultyColors = {
 };
 
 
-const ScoreBreakdownCard = ({ scores }) => {
+const ScoreBreakdownCard = ({ scores }: { scores: Record<string, number> }) => {
   const totalPoints = Object.values(scores).reduce((sum, points) => sum + points, 0);
 
   return (
@@ -174,7 +174,14 @@ const ScoreBreakdownCard = ({ scores }) => {
       </Card>
   );
 }
-const ChallengePopup = ({ challenge, isOpen, onClose, onStart, onStop, isActive }) => {
+const ChallengePopup = ({ challenge, isOpen, onClose, onStart, onStop, isActive }: {
+  challenge: { name: string; points: number } | null;
+  isOpen: boolean;
+  onClose: () => void;
+  onStart: (challenge: { name: string; points: number }) => void;
+  onStop: (challenge: { name: string; points: number }) => void;
+  isActive: boolean;
+}) => {
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent style={{ backgroundColor: '#0f2818', borderColor: '#39FF14' }}>
@@ -186,14 +193,14 @@ const ChallengePopup = ({ challenge, isOpen, onClose, onStart, onStop, isActive 
         </DialogHeader>
         {isActive ? (
           <Button
-            onClick={() => onStop(challenge)}
+            onClick={() => challenge && onStop(challenge)}
             style={{ backgroundColor: '#8B0000', color: '#ffffff' }}
           >
             Stop Instance
           </Button>
         ) : (
           <Button
-            onClick={() => onStart(challenge)}
+            onClick={() => challenge && onStart(challenge)}
             style={{ backgroundColor: '#2a623d', color: '#ffffff' }}
           >
             Start Challenge
@@ -204,33 +211,40 @@ const ChallengePopup = ({ challenge, isOpen, onClose, onStart, onStop, isActive 
   );
 };
 
-export function CTFHomePageClient() {
-  const [selectedCategory, setSelectedCategory] = useState(null);
-  const [selectedChallenge, setSelectedChallenge] = useState(null);
-  const [activeChallenge, setActiveChallenge] = useState(null);
-  const [progress, setProgress] = useState(
+// Add prop types for CTFHomePageClient
+interface CTFHomePageClientProps {
+  leaderboardData: { rank: number; username: string; points: number; }[];
+  pointsBreakdown: { category: string; points: number; }[];
+  totalPoints: number;
+}
+
+export function CTFHomePageClient({ leaderboardData, pointsBreakdown, totalPoints }: CTFHomePageClientProps) {
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [selectedChallenge, setSelectedChallenge] = useState<{ name: string; points: number } | null>(null);
+  const [activeChallenge, setActiveChallenge] = useState<{ name: string; points: number } | null>(null);
+  const [progress, setProgress] = useState<Record<string, string[]>>(
     Object.fromEntries(Object.keys(challengeCategories).map(category => [category, []]))
   );
-  const [scores, setScores] = useState(
+  const [scores, setScores] = useState<Record<string, number>>(
     Object.fromEntries(Object.keys(challengeCategories).map(category => [category, 0]))
   );
 
-  const handleCategoryClick = (category) => {
+  const handleCategoryClick = (category: string) => {
     setSelectedCategory(category === selectedCategory ? null : category);
     setSelectedChallenge(null);
   };
 
-  const handleChallengeClick = (challenge) => {
+  const handleChallengeClick = (challenge: { name: string; points: number }) => {
     setSelectedChallenge(challenge);
   };
 
-  const handleStartChallenge = (challenge) => {
+  const handleStartChallenge = (challenge: { name: string; points: number }) => {
     console.log(`Starting challenge: ${challenge.name}`);
     setActiveChallenge(challenge);
     setSelectedChallenge(null);
   };
 
-  const handleStopChallenge = (challenge) => {
+  const handleStopChallenge = (challenge: { name: string; points: number }) => {
     console.log(`Stopping challenge: ${challenge.name}`);
     setActiveChallenge(null);
     if (selectedCategory && !progress[selectedCategory].includes(challenge.name)) {
@@ -356,7 +370,7 @@ export function CTFHomePageClient() {
           onClose={() => setSelectedChallenge(null)}
           onStart={handleStartChallenge}
           onStop={handleStopChallenge}
-          isActive={activeChallenge && activeChallenge.name === selectedChallenge?.name}
+          isActive={Boolean(activeChallenge && activeChallenge.name === selectedChallenge?.name)}
         />
       </div>
     </ScrollArea>

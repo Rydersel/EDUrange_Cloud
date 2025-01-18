@@ -5,7 +5,7 @@ import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
-async function updateChallengeInstances(challengePods) {
+async function updateChallengeInstances(challengePods: ChallengePod[]) {
   const existingInstanceIds = new Set(
     challengePods.map(pod => pod.pod_name)
   );
@@ -76,10 +76,42 @@ async function updateChallengeInstances(challengePods) {
   }
 }
 
-export async function POST(req) {
-  const body = await req.json();
+// Add retry logic for API calls
+async function fetchWithRetry(url: string, options = {}, retries = 3) {
+  for (let i = 0; i < retries; i++) {
+    try {
+      const response = await fetch(url, options);
+      if (!response.ok) {
+        throw new Error(`Request failed with status ${response.status}`);
+      }
+      return await response.json();
+    } catch (error) {
+      if (i < retries - 1) {
+        console.warn(`Retrying... (${i + 1}/${retries})`);
+      } else {
+        console.error('Failed to fetch after retries:', error);
+        throw error;
+      }
+    }
+  }
+}
+
+// Define ChallengePod type with a generic structure
+interface ChallengePod {
+  pod_name: string;
+  user_id: string;
+  challenge_image: string;
+  challenge_url: string;
+  creation_time: string;
+  status?: string;
+  flag_secret_name: string;
+  flag?: string;
+}
+
+export async function POST(req: Request) {
+  const body = await fetchWithRetry(req.url, { method: 'POST', body: req.body });
   try {
-    await updateChallengeInstances(body.challengePods);
+    await updateChallengeInstances(body.challengePods as ChallengePod[]);
     return NextResponse.json({ message: 'Challenge instances updated successfully' });
   } catch (error) {
     console.error('Error updating challenge instances:', error);

@@ -9,8 +9,6 @@ import hashlib
 import requests
 
 
-
-
 def wait_for_url(url, timeout=120,
                  interval=5):  # Waits for url to not return 404 Ingress not found or 503 Ingress temp not available
     start_time = time.time()
@@ -248,3 +246,17 @@ def get_pod_status_logic(pod):
         return 'deleting'
     else:
         return pod.status.phase
+
+
+# Get KUBERNETES_HOST and KUBERNETES_SERVICE_ACCOUNT_TOKEN for terminal from ConfigMap
+def get_credentials_for_terminal(self):
+    try:
+        core_api = client.CoreV1Api()
+        config_map = core_api.read_namespaced_config_map(name="terminal-credentials", namespace="default")
+        kubernetes_host = config_map.data["KUBERNETES_HOST"]
+        kubernetes_service_account_token = config_map.data["KUBERNETES_SERVICE_ACCOUNT_TOKEN"]
+        return kubernetes_host, kubernetes_service_account_token
+    except Exception as e:
+        logging.error(f"Error reading terminal credentials from ConfigMap: {e}")
+        raise
+

@@ -41,7 +41,13 @@ def start_challenge():
             run_as_root=True,
             apps_config=apps_config
         )
-        deployment_name, challenge_url, secret_name = full_os_challenge.create_pod_service_and_ingress()
+        deployment_name, challenge_url, terminal_url, secret_name = full_os_challenge.create_pod_service_and_ingress()
+        return jsonify({
+            "success": True,
+            "challenge_url": challenge_url,
+            "terminal_url": terminal_url,
+            "deployment_name": deployment_name
+        }), 200
     elif chal_type == 'web':
         web_challenge = WebChallenge(
             user_id=user_id,
@@ -51,6 +57,11 @@ def start_challenge():
             apps_config=apps_config
         )
         deployment_name, challenge_url, secret_name = web_challenge.create_pod_service_and_ingress()
+        return jsonify({
+            "success": True,
+            "challenge_url": challenge_url,
+            "deployment_name": deployment_name
+        }), 200
     elif chal_type == 'metasploit':
         metasploit_challenge = MetasploitChallenge(
             user_id=user_id,

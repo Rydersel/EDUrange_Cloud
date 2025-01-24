@@ -1,7 +1,7 @@
 const env = require("./env");
 const WebSocket = require("ws");
 
-const MAX_RETRIES = 3;
+const MAX_RETRIES = 5;
 const RETRY_DELAY = 2000; // 2 seconds
 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
@@ -71,7 +71,7 @@ exports.connect = async (pod, container) => {
     } catch (error) {
       lastError = error;
       retries++;
-      
+
       if (retries < MAX_RETRIES) {
         console.log(`Connection failed. Retrying in ${RETRY_DELAY/1000} seconds...`);
         await sleep(RETRY_DELAY);

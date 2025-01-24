@@ -1,1 +1,5 @@
--Added TLS certificate to doom module
+
+
+- Removes old LoadBalancer-Instance-Manager as code was obsolete
+
+- Adjusted rate limiting values for remote-terminal as they were too low + increased max con retries

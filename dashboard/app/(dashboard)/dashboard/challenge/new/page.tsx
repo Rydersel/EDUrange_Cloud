@@ -19,10 +19,9 @@ export default async function NewChallengePage() {
   // @ts-ignore
   const user = await prisma.user.findUnique({ where: { email: session.user.email } });
 
-  if (!user  || !user.admin) {
+  if (!user  || !user.role.includes('ADMIN')) {
     redirect('/invalid-permission'); // Redirect if not admin
   }
-
 
   return (
     <div className="flex flex-col h-screen overflow-hidden">

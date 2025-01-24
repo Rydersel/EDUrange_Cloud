@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 // @ts-ignore
 import { NextAuthConfig } from 'next-auth';
 import CredentialsProvider from 'next-auth/providers/credentials';
@@ -44,8 +45,8 @@ const authConfig: NextAuthConfig = {
   },
   callbacks: {
     async redirect({ url, baseUrl }) {
-      console.log("Redirecting to dashboard");
-      return url.startsWith(baseUrl) ? '/dashboard' : baseUrl;
+      console.log("Redirecting to Home");
+      return url.startsWith(baseUrl) ? '/home' : baseUrl;
     },
     async session({ session, token }) {
       if (token) {
@@ -105,7 +106,7 @@ const authConfig: NextAuthConfig = {
               name: user.name,
               email: user.email,
               image: user.image,
-              admin: false, // Set the default value for admin
+              role: "STUDENT"
             },
           });
           await prisma.account.create({

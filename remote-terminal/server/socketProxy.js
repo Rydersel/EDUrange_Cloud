@@ -6,12 +6,12 @@ const { RateLimiterMemory } = require('rate-limiter-flexible');
 // Rate limiter for connection attempts (10 connections per minute per IP)
 const connectLimiter = new RateLimiterMemory({
   points: 10, // Number of connections
-  duration: 120, // Per x seconds
+  duration: 60, // Per x seconds
 });
 
 // Rate limiter for messages (60 messages per minute per connection)
 const messageLimiter = new RateLimiterMemory({
-  points: 60, // # of messages
+  points: 120, // # of messages
   duration: 60, // Per x seconds
 });
 
@@ -72,7 +72,7 @@ function setupWebSocketHandlers(ws, podSocket, ip) {
 
   let isClosing = false;
   let messageCount = 0;
-  const maxMessagesBeforeWarning = 45; // Warn when approaching limit
+  const maxMessagesBeforeWarning = 90; // Warn when approaching limit
 
   const cleanup = () => {
     if (isClosing) return;

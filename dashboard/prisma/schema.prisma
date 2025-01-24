@@ -1,11 +1,118 @@
+generator client {
+  provider = "prisma-client-js"
+}
 
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
-generator client {
-  provider = "prisma-client-js"
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  image         String?
+  role          UserRole  @default(STUDENT)
+  accounts      Account[]
+  sessions      Session[]
+
+  memberOf         CompetitionGroup[]  @relation("GroupMembers")
+  instructorGroups CompetitionGroup[]  @relation("GroupInstructors")
+  challengeCompletions ChallengeCompletion[]
+  challengeInstances ChallengeInstance[]
+  groupPoints       GroupPoints[]
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+enum UserRole {
+  STUDENT
+  INSTRUCTOR
+  ADMIN
+}
+
+model CompetitionGroup {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  startDate   DateTime
+  endDate     DateTime?
+
+  challenges  GroupChallenge[]
+  accessCodes CompetitionAccessCode[]
+  userPoints  GroupPoints[]
+
+  members     User[]   @relation("GroupMembers")
+  instructors User[]   @relation("GroupInstructors")
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model GroupChallenge {
+  id              String   @id @default(cuid())
+  points          Int
+
+  challengeId     String
+  challenge       Challenges @relation(fields: [challengeId], references: [id])
+
+  groupId         String
+  group           CompetitionGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  completions     ChallengeCompletion[]
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([challengeId, groupId])
+}
+
+model ChallengeCompletion {
+  id                String   @id @default(cuid())
+  userId            String
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  groupChallengeId  String
+  groupChallenge    GroupChallenge @relation(fields: [groupChallengeId], references: [id], onDelete: Cascade)
+
+  pointsEarned      Int
+  completedAt       DateTime @default(now())
+
+  @@unique([userId, groupChallengeId])
+}
+
+model CompetitionAccessCode {
+  id          String   @id @default(cuid())
+  code        String   @unique
+  expiresAt   DateTime?
+  maxUses     Int?
+  usedCount   Int      @default(0)
+
+  groupId     String
+  group       CompetitionGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  createdAt   DateTime @default(now())
+  createdBy   String
+}
+
+model ActivityLog {
+  id          String   @id @default(cuid())
+  eventType   ActivityEventType
+  userId      String
+  challengeId String?
+  groupId     String?
+  metadata    Json
+  timestamp   DateTime @default(now())
+}
+
+enum ActivityEventType {
+  CHALLENGE_STARTED
+  CHALLENGE_COMPLETED
+  GROUP_JOINED
+  GROUP_CREATED
+  ACCESS_CODE_GENERATED
 }
 
 model ChallengeType {
@@ -18,26 +125,11 @@ model Challenges {
   id              String        @id @default(cuid())
   name            String
   challengeImage  String
-  AppsConfig        Json            @default("{}")
+  AppsConfig      Json         @default("{}")
   challengeTypeId String
   challengeType   ChallengeType @relation(fields: [challengeTypeId], references: [id], onDelete: Cascade)
-}
 
-
-model User {
-  id            String          @id @default(cuid())
-  name          String?
-  email         String          @unique
-  emailVerified DateTime?
-  image         String?
-  accounts      Account[]
-  sessions      Session[]
-  admin         Boolean
-  Authenticator Authenticator[]
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-  points        Int @default(0)
-  challengeInstances ChallengeInstance[]
+  groupChallenges GroupChallenge[]
 }
 
 model ChallengeInstance {
@@ -48,64 +140,59 @@ model ChallengeInstance {
   challengeUrl      String
   creationTime      DateTime @default(now())
   status            String
-  flagSecretName     String
-  flag               String
+  flagSecretName    String
+  flag              String
 
-  user              User     @relation(fields: [userId], references: [id])
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
-
 model Account {
+  id                String   @id @default(cuid())
   userId            String
   type              String
   provider          String
   providerAccountId String
-  refresh_token     String?
-  access_token      String?
+  refresh_token     String?  @db.Text
+  access_token      String?  @db.Text
   expires_at        Int?
   token_type        String?
   scope             String?
-  id_token          String?
+  id_token          String?  @db.Text
   session_state     String?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@id([provider, providerAccountId])
+  @@unique([provider, providerAccountId])
 }
 
 model Session {
+  id           String   @id @default(cuid())
   sessionToken String   @unique
   userId       String
   expires      DateTime
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
 }
 
 model VerificationToken {
   identifier String
-  token      String
+  token      String   @unique
   expires    DateTime
 
-  @@id([identifier, token])
+  @@unique([identifier, token])
 }
 
-// Optional for WebAuthn support
-model Authenticator {
-  credentialID         String  @unique
-  userId               String
-  providerAccountId    String
-  credentialPublicKey  String
-  counter              Int
-  credentialDeviceType String
-  credentialBackedUp   Boolean
-  transports           String?
+model GroupPoints {
+  id          String   @id @default(cuid())
+  points      Int      @default(0)
+  
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  groupId     String
+  group       CompetitionGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  @@id([userId, credentialID])
+  @@unique([userId, groupId])
 }

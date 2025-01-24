@@ -38,7 +38,7 @@ interface ChallengesClientProps {
 
 export const ChallengesClient: React.FC<ChallengesClientProps> = ({ data }) => {
   const router = useRouter();
-  const [challenges, setChallenges] = useState<Challenge[]>(data || []);
+  const [challenges, setChallenges] = useState<Challenge[]>(data);
   const [selectedChallenge, setSelectedChallenge] = useState<Challenge | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
@@ -166,7 +166,7 @@ export const ChallengesClient: React.FC<ChallengesClientProps> = ({ data }) => {
     <>
       <div className="flex items-start justify-between">
         <Heading
-          title={`Challenges (${challenges?.length || 0})`}
+          title={`Challenges (${challenges.length})`}
           description="Manage challenge pods"
         />
         <Button

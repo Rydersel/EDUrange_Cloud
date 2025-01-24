@@ -16,6 +16,19 @@ type ParamsProps = {
 };
 
 export default async function Page({ searchParams }: ParamsProps) {
+  const session = await getServerSession(authConfig);
+
+  if (!session) {
+    redirect('/');
+  }
+
+  // @ts-ignore - we know the user exists in the session
+  const user = await prisma.user.findUnique({ where: { email: session.user?.email } });
+
+  if (!user  || !user.role.includes('ADMIN')) {
+    redirect('/invalid-permission'); // Redirect if not admin
+  }
+
   const page = Number(searchParams.page) || 1;
   const pageLimit = Number(searchParams.limit) || 10;
   const offset = (page - 1) * pageLimit;
@@ -27,11 +40,6 @@ export default async function Page({ searchParams }: ParamsProps) {
       sessions: true,
     },
   });
-  const session = await getServerSession(authConfig);
-
-   if (!session) {
-    redirect('/'); // Redirect to sign-in page if not authenticated
-  }
 
   const totalUsers = await prisma.user.count();
   const pageCount = Math.ceil(totalUsers / pageLimit);

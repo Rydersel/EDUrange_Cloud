@@ -8,6 +8,7 @@
     "dev": "npm run build && node server/index.js"
   },
   "dependencies": {
+    "browserify": "^17.0.1",
     "copy-to-clipboard": "^3.3.3",
     "dotenv": "^8.2.0",
     "express": "^4.17.1",

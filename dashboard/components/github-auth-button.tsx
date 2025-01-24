@@ -15,7 +15,7 @@ export default function GoogleSignInButton() {
       variant="outline"
       type="button"
       onClick={() =>
-        signIn('github', { callbackUrl: callbackUrl ?? '/dashboard' })
+        signIn('github', { callbackUrl: callbackUrl ?? '/home' })
       }
     >
       <Icons.gitHub className="mr-2 h-4 w-4" />

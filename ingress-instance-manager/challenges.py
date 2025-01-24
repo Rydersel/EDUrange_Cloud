@@ -9,6 +9,8 @@ from challenge_utils.utils import generate_unique_flag, create_flag_secret, read
 
 load_dotenv()  # Load environmental variables
 url = os.getenv("INGRESS_URL")
+
+
 class FullOsChallenge:
     def __init__(self, user_id, challenge_image, yaml_path, run_as_root, apps_config):
         self.user_id = user_id
@@ -17,7 +19,6 @@ class FullOsChallenge:
         self.run_as_root = run_as_root
         self.apps_config = apps_config
         self.KUBERNETES_HOST, self.KUBERNETES_SERVICE_ACCOUNT_TOKEN = get_credentials_for_terminal(self)
-
 
     def create_pod_service_and_ingress(self):
         logging.info("Starting create_pod_service_and_ingress")

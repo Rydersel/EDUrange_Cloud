@@ -1,5 +1,5 @@
-generator client_py {
-  provider = "prisma-client-py"
+generator client {
+  provider = "prisma-client-js"
 }
 
 datasource db {
@@ -16,17 +16,15 @@ model User {
   role          UserRole  @default(STUDENT)
   accounts      Account[]
   sessions      Session[]
-  
+
   memberOf         CompetitionGroup[]  @relation("GroupMembers")
   instructorGroups CompetitionGroup[]  @relation("GroupInstructors")
   challengeCompletions ChallengeCompletion[]
   challengeInstances ChallengeInstance[]
   groupPoints       GroupPoints[]
-  
-  admin         Boolean
+
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
-  points        Int      @default(0)
 }
 
 enum UserRole {
@@ -41,14 +39,14 @@ model CompetitionGroup {
   description String?
   startDate   DateTime
   endDate     DateTime?
-  
+
   challenges  GroupChallenge[]
   accessCodes CompetitionAccessCode[]
   userPoints  GroupPoints[]
-  
+
   members     User[]   @relation("GroupMembers")
   instructors User[]   @relation("GroupInstructors")
-  
+
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 }
@@ -56,15 +54,15 @@ model CompetitionGroup {
 model GroupChallenge {
   id              String   @id @default(cuid())
   points          Int
-  
+
   challengeId     String
   challenge       Challenges @relation(fields: [challengeId], references: [id])
-  
+
   groupId         String
   group           CompetitionGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
-  
+
   completions     ChallengeCompletion[]
-  
+
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
@@ -75,10 +73,10 @@ model ChallengeCompletion {
   id                String   @id @default(cuid())
   userId            String
   user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
+
   groupChallengeId  String
   groupChallenge    GroupChallenge @relation(fields: [groupChallengeId], references: [id], onDelete: Cascade)
-  
+
   pointsEarned      Int
   completedAt       DateTime @default(now())
 
@@ -91,10 +89,10 @@ model CompetitionAccessCode {
   expiresAt   DateTime?
   maxUses     Int?
   usedCount   Int      @default(0)
-  
+
   groupId     String
   group       CompetitionGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
-  
+
   createdAt   DateTime @default(now())
   createdBy   String
 }
@@ -130,7 +128,7 @@ model Challenges {
   AppsConfig      Json         @default("{}")
   challengeTypeId String
   challengeType   ChallengeType @relation(fields: [challengeTypeId], references: [id], onDelete: Cascade)
-  
+
   groupChallenges GroupChallenge[]
 }
 
@@ -186,10 +184,10 @@ model VerificationToken {
 model GroupPoints {
   id          String   @id @default(cuid())
   points      Int      @default(0)
-  
+
   userId      String
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
+
   groupId     String
   group       CompetitionGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
 

@@ -1,5 +1,22 @@
+Added Competition System & Image Registry garbage collection
 
+Competition System:
+- Built competition creation and management interface
+- Added access code generation and revocation system
+- Implemented competition joining flow
+- Created member progress and leaderboard tracking
+- Added challenge completion system
+- Built competition status management (active/upcoming/past)
 
-- Removes old LoadBalancer-Instance-Manager as code was obsolete
+Image Registry:
+- Added image pull/push authentication
+- Implemented automated cleanup and garbage collection
 
-- Adjusted rate limiting values for remote-terminal as they were too low + increased max con retries
+API & Database:
+- Created RESTful endpoints for all operations
+- Built new Prisma schema with proper relations
+- Added authentication and role-based access control for competition management
+
+UI/UX:
+- Major UI/UX improvements across the frontend
+

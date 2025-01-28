@@ -1,4 +1,35 @@
 apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: registry-config
+data:
+  config.yml: |
+    version: 0.1
+    storage:
+      delete:
+        enabled: true
+      cache:
+        blobdescriptor: inmemory
+      filesystem:
+        rootdirectory: /var/lib/registry
+    maintenance:
+      uploadpurging:
+        enabled: true
+        age: 24h
+        interval: 12h
+        dryrun: false
+    gc:
+      disabled: false
+    repositories:
+      "*":
+        tags:
+          retention:
+            enabled: true
+            count: 3
+            order: asc
+            visual: false
+---
+apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: registry-pvc
@@ -30,13 +61,49 @@ spec:
         image: registry:2
         ports:
         - containerPort: 5000
+        env:
+        - name: REGISTRY_STORAGE_DELETE_ENABLED
+          value: "true"
+        - name: REGISTRY_STORAGE_MAINTENANCE_READONLY
+          value: "false"
+        - name: REGISTRY_STORAGE_MAINTENANCE_UPLOADPURGING_ENABLED
+          value: "true"
+        - name: REGISTRY_STORAGE_MAINTENANCE_UPLOADPURGING_AGE
+          value: "24h"
+        - name: REGISTRY_STORAGE_MAINTENANCE_UPLOADPURGING_INTERVAL
+          value: "12h"
         volumeMounts:
         - name: registry-storage
           mountPath: /var/lib/registry
+        - name: registry-config
+          mountPath: /etc/docker/registry/config.yml
+          subPath: config.yml
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "200m"
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 5000
+          initialDelaySeconds: 10
+          periodSeconds: 30
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 5000
+          initialDelaySeconds: 5
+          periodSeconds: 10
       volumes:
       - name: registry-storage
         persistentVolumeClaim:
           claimName: registry-pvc
+      - name: registry-config
+        configMap:
+          name: registry-config
 ---
 apiVersion: v1
 kind: Service
@@ -56,11 +123,17 @@ spec:
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: docker-registry-ingress
+  name: docker-registry
   annotations:
-    kubernetes.io/ingress.class: "nginx"
-    nginx.ingress.kubernetes.io/proxy-body-size: "0" # Prevents 413 Request Entity Too Large Error
+    nginx.ingress.kubernetes.io/proxy-body-size: "0"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "600"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
 spec:
+  tls:
+  - hosts:
+    - registry.rydersel.cloud
+    secretName: registry-tls
   rules:
   - host: registry.rydersel.cloud
     http:
@@ -72,8 +145,3 @@ spec:
             name: docker-registry
             port:
               number: 80
-  tls:
-    - hosts:
-        - registry.rydersel.cloud
-      secretName: wildcard-domain-certificate-prod
-

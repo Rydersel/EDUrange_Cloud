@@ -115,6 +115,13 @@ enum ActivityEventType {
   ACCESS_CODE_GENERATED
 }
 
+enum ChallengeDifficulty {
+  EASY
+  MEDIUM
+  HARD
+  VERY_HARD
+}
+
 model ChallengeType {
   id               String          @id @default(cuid())
   name             String
@@ -125,6 +132,8 @@ model Challenges {
   id              String        @id @default(cuid())
   name            String
   challengeImage  String
+  difficulty      ChallengeDifficulty @default(MEDIUM)
+
   AppsConfig      Json         @default("{}")
   challengeTypeId String
   challengeType   ChallengeType @relation(fields: [challengeTypeId], references: [id], onDelete: Cascade)
@@ -184,10 +193,10 @@ model VerificationToken {
 model GroupPoints {
   id          String   @id @default(cuid())
   points      Int      @default(0)
-  
+
   userId      String
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
+
   groupId     String
   group       CompetitionGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
 

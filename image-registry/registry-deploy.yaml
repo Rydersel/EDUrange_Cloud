@@ -5,19 +5,32 @@ metadata:
 data:
   config.yml: |
     version: 0.1
+    log:
+      level: debug
     storage:
+      filesystem:
+        rootdirectory: /var/lib/registry
       delete:
         enabled: true
       cache:
         blobdescriptor: inmemory
-      filesystem:
-        rootdirectory: /var/lib/registry
-    maintenance:
-      uploadpurging:
+      maintenance:
+        readonly:
+          enabled: false
+        uploadpurging:
+          enabled: true
+          age: 168h
+          interval: 24h
+          dryrun: false
+    http:
+      addr: :5000
+      headers:
+        X-Content-Type-Options: [nosniff]
+    health:
+      storagedriver:
         enabled: true
-        age: 24h
-        interval: 12h
-        dryrun: false
+        interval: 10s
+        threshold: 3
     gc:
       disabled: false
     repositories:
@@ -30,12 +43,29 @@ data:
             visual: false
 ---
 apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: registry-pv
+spec:
+  capacity:
+    storage: 10Gi
+  volumeMode: Filesystem
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: manual
+  hostPath:
+    path: /mnt/data/registry
+    type: DirectoryOrCreate
+---
+apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: registry-pvc
 spec:
   accessModes:
     - ReadWriteOnce
+  storageClassName: manual
   resources:
     requests:
       storage: 10Gi
@@ -56,22 +86,33 @@ spec:
       labels:
         app: docker-registry
     spec:
+      initContainers:
+      - name: init-permissions
+        image: busybox
+        command: ['sh', '-c', 'mkdir -p /var/lib/registry/docker && chown -R 1000:1000 /var/lib/registry']
+        securityContext:
+          runAsUser: 0
+          runAsNonRoot: false
+        volumeMounts:
+        - name: registry-storage
+          mountPath: /var/lib/registry
       containers:
       - name: registry
         image: registry:2
+        securityContext:
+          runAsUser: 1000
+          runAsNonRoot: true
         ports:
         - containerPort: 5000
         env:
+        - name: REGISTRY_HTTP_ADDR
+          value: ":5000"
+        - name: REGISTRY_STORAGE_FILESYSTEM_ROOTDIRECTORY
+          value: "/var/lib/registry"
+        - name: REGISTRY_LOG_LEVEL
+          value: "debug"
         - name: REGISTRY_STORAGE_DELETE_ENABLED
           value: "true"
-        - name: REGISTRY_STORAGE_MAINTENANCE_READONLY
-          value: "false"
-        - name: REGISTRY_STORAGE_MAINTENANCE_UPLOADPURGING_ENABLED
-          value: "true"
-        - name: REGISTRY_STORAGE_MAINTENANCE_UPLOADPURGING_AGE
-          value: "24h"
-        - name: REGISTRY_STORAGE_MAINTENANCE_UPLOADPURGING_INTERVAL
-          value: "12h"
         volumeMounts:
         - name: registry-storage
           mountPath: /var/lib/registry

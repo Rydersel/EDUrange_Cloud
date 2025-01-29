@@ -1,22 +1,6 @@
-Added Competition System & Image Registry garbage collection
 
-Competition System:
-- Built competition creation and management interface
-- Added access code generation and revocation system
-- Implemented competition joining flow
-- Created member progress and leaderboard tracking
-- Added challenge completion system
-- Built competition status management (active/upcoming/past)
-
-Image Registry:
-- Added image pull/push authentication
-- Implemented automated cleanup and garbage collection
-
-API & Database:
-- Created RESTful endpoints for all operations
-- Built new Prisma schema with proper relations
-- Added authentication and role-based access control for competition management
-
-UI/UX:
-- Major UI/UX improvements across the frontend
-
+More work on competition system and dashboard
+- Connected challenge selector with database
+- Began work on Database restructuring to accommodate new features
+- Improved Frontend API endpoints and began writting documentation for them
+- Many other minor changes and improvements to the frontend

@@ -128,7 +128,6 @@ model Challenges {
   AppsConfig      Json         @default("{}")
   challengeTypeId String
   challengeType   ChallengeType @relation(fields: [challengeTypeId], references: [id], onDelete: Cascade)
-
   groupChallenges GroupChallenge[]
 }
 

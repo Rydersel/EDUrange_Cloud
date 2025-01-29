@@ -159,10 +159,11 @@ export default function NewChallengeForm({ userId }) {
     setSelectedChallengeId(selectedChallengeId);
     const selectedChallenge = challenges.find(challenge => challenge.id === selectedChallengeId);
     if (selectedChallenge) {
-      setAppsConfig(selectedChallenge.AppsConfig);
-      setOverriddenConfig(selectedChallenge.AppsConfig);
-      setChallengeType(selectedChallenge.challengeType.name);
-      setChallengeImage(selectedChallenge.challengeImage);
+      const config = Array.isArray(selectedChallenge.AppsConfig) ? selectedChallenge.AppsConfig : [];
+      setAppsConfig(config);
+      setOverriddenConfig(config);
+      setChallengeType(selectedChallenge.challengeType?.name || '');
+      setChallengeImage(selectedChallenge.challengeImage || '');
     }
   };
 

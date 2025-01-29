@@ -63,8 +63,7 @@ interface Challenge {
   type: string;
 }
 
-interface ChallengeType {
-  id: string;
+interface ChallengeTypeGroup {
   name: string;
   challenges: Challenge[];
 }
@@ -141,7 +140,7 @@ export default function CreateCompetitionPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
-  const [challengeTypes, setChallengeTypes] = useState<Record<string, Challenge[]>>({});
+  const [challengeTypes, setChallengeTypes] = useState<Record<string, ChallengeTypeGroup>>({});
   const [instructors, setInstructors] = useState<Instructor[]>([]);
   const { toast } = useToast();
 
@@ -180,7 +179,26 @@ export default function CreateCompetitionPage() {
         const challengesRes = await fetch('/api/challenges');
         if (!challengesRes.ok) throw new Error('Failed to fetch challenges');
         const challengesData = await challengesRes.json();
-        setChallengeTypes(challengesData);
+        
+        // Group challenges by type and store type names
+        const groupedChallenges = challengesData.reduce((acc: Record<string, { name: string, challenges: Challenge[] }>, challenge: any) => {
+          const typeId = challenge.challengeType.id;
+          if (!acc[typeId]) {
+            acc[typeId] = {
+              name: challenge.challengeType.name,
+              challenges: []
+            };
+          }
+          acc[typeId].challenges.push({
+            id: challenge.id,
+            name: challenge.name,
+            image: challenge.challengeImage,
+            type: challenge.challengeType.name
+          });
+          return acc;
+        }, {});
+        
+        setChallengeTypes(groupedChallenges);
 
         // Fetch instructors
         const instructorsRes = await fetch('/api/instructors');
@@ -474,9 +492,9 @@ export default function CreateCompetitionPage() {
                       <SelectValue placeholder="Select a type" />
                     </SelectTrigger>
                     <SelectContent>
-                      {Object.keys(challengeTypes).map((type) => (
-                        <SelectItem key={type} value={type}>
-                          {type}
+                      {Object.entries(challengeTypes).map(([typeId, typeData]) => (
+                        <SelectItem key={typeId} value={typeId}>
+                          {typeData.name}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -488,7 +506,7 @@ export default function CreateCompetitionPage() {
                   <Select
                     disabled={!selectedType}
                     onValueChange={(value) => {
-                      const challenge = challengeTypes[selectedType]?.find(c => c.id === value);
+                      const challenge = challengeTypes[selectedType]?.challenges?.find(c => c.id === value);
                       if (challenge) handleAddChallenge(challenge);
                     }}
                   >
@@ -496,7 +514,7 @@ export default function CreateCompetitionPage() {
                       <SelectValue placeholder="Select a challenge" />
                     </SelectTrigger>
                     <SelectContent>
-                      {selectedType && challengeTypes[selectedType]?.map((challenge) => (
+                      {selectedType && challengeTypes[selectedType]?.challenges?.map((challenge) => (
                         <SelectItem
                           key={challenge.id}
                           value={challenge.id}

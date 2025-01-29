@@ -4,34 +4,50 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { UserNav } from '@/components/layout/user-nav'
 import ThemeToggle from '@/components/layout/ThemeToggle/theme-toggle'
+import { useSession } from 'next-auth/react';
 
 export function MainNavigation() {
-  const pathname = usePathname()
+  const pathname = usePathname();
+  const { data: session, status } = useSession();
+  
+  console.log('Full Session Data:', session);
+  console.log('Session User:', session?.user);
+
+  // Get user role from session
+  const userRole = session?.user?.role;
+  const isAdminOrInstructor = userRole === 'ADMIN' || userRole === 'INSTRUCTOR';
+
+  console.log('Session Status:', status);
+  console.log('User Role:', userRole);
+  console.log('Is Admin or Instructor:', isAdminOrInstructor);
+
+  const navigationItems = [
+    { name: "Home", path: "/home" },
+    { name: "Competitions", path: "/competitions" }
+  ];
+
+  // Add admin item if user is admin/instructor
+  if (status === 'authenticated' && isAdminOrInstructor) {
+    navigationItems.push({ name: "Admin", path: "/dashboard" });
+  }
 
   return (
     <nav className="bg-background border-b">
       <div className="max-w-7xl mx-auto flex items-center px-4 relative">
         <div className="absolute left-4">
-          <span className="text-sm font-light tracking-wider text-foreground dark:text-white opacity-70">
+          <Link href="/home" className="text-sm font-light tracking-wider text-foreground dark:text-white opacity-70 hover:opacity-100 hover:text-green-400 transition-all">
             EDURange Cloud
-          </span>
+          </Link>
         </div>
         <ul className="flex -mb-px mx-auto">
-          {[
-            { name: "Home", path: "/" },
-            { name: "Challenges", path: "/challenges" },
-            { name: "Competitions", path: "/competitions" },
-            { name: "Leaderboard", path: "/leaderboard" },
-            { name: "Profile", path: "/profile" },
-            { name: "Admin", path: "/dashboard" },
-          ].map((item) => (
+          {navigationItems.map((item) => (
             <li key={item.name}>
               <Link
                 href={item.path}
-                className={`inline-flex items-center px-6 py-4 border-b-[3px] text-base font-semibold transition-all relative
+                className={`inline-flex items-center px-6 py-4 text-base font-semibold transition-all relative
                   ${pathname === item.path
-                    ? "border-blue-500 text-blue-500 dark:border-blue-400 dark:text-blue-400"
-                    : "border-transparent text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white hover:border-gray-300 dark:hover:border-gray-500"
+                    ? "text-green-400 dark:text-green-400 after:absolute after:bottom-0 after:left-0 after:w-full after:h-[3px] after:bg-green-500 after:shadow-[0_4px_6px_-1px_rgba(34,197,94,0.4)] dark:after:shadow-[0_4px_8px_-1px_rgba(34,197,94,0.6)]"
+                    : "border-transparent text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-green-400 after:absolute after:bottom-0 after:left-0 after:w-full after:h-[3px] after:bg-transparent hover:after:bg-gray-300 dark:hover:after:bg-green-500/50"
                   }
                 `}
               >

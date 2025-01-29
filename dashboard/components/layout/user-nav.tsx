@@ -11,7 +11,10 @@ import {
   DropdownMenuShortcut,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
-import { signOut, useSession } from 'next-auth/react';
+import { signOut, useSession, signIn } from 'next-auth/react';
+import { User, Settings, LogOut } from 'lucide-react';
+import Link from 'next/link';
+
 export function UserNav() {
   const { data: session } = useSession();
   if (session) {
@@ -41,17 +44,22 @@ export function UserNav() {
           </DropdownMenuLabel>
           <DropdownMenuSeparator />
           <DropdownMenuGroup>
+            <Link href="/profile">
+              <DropdownMenuItem className="cursor-pointer">
+                <User className="mr-2 h-4 w-4" />
+                Profile
+                <DropdownMenuShortcut>⇧⌘P</DropdownMenuShortcut>
+              </DropdownMenuItem>
+            </Link>
             <DropdownMenuItem>
-              Github
-              <DropdownMenuShortcut>⇧⌘G</DropdownMenuShortcut>
+              <Settings className="mr-2 h-4 w-4" />
+              Settings
+              <DropdownMenuShortcut>⇧⌘S</DropdownMenuShortcut>
             </DropdownMenuItem>
-            <DropdownMenuItem>
-            Settings
-            <DropdownMenuShortcut>⇧⌘S</DropdownMenuShortcut>
-          </DropdownMenuItem>
           </DropdownMenuGroup>
           <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={() => signOut()}>
+          <DropdownMenuItem onClick={() => signOut()} className="text-red-600 dark:text-red-400">
+            <LogOut className="mr-2 h-4 w-4" />
             Log out
             <DropdownMenuShortcut>⇧⌘Q</DropdownMenuShortcut>
           </DropdownMenuItem>
@@ -59,4 +67,14 @@ export function UserNav() {
       </DropdownMenu>
     );
   }
+  
+  return (
+    <Button 
+      variant="ghost" 
+      className="relative h-8 rounded-md hover:bg-accent hover:text-accent-foreground"
+      onClick={() => signIn()}
+    >
+      Login
+    </Button>
+  );
 }

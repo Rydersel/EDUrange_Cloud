@@ -28,6 +28,7 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Switch } from '@/components/ui/switch';
+
 import {
   Dialog,
   DialogContent,
@@ -55,6 +56,10 @@ import { CSS } from '@dnd-kit/utilities';
 import { useToast } from '@/components/ui/use-toast';
 import { z } from 'zod';
 import { Checkbox } from '@/components/ui/checkbox';
+import {getServerSession} from "next-auth/next";
+import authConfig from "@/auth.config";
+import {redirect} from "next/navigation";
+
 
 interface Challenge {
   id: string;
@@ -142,7 +147,8 @@ export default function CreateCompetitionPage() {
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [challengeTypes, setChallengeTypes] = useState<Record<string, ChallengeTypeGroup>>({});
   const [instructors, setInstructors] = useState<Instructor[]>([]);
-  const { toast } = useToast();
+  const {toast} = useToast();
+
 
   const [form, setForm] = useState<CompetitionForm>({
     name: '',
@@ -154,34 +160,38 @@ export default function CreateCompetitionPage() {
     generateAccessCode: false,
   });
 
-  const handleDateSelect = (field: keyof Pick<CompetitionForm, 'startDate' | 'endDate'>) => 
-    (date: Date | undefined) => {
-      setForm((prevForm: CompetitionForm) => ({
-        ...prevForm,
-        [field]: date ?? null
-      }));
-    };
+  const handleDateSelect = (field: keyof Pick<CompetitionForm, 'startDate' | 'endDate'>) =>
+      (date: Date | undefined) => {
+        setForm((prevForm: CompetitionForm) => ({
+          ...prevForm,
+          [field]: date ?? null
+        }));
+      };
 
   const sensors = useSensors(
-    useSensor(PointerSensor),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
-    })
+      useSensor(PointerSensor),
+      useSensor(KeyboardSensor, {
+        coordinateGetter: sortableKeyboardCoordinates,
+      })
   );
 
   // Fetch challenges and instructors on component mount
   useEffect(() => {
     const fetchData = async () => {
+
       try {
         setIsLoading(true);
-        
+
         // Fetch challenges
         const challengesRes = await fetch('/api/challenges');
         if (!challengesRes.ok) throw new Error('Failed to fetch challenges');
         const challengesData = await challengesRes.json();
-        
+
         // Group challenges by type and store type names
-        const groupedChallenges = challengesData.reduce((acc: Record<string, { name: string, challenges: Challenge[] }>, challenge: any) => {
+        const groupedChallenges = challengesData.reduce((acc: Record<string, {
+          name: string,
+          challenges: Challenge[]
+        }>, challenge: any) => {
           const typeId = challenge.challengeType.id;
           if (!acc[typeId]) {
             acc[typeId] = {
@@ -197,7 +207,7 @@ export default function CreateCompetitionPage() {
           });
           return acc;
         }, {});
-        
+
         setChallengeTypes(groupedChallenges);
 
         // Fetch instructors
@@ -241,9 +251,9 @@ export default function CreateCompetitionPage() {
   const handleInstructorChange = (instructorId: string) => {
     setForm(prev => {
       const newInstructorIds = prev.instructorIds.includes(instructorId)
-        ? prev.instructorIds.filter(id => id !== instructorId)
-        : [...prev.instructorIds, instructorId];
-      
+          ? prev.instructorIds.filter(id => id !== instructorId)
+          : [...prev.instructorIds, instructorId];
+
       return {
         ...prev,
         instructorIds: newInstructorIds,
@@ -253,28 +263,28 @@ export default function CreateCompetitionPage() {
 
   const isFormValid = () => {
     return (
-      form.name.trim() !== '' &&
-      form.description.trim() !== '' &&
-      form.startDate !== null &&
-      form.challengeIds.length > 0 &&
-      form.instructorIds.length > 0
+        form.name.trim() !== '' &&
+        form.description.trim() !== '' &&
+        form.startDate !== null &&
+        form.challengeIds.length > 0 &&
+        form.instructorIds.length > 0
     );
   };
 
   const handleDragEnd = (event: any) => {
-    const { active, over } = event;
+    const {active, over} = event;
 
     if (active.id !== over.id) {
       setSelectedChallenges((items) => {
         const oldIndex = items.findIndex((item) => item.id === active.id);
         const newIndex = items.findIndex((item) => item.id === over.id);
-        
+
         const newItems = arrayMove(items, oldIndex, newIndex);
         setForm(prev => ({
           ...prev,
           challengeIds: newItems.map(item => item.id),
         }));
-        
+
         return newItems;
       });
     }
@@ -344,280 +354,280 @@ export default function CreateCompetitionPage() {
 
   if (isLoading) {
     return (
-      <div className="flex h-[50vh] items-center justify-center">
-        <div className="text-center">
-          <Loader2 className="h-8 w-8 animate-spin mx-auto" />
-          <p className="mt-2 text-muted-foreground">Loading competition data...</p>
+        <div className="flex h-[50vh] items-center justify-center">
+          <div className="text-center">
+            <Loader2 className="h-8 w-8 animate-spin mx-auto"/>
+            <p className="mt-2 text-muted-foreground">Loading competition data...</p>
+          </div>
         </div>
-      </div>
     );
   }
 
   return (
-    <form onSubmit={handleSubmit} className="container mx-auto py-10 max-h-screen overflow-y-auto">
-      <div className="flex items-center justify-between mb-8">
-        <div className="flex items-center space-x-2">
-          <Link href="/dashboard/competitions" className="text-muted-foreground hover:text-foreground">
-            <ChevronLeft className="h-4 w-4" />
-          </Link>
-          <h2 className="text-3xl font-bold tracking-tight">Create Competition</h2>
+      <form onSubmit={handleSubmit} className="container mx-auto py-10 max-h-screen overflow-y-auto">
+        <div className="flex items-center justify-between mb-8">
+          <div className="flex items-center space-x-2">
+            <Link href="/dashboard/competitions" className="text-muted-foreground hover:text-foreground">
+              <ChevronLeft className="h-4 w-4"/>
+            </Link>
+            <h2 className="text-3xl font-bold tracking-tight">Create Competition</h2>
+          </div>
+          <Button
+              type="submit"
+              disabled={isSubmitting || !isFormValid()}
+              className="ml-auto"
+          >
+            {isSubmitting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin"/>
+                  Creating Competition...
+                </>
+            ) : (
+                'Create Competition'
+            )}
+          </Button>
         </div>
-        <Button
-          type="submit"
-          disabled={isSubmitting || !isFormValid()}
-          className="ml-auto"
-        >
-          {isSubmitting ? (
-            <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Creating Competition...
-            </>
-          ) : (
-            'Create Competition'
-          )}
-        </Button>
-      </div>
 
-      <div className="grid gap-6 pb-20">
-        <Card>
-          <CardHeader>
-            <CardTitle>Basic Information</CardTitle>
-            <CardDescription>
-              Set up the basic details for your competition.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="name">Competition Name</Label>
-              <Input
-                id="name"
-                value={form.name}
-                onChange={(e) => setForm(prev => ({ ...prev, name: e.target.value }))}
-                placeholder="Enter competition name"
-              />
-              {formErrors.name && (
-                <p className="text-sm text-red-500">{formErrors.name}</p>
-              )}
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="description">Description</Label>
-              <Textarea
-                id="description"
-                value={form.description}
-                onChange={(e) => setForm(prev => ({ ...prev, description: e.target.value }))}
-                placeholder="Enter competition description"
-              />
-              {formErrors.description && (
-                <p className="text-sm text-red-500">{formErrors.description}</p>
-              )}
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
+        <div className="grid gap-6 pb-20">
+          <Card>
+            <CardHeader>
+              <CardTitle>Basic Information</CardTitle>
+              <CardDescription>
+                Set up the basic details for your competition.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
               <div className="space-y-2">
-                <Label>Start Date</Label>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      className={cn(
-                        "w-full justify-start text-left font-normal",
-                        !form.startDate && "text-muted-foreground"
-                      )}
-                    >
-                      <CalendarIcon className="mr-2 h-4 w-4" />
-                      {form.startDate ? format(form.startDate, "PPP") : "Pick a date"}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0">
-                    <Calendar
-                      mode="single"
-                      selected={form.startDate ?? undefined}
-                      onSelect={handleDateSelect('startDate')}
-                      disabled={(date) => date < new Date()}
-                    />
-                  </PopoverContent>
-                </Popover>
-                {formErrors.startDate && (
-                  <p className="text-sm text-red-500">{formErrors.startDate}</p>
+                <Label htmlFor="name">Competition Name</Label>
+                <Input
+                    id="name"
+                    value={form.name}
+                    onChange={(e) => setForm(prev => ({...prev, name: e.target.value}))}
+                    placeholder="Enter competition name"
+                />
+                {formErrors.name && (
+                    <p className="text-sm text-red-500">{formErrors.name}</p>
                 )}
               </div>
 
               <div className="space-y-2">
-                <Label>End Date (Optional)</Label>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      className={cn(
-                        "w-full justify-start text-left font-normal",
-                        !form.endDate && "text-muted-foreground"
-                      )}
+                <Label htmlFor="description">Description</Label>
+                <Textarea
+                    id="description"
+                    value={form.description}
+                    onChange={(e) => setForm(prev => ({...prev, description: e.target.value}))}
+                    placeholder="Enter competition description"
+                />
+                {formErrors.description && (
+                    <p className="text-sm text-red-500">{formErrors.description}</p>
+                )}
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Start Date</Label>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                          variant="outline"
+                          className={cn(
+                              "w-full justify-start text-left font-normal",
+                              !form.startDate && "text-muted-foreground"
+                          )}
+                      >
+                        <CalendarIcon className="mr-2 h-4 w-4"/>
+                        {form.startDate ? format(form.startDate, "PPP") : "Pick a date"}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0">
+                      <Calendar
+                          mode="single"
+                          selected={form.startDate ?? undefined}
+                          onSelect={handleDateSelect('startDate')}
+                          disabled={(date) => date < new Date()}
+                      />
+                    </PopoverContent>
+                  </Popover>
+                  {formErrors.startDate && (
+                      <p className="text-sm text-red-500">{formErrors.startDate}</p>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <Label>End Date (Optional)</Label>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                          variant="outline"
+                          className={cn(
+                              "w-full justify-start text-left font-normal",
+                              !form.endDate && "text-muted-foreground"
+                          )}
+                      >
+                        <CalendarIcon className="mr-2 h-4 w-4"/>
+                        {form.endDate ? format(form.endDate, "PPP") : "Pick a date"}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0">
+                      <Calendar
+                          mode="single"
+                          selected={form.endDate ?? undefined}
+                          onSelect={handleDateSelect('endDate')}
+                          disabled={(date) => date < (form.startDate ?? new Date())}
+                      />
+                    </PopoverContent>
+                  </Popover>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Challenges</CardTitle>
+              <CardDescription>
+                Select and organize the challenges for your competition.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <div className="flex space-x-4">
+                  <div className="w-1/3">
+                    <Label>Challenge Type</Label>
+                    <Select
+                        value={selectedType}
+                        onValueChange={setSelectedType}
                     >
-                      <CalendarIcon className="mr-2 h-4 w-4" />
-                      {form.endDate ? format(form.endDate, "PPP") : "Pick a date"}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0">
-                    <Calendar
-                      mode="single"
-                      selected={form.endDate ?? undefined}
-                      onSelect={handleDateSelect('endDate')}
-                      disabled={(date) => date < (form.startDate ?? new Date())}
-                    />
-                  </PopoverContent>
-                </Popover>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select a type"/>
+                      </SelectTrigger>
+                      <SelectContent>
+                        {Object.entries(challengeTypes).map(([typeId, typeData]) => (
+                            <SelectItem key={typeId} value={typeId}>
+                              {typeData.name}
+                            </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Challenges</CardTitle>
-            <CardDescription>
-              Select and organize the challenges for your competition.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="flex space-x-4">
-                <div className="w-1/3">
-                  <Label>Challenge Type</Label>
-                  <Select
-                    value={selectedType}
-                    onValueChange={setSelectedType}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select a type" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {Object.entries(challengeTypes).map(([typeId, typeData]) => (
-                        <SelectItem key={typeId} value={typeId}>
-                          {typeData.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <div className="w-2/3">
+                    <Label>Available Challenges</Label>
+                    <Select
+                        disabled={!selectedType}
+                        onValueChange={(value) => {
+                          const challenge = challengeTypes[selectedType]?.challenges?.find(c => c.id === value);
+                          if (challenge) handleAddChallenge(challenge);
+                        }}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select a challenge"/>
+                      </SelectTrigger>
+                      <SelectContent>
+                        {selectedType && challengeTypes[selectedType]?.challenges?.map((challenge) => (
+                            <SelectItem
+                                key={challenge.id}
+                                value={challenge.id}
+                                disabled={selectedChallenges.some(c => c.id === challenge.id)}
+                            >
+                              {challenge.name}
+                            </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
 
-                <div className="w-2/3">
-                  <Label>Available Challenges</Label>
-                  <Select
-                    disabled={!selectedType}
-                    onValueChange={(value) => {
-                      const challenge = challengeTypes[selectedType]?.challenges?.find(c => c.id === value);
-                      if (challenge) handleAddChallenge(challenge);
-                    }}
+                <div className="space-y-2">
+                  <Label>Selected Challenges</Label>
+                  <DndContext
+                      sensors={sensors}
+                      collisionDetection={closestCenter}
+                      onDragEnd={handleDragEnd}
                   >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select a challenge" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {selectedType && challengeTypes[selectedType]?.challenges?.map((challenge) => (
-                        <SelectItem
-                          key={challenge.id}
-                          value={challenge.id}
-                          disabled={selectedChallenges.some(c => c.id === challenge.id)}
-                        >
-                          {challenge.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                    <SortableContext
+                        items={selectedChallenges}
+                        strategy={verticalListSortingStrategy}
+                    >
+                      <div className="space-y-2">
+                        {selectedChallenges.map((challenge) => (
+                            <SortableChallenge
+                                key={challenge.id}
+                                challenge={challenge}
+                                onRemove={handleRemoveChallenge}
+                            />
+                        ))}
+                      </div>
+                    </SortableContext>
+                  </DndContext>
+                  {formErrors.challenges && (
+                      <p className="text-sm text-red-500">{formErrors.challenges}</p>
+                  )}
                 </div>
               </div>
+            </CardContent>
+          </Card>
 
-              <div className="space-y-2">
-                <Label>Selected Challenges</Label>
-                <DndContext
-                  sensors={sensors}
-                  collisionDetection={closestCenter}
-                  onDragEnd={handleDragEnd}
-                >
-                  <SortableContext
-                    items={selectedChallenges}
-                    strategy={verticalListSortingStrategy}
-                  >
-                    <div className="space-y-2">
-                      {selectedChallenges.map((challenge) => (
-                        <SortableChallenge
-                          key={challenge.id}
-                          challenge={challenge}
-                          onRemove={handleRemoveChallenge}
-                        />
-                      ))}
+          <Card>
+            <CardHeader>
+              <CardTitle>Access Settings</CardTitle>
+              <CardDescription>
+                Configure how participants will access the competition.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center space-x-2">
+                <Switch
+                    checked={form.generateAccessCode}
+                    onCheckedChange={(checked) => setForm(prev => ({...prev, generateAccessCode: checked}))}
+                />
+                <Label>Generate access code for this competition</Label>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Instructors</CardTitle>
+              <CardDescription>
+                Select instructors who will manage this competition.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {instructors.map((instructor) => (
+                    <div key={instructor.id} className="flex items-center space-x-2">
+                      <Checkbox
+                          id={instructor.id}
+                          checked={form.instructorIds.includes(instructor.id)}
+                          onCheckedChange={() => handleInstructorChange(instructor.id)}
+                      />
+                      <Label htmlFor={instructor.id}>
+                        {instructor.name || instructor.email}
+                      </Label>
                     </div>
-                  </SortableContext>
-                </DndContext>
-                {formErrors.challenges && (
-                  <p className="text-sm text-red-500">{formErrors.challenges}</p>
+                ))}
+                {formErrors.instructors && (
+                    <p className="text-sm text-red-500">{formErrors.instructors}</p>
                 )}
               </div>
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Access Settings</CardTitle>
-            <CardDescription>
-              Configure how participants will access the competition.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center space-x-2">
-              <Switch
-                checked={form.generateAccessCode}
-                onCheckedChange={(checked) => setForm(prev => ({ ...prev, generateAccessCode: checked }))}
-              />
-              <Label>Generate access code for this competition</Label>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Instructors</CardTitle>
-            <CardDescription>
-              Select instructors who will manage this competition.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {instructors.map((instructor) => (
-                <div key={instructor.id} className="flex items-center space-x-2">
-                  <Checkbox
-                    id={instructor.id}
-                    checked={form.instructorIds.includes(instructor.id)}
-                    onCheckedChange={() => handleInstructorChange(instructor.id)}
-                  />
-                  <Label htmlFor={instructor.id}>
-                    {instructor.name || instructor.email}
-                  </Label>
-                </div>
-              ))}
-              {formErrors.instructors && (
-                <p className="text-sm text-red-500">{formErrors.instructors}</p>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-
-        {Object.keys(formErrors).length > 0 && (
-          <Alert variant="destructive">
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription>
-              Please fix the following errors:
-              <ul className="mt-2 list-disc list-inside">
-                {Object.values(formErrors).map((error, index) => (
-                  <li key={index}>{error}</li>
-                ))}
-              </ul>
-            </AlertDescription>
-          </Alert>
-        )}
-      </div>
-    </form>
+          {Object.keys(formErrors).length > 0 && (
+              <Alert variant="destructive">
+                <AlertCircle className="h-4 w-4"/>
+                <AlertDescription>
+                  Please fix the following errors:
+                  <ul className="mt-2 list-disc list-inside">
+                    {Object.values(formErrors).map((error, index) => (
+                        <li key={index}>{error}</li>
+                    ))}
+                  </ul>
+                </AlertDescription>
+              </Alert>
+          )}
+        </div>
+      </form>
   );
-} 
+}

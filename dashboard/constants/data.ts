@@ -102,7 +102,7 @@ export const defaultAppsConfig: AppConfig[] = [
 export const navItems: NavItem[] = [
   {
     title: 'Home',
-    href: '/dashboard/home',
+    href: '/home',
     icon: 'logo',
     label: 'home'
   },

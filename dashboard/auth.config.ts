@@ -39,45 +39,6 @@ const authConfig: AuthOptions = {
       clientId: process.env.AUTH_GITHUB_ID ?? '',
       clientSecret: process.env.AUTH_GITHUB_SECRET ?? '',
     }),
-    CredentialsProvider({
-      credentials: {
-        email: { type: 'email', label: 'Email', placeholder: 'your-email@example.com' },
-        password: { type: 'password', label: 'Password', placeholder: 'your-password' }
-      },
-      async authorize(credentials) {
-        const { email, password } = credentials ?? {};
-
-        if (!email || !password) {
-          console.log("Missing email or password");
-          return null;
-        }
-
-        // First find the user without password to check if they exist
-        const user = await prisma.user.findUnique({ 
-          where: { email }
-        });
-
-        if (!user) {
-          console.log("User not found");
-          return null;
-        }
-
-        // For demo purposes, we're doing a simple password check
-        // In production, you should use proper password hashing
-        if (password === 'demo-password') {
-          console.log("User authenticated successfully", user);
-          return {
-            id: user.id,
-            name: user.name,
-            email: user.email,
-            role: user.role
-          };
-        } else {
-          console.log("Incorrect password");
-          return null;
-        }
-      }
-    })
   ],
   pages: {
     signIn: '/' // Sign-in page
@@ -95,10 +56,10 @@ const authConfig: AuthOptions = {
       }
       return session;
     },
-    async signIn({ user, account, profile }: { 
-      user: (AuthUser & { name?: string | null; image?: string | null }) | { email: string; id?: string }; 
-      account: Account | null; 
-      profile?: Profile 
+    async signIn({ user, account, profile }: {
+      user: (AuthUser & { name?: string | null; image?: string | null }) | { email: string; id?: string };
+      account: Account | null;
+      profile?: Profile
     }) {
       console.log("SignIn callback invoked", { user, account, profile });
 
@@ -143,7 +104,7 @@ const authConfig: AuthOptions = {
             name: 'name' in user ? user.name : null,
             email: user.email,
             image: 'image' in user ? user.image : null,
-            role: "STUDENT"
+            role: "STUDENT" // Default Role
           },
         });
         await prisma.account.create({

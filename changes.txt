@@ -1,6 +1,2 @@
 
-More work on competition system and dashboard
-- Connected challenge selector with database
-- Began work on Database restructuring to accommodate new features
-- Improved Frontend API endpoints and began writting documentation for them
-- Many other minor changes and improvements to the frontend
+Redesigned how challenges are stored in the database, specifically how their appconfigs are stored.

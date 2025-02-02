@@ -11,7 +11,7 @@ export default function UserAuthForm() {
                 Welcome to EDUrange Cloud
             </h1>
             <p className="bg-clip-text text-transparent drop-shadow-2xl bg-gradient-to-b from-white/80 to-white/20">
-                Create a new account or login to get started
+                Login with one of our supported providers
             </p>
             <p className="text-sm text-gray-400">
 

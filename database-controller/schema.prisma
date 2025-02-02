@@ -1,6 +1,9 @@
 generator client {
   provider = "prisma-client-js"
 }
+generator client_py {
+  provider = "prisma-client-py"
+}
 
 datasource db {
   provider = "postgresql"
@@ -115,6 +118,13 @@ enum ActivityEventType {
   ACCESS_CODE_GENERATED
 }
 
+enum ChallengeDifficulty {
+  EASY
+  MEDIUM
+  HARD
+  VERY_HARD
+}
+
 model ChallengeType {
   id               String          @id @default(cuid())
   name             String
@@ -125,9 +135,12 @@ model Challenges {
   id              String        @id @default(cuid())
   name            String
   challengeImage  String
+  difficulty      ChallengeDifficulty @default(MEDIUM)
+
   AppsConfig      Json         @default("{}")
   challengeTypeId String
   challengeType   ChallengeType @relation(fields: [challengeTypeId], references: [id], onDelete: Cascade)
+
   groupChallenges GroupChallenge[]
 }
 

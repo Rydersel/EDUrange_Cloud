@@ -2,10 +2,13 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { CompetitionsList } from "./competitions-list";
+import {redirect} from "next/navigation";
 
 export default async function CompetitionsPage() {
   const session = await getServerSession(authOptions);
-  if (!session?.user) return null;
+  if (!session?.user) {
+    redirect('/')
+  }
 
   const now = new Date();
 
@@ -27,13 +30,13 @@ export default async function CompetitionsPage() {
   });
 
   // Sort competitions into categories
-  const active = competitions.filter((c) => 
+  const active = competitions.filter((c) =>
     c.startDate <= now && (!c.endDate || c.endDate >= now)
   );
   const upcoming = competitions.filter((c) => c.startDate > now);
-  const past = competitions.filter((c) => 
+  const past = competitions.filter((c) =>
     c.endDate && c.endDate < now
   );
 
   return <CompetitionsList competitions={{ active, upcoming, past }} />;
-} 
+}

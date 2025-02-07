@@ -2,16 +2,17 @@
 
 import React from 'react'
 import { ChevronDown, ChevronUp, Trophy } from 'lucide-react'
-import { Badge } from "../components/ui/badge"
+import { Badge } from "./ui/badge"
 import {
   Accordion,
   AccordionContent,
   AccordionItem,
   AccordionTrigger,
-} from "../components/ui/accordion"
-import { Button } from "../components/ui/button"
+} from "./ui/accordion"
+import { Button } from "./ui/button"
 import { motion, AnimatePresence } from "framer-motion"
-import { extractChallengeDescription, extractChallengePoints } from "@/lib/utils"
+import { extractChallengeDescription } from "@/lib/utils"
+import { useToast } from "./ui/use-toast"
 
 interface Challenge {
   id: string;
@@ -22,10 +23,12 @@ interface Challenge {
     id: string;
     name: string;
   };
+  points: number;
 }
 
 interface ChallengeItemProps {
   challenge: Challenge;
+  competitionId: string;
   expandedChallenge: string | null;
   setExpandedChallenge: (challenge: string | null) => void;
   startedChallenges: Set<string>;
@@ -38,8 +41,24 @@ interface ChallengeItemProps {
   onComplete: (challengeName: string) => void;
 }
 
+const checkUrlAvailability = async (url: string, maxAttempts = 30): Promise<boolean> => {
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    try {
+      const response = await fetch(url);
+      if (response.ok || response.status !== 503) {
+        return true;
+      }
+    } catch (error) {
+      console.log(`Attempt ${attempt + 1}: URL not ready yet`);
+    }
+    await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2 seconds between attempts
+  }
+  return false;
+};
+
 export function ChallengeItem({
   challenge,
+  competitionId,
   expandedChallenge,
   setExpandedChallenge,
   startedChallenges,
@@ -52,11 +71,70 @@ export function ChallengeItem({
   onComplete
 }: ChallengeItemProps) {
   const [showCompletionAnimation, setShowCompletionAnimation] = React.useState(false);
+  const [isStarting, setIsStarting] = React.useState(false);
   const description = extractChallengeDescription(challenge.AppsConfig);
-  const points = extractChallengePoints(challenge.AppsConfig);
+  const { toast } = useToast();
 
-  const handleStartChallenge = (challengeName: string) => {
-    setStartedChallenges(new Set(startedChallenges).add(challengeName));
+  const handleStartChallenge = async () => {
+    try {
+      setIsStarting(true);
+      const toastId = toast({
+        title: "Creating Challenge",
+        description: "Please wait while your challenge instance is being created...",
+      });
+
+      const response = await fetch("/api/challenges/start", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          challengeId: challenge.id,
+          competitionId: competitionId,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to start challenge");
+      }
+
+      const data = await response.json();
+      setStartedChallenges(new Set(startedChallenges).add(challenge.name));
+      
+      if (data.challengeUrl) {
+        // Update toast to show waiting status
+        toast({
+          title: "Challenge Created",
+          description: "Waiting for challenge environment to be ready...",
+        });
+
+        // Wait for the URL to be available
+        const isAvailable = await checkUrlAvailability(data.challengeUrl);
+        
+        if (isAvailable) {
+          toast({
+            title: "Challenge Ready",
+            description: "Opening challenge in a new tab...",
+          });
+          window.open(data.challengeUrl, '_blank');
+        } else {
+          toast({
+            title: "Challenge Created",
+            description: "Challenge is taking longer than expected to be ready. You can try accessing it manually in a few moments.",
+            duration: 5000,
+          });
+        }
+      }
+    } catch (error) {
+      console.error("Error starting challenge:", error);
+      toast({
+        title: "Error",
+        description: "Failed to start challenge. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsStarting(false);
+    }
   };
 
   const handleCompleteChallenge = (challengeName: string) => {
@@ -69,6 +147,7 @@ export function ChallengeItem({
       });
       setShowCompletionAnimation(true);
       setTimeout(() => setShowCompletionAnimation(false), 1500);
+      onComplete(challengeName);
     }
   };
 
@@ -116,7 +195,7 @@ export function ChallengeItem({
             </div>
             <div className="flex items-center gap-2 text-gray-400">
               <Trophy className="h-4 w-4 text-yellow-500" />
-              <span>{points} points</span>
+              <span>{challenge.points} points</span>
             </div>
             <div className="flex items-center justify-end gap-2">
               {completedChallenges.has(challenge.name) && (
@@ -145,16 +224,17 @@ export function ChallengeItem({
                   } else if (startedChallenges.has(challenge.name)) {
                     handleCompleteChallenge(challenge.name);
                   } else {
-                    handleStartChallenge(challenge.name);
+                    handleStartChallenge();
                   }
                 }}
-                disabled={completedChallenges.has(challenge.name)}
+                disabled={completedChallenges.has(challenge.name) || isStarting}
               >
-                {completedChallenges.has(challenge.name) 
-                  ? 'Challenge Completed' 
-                  : startedChallenges.has(challenge.name) 
-                    ? 'Complete Challenge' 
-                    : 'Start Challenge'}
+                {isStarting ? 'Starting Challenge...' :
+                  completedChallenges.has(challenge.name) 
+                    ? 'Challenge Completed' 
+                    : startedChallenges.has(challenge.name) 
+                      ? 'Complete Challenge' 
+                      : 'Start Challenge'}
               </Button>
             </div>
           </div>

@@ -43,18 +43,15 @@ async def add_challenge_instance(instance):
     logging.info(f"Adding new instance: {instance['challenge_url']}")
     flag = get_flag(instance.get('flag_secret_name', 'null'))
     
-    # Extract challenge ID from the challenge image name
-    # Example: if image is "registry.rydersel.cloud/challenges/sql-injection:latest"
-    # we want to extract "sql-injection"
-    challenge_image = instance.get('challenge_image', '')
-    challenge_id = "temp"  # Default value
-    if challenge_image:
+    # Get challenge ID directly from instance data
+    challenge_id = instance.get('challenge_id', None)
+    
+    # If challenge_id is not provided, try to extract from image name as fallback
+    if not challenge_id and instance.get('challenge_image'):
         try:
-            # Try to extract challenge ID from image name
-            parts = challenge_image.split('/')
+            parts = instance.get('challenge_image', '').split('/')
             if len(parts) > 1:
-                challenge_name = parts[-1].split(':')[0]  # Get the part before the tag
-                # Find the challenge by name
+                challenge_name = parts[-1].split(':')[0]
                 challenge = await prisma.challenges.find_first(
                     where={'name': challenge_name}
                 )
@@ -63,15 +60,20 @@ async def add_challenge_instance(instance):
         except Exception as e:
             logging.error(f"Error extracting challenge ID from image: {e}")
     
+    if not challenge_id:
+        logging.error("No challenge ID found for instance")
+        return None
+    
     # Create the challenge instance
     challenge_instance = await prisma.challengeinstance.create(
         data={
             'id': instance['pod_name'],
             'challengeId': challenge_id,
             'userId': instance.get('user_id', 'null'),
+            'competitionId': instance.get('competition_id', 'null'),
             'challengeImage': instance.get('challenge_image', 'null'),
             'challengeUrl': instance.get('challenge_url', 'null'),
-            'status': instance.get('status', 'null'),
+            'status': instance.get('status', 'creating'),  # Default to creating if not specified
             'flagSecretName': instance.get('flag_secret_name', 'null'),
             'flag': flag
         }
@@ -83,6 +85,7 @@ async def add_challenge_instance(instance):
             'eventType': 'CHALLENGE_STARTED',
             'userId': instance.get('user_id', 'null'),
             'challengeId': challenge_id,
+            'groupId': instance.get('competition_id', None),
             'metadata': {
                 'instanceId': challenge_instance.id,
                 'startTime': datetime.now().isoformat()
@@ -237,41 +240,68 @@ async def sync_challenges():
             for pod in challenge_pods:
                 logging.debug(f"Processing pod: {pod}")
                 pod_id = pod['pod_name']
+
+                # Get pod status from Kubernetes
+                status_response = requests.get(
+                    f"https://eductf.rydersel.cloud/instance-manager/api/get-pod-status",
+                    params={"pod_name": pod_id}
+                )
+                current_status = "unknown"
+                if status_response.ok:
+                    status_data = status_response.json()
+                    k8s_status = status_data.get("status", "unknown")
+                    # Map Kubernetes status to our database status
+                    if k8s_status == "active":
+                        current_status = "running"
+                    elif k8s_status == "creating" or k8s_status == "pending":
+                        current_status = "creating"
+                    elif k8s_status == "error" or k8s_status == "failed":
+                        current_status = "error"
+                    elif k8s_status == "deleting" or k8s_status == "terminated":
+                        current_status = "terminated"
+                    else:
+                        current_status = k8s_status
+                    logging.info(f"Pod {pod_id} k8s status: {k8s_status} mapped to: {current_status}")
+
                 if pod_id not in db_instance_dict:
                     # Add new instance
                     await add_challenge_instance({
                         'pod_name': pod['pod_name'],
                         'challenge_id': pod.get('challenge_id', ''),
                         'user_id': pod.get('user_id', ''),
+                        'competition_id': pod.get('competition_id', ''),
                         'challenge_image': pod.get('challenge_image', ''),
                         'challenge_url': pod.get('challenge_url', ''),
-                        'status': pod.get('status', 'unknown'),
+                        'status': current_status,
                         'flag_secret_name': pod.get('flag_secret_name', '')
                     })
                 else:
                     # Update existing instance if necessary
                     db_instance = db_instance_dict[pod_id]
                     new_flag = get_flag(pod.get('flag_secret_name', ''))
+
+                    # Check if status transition is valid
+                    status_changed = db_instance.status != current_status
+                    if status_changed:
+                        logging.info(f"Status change for pod {pod_id}: {db_instance.status} -> {current_status}")
+
                     if (db_instance.userId != pod.get('user_id', '') or
                             db_instance.challengeImage != pod.get('challenge_image', '') or
-                            db_instance.status != pod.get('status', 'unknown') or
+                            status_changed or
                             db_instance.flagSecretName != pod.get('flag_secret_name', '') or
+                            db_instance.competitionId != pod.get('competition_id', '') or
                             db_instance.flag != new_flag):
+                        
                         pod['flag'] = new_flag
-                        await update_challenge_instance({
-                            'pod_name': pod['pod_name'],
-                            'challenge_id': pod.get('challenge_id', ''),
-                            'user_id': pod.get('user_id', ''),
-                            'challenge_image': pod.get('challenge_image', ''),
-                            'challenge_url': pod.get('challenge_url', ''),
-                            'status': pod.get('status', 'unknown'),
-                            'flag_secret_name': pod.get('flag_secret_name', '')
-                        })
+                        pod['status'] = current_status
+                        await update_challenge_instance(pod)
+
                     # Remove the instance from the dictionary as it is already processed
                     del db_instance_dict[pod_id]
 
             # Remove instances that are no longer present in the API response
             for instance_id in db_instance_dict.keys():
+                logging.info(f"Removing instance {instance_id} as it no longer exists in Kubernetes")
                 await remove_challenge_instance(instance_id)
 
             logging.info(f"{datetime.now()}: Synchronization process completed")

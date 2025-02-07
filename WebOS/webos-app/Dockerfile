@@ -13,6 +13,5 @@ COPY . .
 RUN npm run build
 
 EXPOSE 3000
-EXPOSE 3002
 
-CMD ["npm", "run", "start-serve"]
+CMD ["npm", "run", "start"]

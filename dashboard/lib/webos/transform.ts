@@ -1,4 +1,4 @@
-import { Prisma } from '@prisma/client';
+import { Prisma, ChallengeAppConfig } from '@prisma/client';
 
 type ChallengeQuestion = {
   id: string;
@@ -16,20 +16,6 @@ type QuestionCompletion = {
   pointsEarned: number;
 };
 
-type ChallengeAppConfig = {
-  appId: string;
-  icon: string;
-  title: string;
-  width: number;
-  height: number;
-  screen: string;
-  disabled: boolean;
-  favourite: boolean;
-  desktop_shortcut: boolean;
-  launch_on_startup: boolean;
-  additional_config?: any;
-};
-
 export interface WebOSAppConfig {
   id: string;
   icon: string;
@@ -41,11 +27,11 @@ export interface WebOSAppConfig {
   favourite: boolean;
   desktop_shortcut: boolean;
   launch_on_startup: boolean;
-  description?: string;
   challenge?: {
     type: string;
     title: string;
     description: string;
+    flagSecretName?: string;
     pages: {
       instructions: string;
       questions: {
@@ -58,7 +44,7 @@ export interface WebOSAppConfig {
       }[];
     }[];
   };
-  [key: string]: any; // For additional app-specific config
+  [key: string]: any;
 }
 
 export interface WebOSChallengeConfig {
@@ -110,8 +96,9 @@ export function transformQuestionsToPromptApp(
 }
 
 export function transformAppConfig(appConfig: ChallengeAppConfig): WebOSAppConfig {
-  return {
-    id: appConfig.appId,
+  // Create base config with only the fields WebOS expects
+  const transformed: WebOSAppConfig = {
+    id: appConfig.appId, // Use appId as the id
     icon: appConfig.icon,
     title: appConfig.title,
     width: appConfig.width,
@@ -121,54 +108,20 @@ export function transformAppConfig(appConfig: ChallengeAppConfig): WebOSAppConfi
     favourite: appConfig.favourite,
     desktop_shortcut: appConfig.desktop_shortcut,
     launch_on_startup: appConfig.launch_on_startup,
-    ...(appConfig.additional_config || {})
   };
-}
 
-export function transformToWebOSFormat(
-  challenge: {
-    id: string;
-    name: string;
-    description?: string;
-    challengeImage: string;
-    difficulty: string;
-    questions: ChallengeQuestion[];
-    appConfigs?: ChallengeAppConfig[];
-  },
-  userCompletions?: QuestionCompletion[]
-): WebOSChallengeConfig {
-  const questions = challenge.questions || [];
-  if (userCompletions) {
-    questions.forEach(q => {
-      q.completions = userCompletions.filter(c => c.questionId === q.id);
-    });
+  // Add additional config properties to root if they exist
+  if (appConfig.additional_config) {
+    const additionalConfig = typeof appConfig.additional_config === 'string' 
+      ? JSON.parse(appConfig.additional_config)
+      : appConfig.additional_config;
+      
+    Object.assign(transformed, additionalConfig);
   }
 
-  const totalPoints = questions.reduce((sum: number, q: ChallengeQuestion) => sum + q.points, 0);
-  const earnedPoints = userCompletions 
-    ? userCompletions.reduce((sum: number, c: QuestionCompletion) => sum + c.pointsEarned, 0)
-    : 0;
-  const completed = questions.length > 0 && questions.every(q => 
-    userCompletions?.some(c => c.questionId === q.id)
-  );
+  return transformed;
+}
 
-  const promptApp = transformQuestionsToPromptApp(
-    questions,
-    challenge.name,
-    challenge.description
-  );
-
-  const appConfigs = challenge.appConfigs?.map(transformAppConfig) || [];
-
-  return {
-    id: challenge.id,
-    name: challenge.name,
-    description: challenge.description,
-    challengeImage: challenge.challengeImage,
-    difficulty: challenge.difficulty,
-    totalPoints,
-    earnedPoints,
-    completed,
-    AppsConfig: [promptApp, ...appConfigs]
-  };
+export function transformToWebOSFormat(appConfigs: ChallengeAppConfig[]): WebOSAppConfig[] {
+  return appConfigs.map(transformAppConfig);
 } 

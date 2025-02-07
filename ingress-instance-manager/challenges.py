@@ -11,13 +11,44 @@ load_dotenv()  # Load environmental variables
 url = os.getenv("INGRESS_URL")
 
 
+def transform_app_config(app_config):
+    """Transform app config from database format to WebOS format."""
+    transformed = {
+        "id": app_config["appId"],
+        "icon": app_config["icon"],
+        "title": app_config["title"],
+        "width": app_config["width"],
+        "height": app_config["height"],
+        "screen": app_config["screen"],
+        "disabled": app_config["disabled"],
+        "favourite": app_config["favourite"],
+        "desktop_shortcut": app_config["desktop_shortcut"],
+        "launch_on_startup": app_config["launch_on_startup"]
+    }
+
+    # Handle additional_config
+    if app_config.get("additional_config"):
+        # If additional_config is a string, parse it
+        if isinstance(app_config["additional_config"], str):
+            additional_config = json.loads(app_config["additional_config"])
+        else:
+            additional_config = app_config["additional_config"]
+        
+        # Add each key from additional_config directly to the root
+        for key, value in additional_config.items():
+            transformed[key] = value
+
+    return transformed
+
+
 class FullOsChallenge:
-    def __init__(self, user_id, challenge_image, yaml_path, run_as_root, apps_config):
+    def __init__(self, user_id, challenge_image, yaml_path, run_as_root, apps_config, competition_id):
         self.user_id = user_id
         self.challenge_image = challenge_image
         self.yaml_path = yaml_path
         self.run_as_root = run_as_root
         self.apps_config = apps_config
+        self.competition_id = competition_id
         self.KUBERNETES_HOST, self.KUBERNETES_SERVICE_ACCOUNT_TOKEN = get_credentials_for_terminal(self)
 
     def create_pod_service_and_ingress(self):
@@ -76,8 +107,11 @@ class FullOsChallenge:
         service_spec = documents[1]
         ingress_spec = documents[2]
 
-        pod_spec['metadata']['name'] = instance_name  # Set the instance name
+        pod_spec['metadata']['name'] = instance_name
         pod_spec['metadata']['labels']['app'] = instance_name
+        pod_spec['metadata']['labels']['user'] = sanitized_user_id
+        pod_spec['metadata']['labels']['competition_id'] = self.competition_id
+
         service_spec['metadata']['name'] = f"service-{instance_name}"
         service_spec['spec']['selector']['app'] = instance_name
         ingress_spec['metadata']['name'] = f"ingress-{instance_name}"
@@ -102,8 +136,6 @@ class FullOsChallenge:
         })
 
         # Add the TLS section to use the wildcard certificate
-
-        # Remember the secret name is wildcard-domain-certificate NOT wildcard-certificate-prod
         ingress_spec['spec']['tls'] = [{
             "hosts": [
                 f"{instance_name}.{url}",
@@ -118,18 +150,20 @@ class FullOsChallenge:
                 container['image'] = self.challenge_image
                 container['env'].append({"name": "FLAG", "value": flag})
 
-        for container in pod_spec['spec']['containers']:
-            if container['name'] == 'bridge':
+            elif container['name'] == 'webos':
+                # Pass through the apps config without transformation
+                container['env'] = [
+                    {"name": "NEXT_PUBLIC_POD_NAME", "value": instance_name},
+                    {"name": "NEXT_PUBLIC_APPS_CONFIG", "value": self.apps_config},  # Pass through directly
+                    {"name": "NEXT_PUBLIC_CHALLENGE_POD_NAME", "value": instance_name},
+                    {"name": "NEXT_PUBLIC_CHALLENGE_API_URL", "value": "http://localhost:5000/execute"},
+                    {"name": "NEXT_PUBLIC_TERMINAL_URL", "value": f"https://terminal-{instance_name}.{url}"},
+                    {"name": "NEXT_PUBLIC_CHALLENGE_URL", "value": f"https://{instance_name}.{url}"}
+                ]
+
+            elif container['name'] == 'bridge':
                 container['env'].append({"name": "flag_secret_name", "value": secret_name})
-
-                # Update the NEXT_PUBLIC_APPS_CONFIG with the correct flag secret name
-                updated_apps_config = json.loads(self.apps_config)
-                for app in updated_apps_config:
-                    if app["id"] == "challenge-prompt" and "challenge" in app:
-                        app["challenge"]["flagSecretName"] = secret_name
-                updated_apps_config_str = json.dumps(updated_apps_config)
-
-                container['env'].append({"name": "NEXT_PUBLIC_APPS_CONFIG", "value": updated_apps_config_str})
+                container['env'].append({"name": "NEXT_PUBLIC_APPS_CONFIG", "value": self.apps_config})
                 container['env'].append({"name": "CHALLENGE_POD_NAME", "value": instance_name})
 
             if container['name'] == 'terminal':
@@ -169,8 +203,7 @@ class FullOsChallenge:
         ingress = client.V1Ingress(
             api_version="networking.k8s.io/v1",
             kind="Ingress",
-            metadata=client.V1ObjectMeta(name=ingress_spec['metadata']['name'],
-                                         annotations=ingress_spec['metadata'].get('annotations', {})),
+            metadata=client.V1ObjectMeta(name=ingress_spec['metadata']['name']),
             spec=ingress_spec['spec']
         )
 
@@ -180,11 +213,12 @@ class FullOsChallenge:
 
 
 class WebChallenge:
-    def __init__(self, user_id, challenge_image, yaml_path, apps_config):
+    def __init__(self, user_id, challenge_image, yaml_path, apps_config, competition_id):
         self.user_id = user_id
         self.challenge_image = challenge_image
         self.yaml_path = yaml_path
         self.apps_config = apps_config
+        self.competition_id = competition_id
         self.KUBERNETES_HOST, self.KUBERNETES_SERVICE_ACCOUNT_TOKEN = get_credentials_for_terminal(self)
 
     def create_pod_service_and_ingress(self):
@@ -225,15 +259,13 @@ class WebChallenge:
         return pod.metadata.name, challenge_url, secret_name
 
     def create_challenge_pod(self):
-        logging.info("Starting create_challenge_pod")
-        logging.debug(
-            f"Received parameters: user_id={self.user_id}, challenge_image={self.challenge_image}, yaml_path={self.yaml_path}")
+        logging.info("Starting create_challenge_pod for WebChallenge")
+        logging.debug(f"Received parameters: user_id={self.user_id}, challenge_image={self.challenge_image}, yaml_path={self.yaml_path}")
 
         flag = generate_unique_flag()
-        secret_name = create_flag_secret(self.user_id, flag)
         sanitized_user_id = self.user_id.replace("_", "-").lower()
         instance_name = f"ctfchal-{sanitized_user_id}-{str(uuid.uuid4())[:4]}".lower()
-
+        secret_name = create_flag_secret(instance_name, flag)
         logging.info("Generated instance name and sanitized user ID")
         logging.info(f"Instance name: {instance_name}, Sanitized user ID: {sanitized_user_id}")
 
@@ -242,8 +274,10 @@ class WebChallenge:
         service_spec = documents[1]
         ingress_spec = documents[2]
 
-        pod_spec['metadata']['name'] = instance_name  # Set the instance name here
+        pod_spec['metadata']['name'] = instance_name
         pod_spec['metadata']['labels']['app'] = instance_name
+        pod_spec['metadata']['labels']['user'] = sanitized_user_id
+        pod_spec['metadata']['labels']['competition_id'] = self.competition_id  # Add competition ID to labels
         service_spec['metadata']['name'] = f"service-{instance_name}"
         service_spec['spec']['selector']['app'] = instance_name
         ingress_spec['metadata']['name'] = f"ingress-{instance_name}"
@@ -310,12 +344,13 @@ class WebChallenge:
 
 
 class MetasploitChallenge:
-    def __init__(self, user_id, attack_image, defence_image, yaml_path, apps_config):
+    def __init__(self, user_id, attack_image, defence_image, yaml_path, apps_config, competition_id):
         self.user_id = user_id
         self.attack_image = attack_image
         self.defence_image = defence_image
         self.yaml_path = yaml_path
         self.apps_config = apps_config
+        self.competition_id = competition_id
         self.KUBERNETES_HOST, self.KUBERNETES_SERVICE_ACCOUNT_TOKEN = get_credentials_for_terminal(self)
 
     def create_pod_service_and_ingress(self):
@@ -358,9 +393,8 @@ class MetasploitChallenge:
         return pod.metadata.name, challenge_url, terminal_url, secret_name
 
     def create_challenge_pod(self):
-        logging.info("Starting create_challenge_pod for Metasploit Challenge")
-        logging.debug(
-            f"Received parameters: user_id={self.user_id}, attack_image={self.attack_image}, defence_image={self.defence_image}, yaml_path={self.yaml_path}")
+        logging.info("Starting create_challenge_pod for MetasploitChallenge")
+        logging.debug(f"Received parameters: user_id={self.user_id}, attack_image={self.attack_image}, defence_image={self.defence_image}, yaml_path={self.yaml_path}")
 
         flag = generate_unique_flag()
         sanitized_user_id = self.user_id.replace("_", "-").lower()
@@ -376,6 +410,8 @@ class MetasploitChallenge:
 
         pod_spec['metadata']['name'] = instance_name
         pod_spec['metadata']['labels']['app'] = instance_name
+        pod_spec['metadata']['labels']['user'] = sanitized_user_id
+        pod_spec['metadata']['labels']['competition_id'] = self.competition_id  # Add competition ID to labels
         service_spec['metadata']['name'] = f"service-{instance_name}"
         service_spec['spec']['selector']['app'] = instance_name
         ingress_spec['metadata']['name'] = f"ingress-{instance_name}"

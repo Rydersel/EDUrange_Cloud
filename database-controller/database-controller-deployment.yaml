@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
       - name: database-api
-        image: registry.rydersel.cloud/database-api-controller
+        image: registry.rydersel.cloud/database-api:latest
         imagePullPolicy: Always
         ports:
         - containerPort: 8000
@@ -32,7 +32,7 @@ spec:
         - name: DATABASE_URL
           value: "postgresql://admin:rydersel1927@172.233.210.28:5432/postgres?schema=public"
       - name: database-sync
-        image: registry.rydersel.cloud/database-sync-controller
+        image: registry.rydersel.cloud/database-sync:latest
         imagePullPolicy: Always
         env:
         - name: POSTGRES_HOST

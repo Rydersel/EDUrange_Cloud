@@ -39,6 +39,7 @@ model CompetitionGroup {
   userPoints  GroupPoints[]
   instructors User[]                  @relation("GroupInstructors")
   members     User[]                  @relation("GroupMembers")
+  instances   ChallengeInstance[]
 }
 
 model GroupChallenge {
@@ -159,16 +160,18 @@ model Challenges {
 }
 
 model ChallengeInstance {
-  id             String   @id @default(uuid())
-  challengeId    String
-  userId         String
-  challengeImage String
-  challengeUrl   String
-  creationTime   DateTime @default(now())
-  status         String
-  flagSecretName String
-  flag           String
-  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id                String   @id @default(uuid())
+  challengeId       String
+  userId            String
+  challengeImage    String
+  challengeUrl      String
+  creationTime      DateTime @default(now())
+  status            String
+  flagSecretName    String
+  flag              String
+  competitionId     String
+  competition       CompetitionGroup @relation(fields: [competitionId], references: [id], onDelete: Cascade)
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model Account {

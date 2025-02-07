@@ -10,6 +10,8 @@ import { DancingFrog } from "./DancingFrog"
 import { Confetti } from "./Confetti"
 import { useToast } from "@/components/ui/use-toast"
 import { extractChallengeDescription } from "@/lib/utils"
+import { Loader2 } from 'lucide-react'
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 
 const difficultyColors = {
   "EASY": "bg-[#22C55E]/10 text-[#22C55E] hover:bg-[#22C55E]/20",
@@ -28,6 +30,8 @@ interface Challenge {
     id: string;
     name: string;
   };
+  points: number;
+  completed: boolean;
 }
 
 interface ChallengeListProps {
@@ -46,17 +50,28 @@ export function ChallengeList({ competitionId }: ChallengeListProps) {
   const [sortByDifficulty, setSortByDifficulty] = useState<"asc" | "desc" | null>(null)
   const [challenges, setChallenges] = useState<Challenge[]>([])
   const [loading, setLoading] = useState(true)
+  const [clickCount, setClickCount] = useState(0)
+  const [showFrog, setShowFrog] = useState(false)
+  const [showConfetti, setShowConfetti] = useState(false)
   const { toast } = useToast()
 
   useEffect(() => {
     const fetchChallenges = async () => {
       try {
-        const response = await fetch(`/api/competition-groups/${competitionId}/challenges`);
+        const response = await fetch(`/api/competition-groups/${competitionId}`);
         if (!response.ok) {
           throw new Error('Failed to fetch challenges');
         }
         const data = await response.json();
-        setChallenges(data);
+        setChallenges(data.challenges.map((c: any) => ({
+          id: c.id,
+          name: c.name,
+          difficulty: c.difficulty || 'MEDIUM', // Default to MEDIUM if not provided
+          AppsConfig: c.AppsConfig || '[]', // Default to empty array if not provided
+          challengeType: c.challengeType,
+          points: c.points,
+          completed: c.completed
+        })));
       } catch (error) {
         console.error('Error fetching challenges:', error);
         toast({
@@ -96,6 +111,20 @@ export function ChallengeList({ competitionId }: ChallengeListProps) {
   }, [challenges, searchQuery, selectedDifficulty, selectedCategory, hideCompleted, completedChallenges, sortByDifficulty]);
 
   const handleDifficultyClick = (difficulty: string) => {
+    setClickCount(prev => {
+      const newCount = prev + 1;
+      if (newCount === 3) {
+        setShowFrog(true);
+        setShowConfetti(true);
+        setTimeout(() => {
+          setShowFrog(false);
+          setShowConfetti(false);
+          return 0;
+        }, 8000);
+      }
+      return newCount;
+    });
+
     if (selectedDifficulty === difficulty) {
       setSortByDifficulty(sortByDifficulty === "asc" ? "desc" : "asc");
     } else {
@@ -113,7 +142,23 @@ export function ChallengeList({ competitionId }: ChallengeListProps) {
   };
 
   if (loading) {
-    return <div>Loading challenges...</div>;
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[400px] gap-4">
+        <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
+        <p className="text-gray-400">Loading challenges...</p>
+      </div>
+    );
+  }
+
+  if (!challenges.length) {
+    return (
+      <Alert>
+        <AlertTitle>No challenges found</AlertTitle>
+        <AlertDescription>
+          There are no challenges available in this competition yet.
+        </AlertDescription>
+      </Alert>
+    );
   }
 
   return (
@@ -129,40 +174,53 @@ export function ChallengeList({ competitionId }: ChallengeListProps) {
         sortByDifficulty={sortByDifficulty}
       />
       <HideCompletedToggle hideCompleted={hideCompleted} setHideCompleted={setHideCompleted} />
-      <div className="rounded-lg border border-[#1E2B1E] overflow-hidden">
-        <div className="grid grid-cols-5 gap-4 bg-[#0A120A] p-4 text-sm font-medium text-gray-400">
-          <div>Challenge</div>
-          <div>Category</div>
-          <div>Difficulty</div>
-          <div>Points</div>
-          <div className="text-right">Status</div>
+
+      {filteredChallenges.length === 0 ? (
+        <Alert>
+          <AlertTitle>No matches found</AlertTitle>
+          <AlertDescription>
+            No challenges match your current filters. Try adjusting your search criteria.
+          </AlertDescription>
+        </Alert>
+      ) : (
+        <div className="rounded-lg border border-[#1E2B1E] overflow-hidden">
+          <div className="grid grid-cols-5 gap-4 bg-[#0A120A] p-4 text-sm font-medium text-gray-400">
+            <div>Challenge</div>
+            <div>Category</div>
+            <div>Difficulty</div>
+            <div>Points</div>
+            <div className="text-right">Status</div>
+          </div>
+          <AnimatePresence>
+            {filteredChallenges.map((challenge) => (
+              <motion.div
+                key={challenge.id}
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: "auto" }}
+                exit={{ opacity: 0, height: 0 }}
+                transition={{ duration: 0.3 }}
+              >
+                <ChallengeItem
+                  challenge={challenge}
+                  competitionId={competitionId}
+                  expandedChallenge={expandedChallenge}
+                  setExpandedChallenge={setExpandedChallenge}
+                  startedChallenges={startedChallenges}
+                  setStartedChallenges={setStartedChallenges}
+                  completedChallenges={completedChallenges}
+                  setCompletedChallenges={setCompletedChallenges}
+                  difficultyColors={difficultyColors}
+                  onDifficultyClick={handleDifficultyClick}
+                  sortByDifficulty={sortByDifficulty}
+                  onComplete={handleChallengeComplete}
+                />
+              </motion.div>
+            ))}
+          </AnimatePresence>
         </div>
-        <AnimatePresence>
-          {filteredChallenges.map((challenge) => (
-            <motion.div
-              key={challenge.id}
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: "auto" }}
-              exit={{ opacity: 0, height: 0 }}
-              transition={{ duration: 0.3 }}
-            >
-              <ChallengeItem
-                challenge={challenge}
-                expandedChallenge={expandedChallenge}
-                setExpandedChallenge={setExpandedChallenge}
-                startedChallenges={startedChallenges}
-                setStartedChallenges={setStartedChallenges}
-                completedChallenges={completedChallenges}
-                setCompletedChallenges={setCompletedChallenges}
-                difficultyColors={difficultyColors}
-                onDifficultyClick={handleDifficultyClick}
-                sortByDifficulty={sortByDifficulty}
-                onComplete={handleChallengeComplete}
-              />
-            </motion.div>
-          ))}
-        </AnimatePresence>
-      </div>
+      )}
+      {showFrog && <DancingFrog />}
+      {showConfetti && <Confetti />}
     </div>
   );
 }

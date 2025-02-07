@@ -4,6 +4,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { Session } from 'next-auth';
 import { z } from 'zod';
+import { extractChallengePoints } from '@/lib/utils';
 
 interface CustomSession extends Session {
   user: {
@@ -48,6 +49,19 @@ export async function POST(request: Request) {
     const body = await request.json();
     const validatedData = createGroupSchema.parse(body);
 
+    // Get all challenges to extract points
+    const challenges = await prisma.challenges.findMany({
+      where: {
+        id: {
+          in: validatedData.challengeIds
+        }
+      },
+      select: {
+        id: true,
+        appConfigs: true
+      }
+    });
+
     // Create the competition group
     const group = await prisma.competitionGroup.create({
       data: {
@@ -61,12 +75,12 @@ export async function POST(request: Request) {
       },
     });
 
-    // Add challenges to the group
+    // Add challenges to the group with points from appConfigs
     await prisma.groupChallenge.createMany({
-      data: validatedData.challengeIds.map(challengeId => ({
-        challengeId,
+      data: challenges.map(challenge => ({
+        challengeId: challenge.id,
         groupId: group.id,
-        points: 0, // Points are now fixed per challenge
+        points: extractChallengePoints(challenge.appConfigs),
       })),
     });
 

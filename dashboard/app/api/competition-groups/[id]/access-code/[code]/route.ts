@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
+import { ActivityLogger } from '@/lib/activity-logger';
+import { ActivityEventType } from '@prisma/client';
 
 export async function DELETE(
   req: Request,
@@ -32,13 +34,38 @@ export async function DELETE(
       return new NextResponse('Forbidden', { status: 403 });
     }
 
-    // Delete the access code
-    await prisma.CompetitionAccessCode.delete({
+    // Get the access code before deleting it
+    const accessCode = await prisma.competitionAccessCode.findUnique({
       where: {
         code: params.code,
         groupId: params.id
       }
     });
+
+    if (!accessCode) {
+      return new NextResponse('Access code not found', { status: 404 });
+    }
+
+    // Delete the access code
+    await prisma.competitionAccessCode.delete({
+      where: {
+        code: params.code,
+        groupId: params.id
+      }
+    });
+
+    // Log the deletion
+    await ActivityLogger.logAccessCodeEvent(
+      ActivityEventType.ACCESS_CODE_DELETED,
+      session.user.id,
+      accessCode.id,
+      params.id,
+      {
+        code: params.code,
+        deletedBy: session.user.id,
+        deletedAt: new Date().toISOString()
+      }
+    );
 
     return new NextResponse(null, { status: 204 });
   } catch (error) {

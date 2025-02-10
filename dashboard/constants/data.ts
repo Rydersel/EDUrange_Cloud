@@ -128,7 +128,15 @@ export const navItems: NavItem[] = [
     title: 'Users',
     href: '/dashboard/users',
     icon: 'user',
-    label: 'users'
+    label: 'users',
+    adminOnly: true
+  },
+  {
+    title: 'Logs',
+    href: '/dashboard/logs',
+    icon: 'circuit',
+    label: 'logs',
+    adminOnly: true
   }
 ];
 

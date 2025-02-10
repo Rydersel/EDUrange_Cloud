@@ -24,6 +24,9 @@ interface Challenge {
     name: string;
   };
   points: number;
+  completed: boolean;
+  totalQuestions: number;
+  completedQuestions: number;
 }
 
 interface ChallengeItemProps {
@@ -31,10 +34,10 @@ interface ChallengeItemProps {
   competitionId: string;
   expandedChallenge: string | null;
   setExpandedChallenge: (challenge: string | null) => void;
-  startedChallenges: Set<string>;
-  setStartedChallenges: ((challenges: Set<string>) => void) & ((prev: (prev: Set<string>) => Set<string>) => void);
-  completedChallenges: Set<string>;
-  setCompletedChallenges: (challenges: Set<string>) => void;
+  startedChallenges: Map<string, Set<string>>;
+  setStartedChallenges: React.Dispatch<React.SetStateAction<Map<string, Set<string>>>>;
+  completedChallenges: Map<string, Set<string>>;
+  setCompletedChallenges: React.Dispatch<React.SetStateAction<Map<string, Set<string>>>>;
   difficultyColors: { [key: string]: string };
   onDifficultyClick: (difficulty: string) => void;
   sortByDifficulty: "asc" | "desc" | null;
@@ -99,7 +102,15 @@ export function ChallengeItem({
       }
 
       const data = await response.json();
-      setStartedChallenges(new Set(startedChallenges).add(challenge.name));
+      
+      // Update startedChallenges Map
+      setStartedChallenges(prev => {
+        const newMap = new Map(prev);
+        const competitionChallenges = newMap.get(competitionId) || new Set();
+        competitionChallenges.add(challenge.name);
+        newMap.set(competitionId, competitionChallenges);
+        return newMap;
+      });
       
       if (data.challengeUrl) {
         // Update toast to show waiting status
@@ -138,13 +149,30 @@ export function ChallengeItem({
   };
 
   const handleCompleteChallenge = (challengeName: string) => {
-    if (!completedChallenges.has(challengeName)) {
-      setCompletedChallenges(new Set(completedChallenges).add(challengeName));
-      setStartedChallenges((prev: Set<string>) => {
-        const newSet = new Set(prev);
-        newSet.delete(challengeName);
-        return newSet;
+    if (!completedChallenges.get(competitionId)?.has(challengeName)) {
+      setCompletedChallenges(prev => {
+        const newMap = new Map(prev);
+        const competitionChallenges = newMap.get(competitionId) || new Set();
+        competitionChallenges.add(challengeName);
+        newMap.set(competitionId, competitionChallenges);
+        return newMap;
       });
+      
+      // Update startedChallenges Map
+      setStartedChallenges(prev => {
+        const newMap = new Map(prev);
+        const competitionChallenges = newMap.get(competitionId);
+        if (competitionChallenges) {
+          competitionChallenges.delete(challengeName);
+          if (competitionChallenges.size === 0) {
+            newMap.delete(competitionId);
+          } else {
+            newMap.set(competitionId, competitionChallenges);
+          }
+        }
+        return newMap;
+      });
+      
       setShowCompletionAnimation(true);
       setTimeout(() => setShowCompletionAnimation(false), 1500);
       onComplete(challengeName);
@@ -198,12 +226,12 @@ export function ChallengeItem({
               <span>{challenge.points} points</span>
             </div>
             <div className="flex items-center justify-end gap-2">
-              {completedChallenges.has(challenge.name) && (
+              {(challenge.completed || completedChallenges.get(competitionId)?.has(challenge.name)) && (
                 <Badge variant="secondary" className="bg-[#22C55E]/10 text-[#22C55E] hover:bg-[#22C55E]/20">
                   Completed
                 </Badge>
               )}
-              {startedChallenges.has(challenge.name) && (
+              {startedChallenges.get(competitionId)?.has(challenge.name) && !challenge.completed && (
                 <Badge variant="secondary" className="bg-[#22C55E]/10 text-[#22C55E] hover:bg-[#22C55E]/20">
                   In Progress
                 </Badge>
@@ -214,25 +242,33 @@ export function ChallengeItem({
         <AccordionContent>
           <div className="px-4 pb-4 bg-[#010301]">
             <div className="rounded-lg bg-[#0A120A] p-4 space-y-4">
-              <p className="text-gray-200">{description}</p>
+              <div className="flex justify-between items-start">
+                <p className="text-gray-200">{description}</p>
+                <div className="flex items-center gap-2 ml-4">
+                  <span className="text-sm text-gray-400">Questions completed:</span>
+                  <Badge variant="secondary" className="bg-[#22C55E]/10 text-[#22C55E]">
+                    {challenge.completedQuestions}/{challenge.totalQuestions}
+                  </Badge>
+                </div>
+              </div>
 
               <Button 
                 className="w-full mt-4"
                 onClick={() => {
-                  if (completedChallenges.has(challenge.name)) {
+                  if (challenge.completed || completedChallenges.get(competitionId)?.has(challenge.name)) {
                     // Do nothing if already completed
-                  } else if (startedChallenges.has(challenge.name)) {
+                  } else if (startedChallenges.get(competitionId)?.has(challenge.name)) {
                     handleCompleteChallenge(challenge.name);
                   } else {
                     handleStartChallenge();
                   }
                 }}
-                disabled={completedChallenges.has(challenge.name) || isStarting}
+                disabled={challenge.completed || completedChallenges.get(competitionId)?.has(challenge.name) || isStarting}
               >
                 {isStarting ? 'Starting Challenge...' :
-                  completedChallenges.has(challenge.name) 
+                  challenge.completed || completedChallenges.get(competitionId)?.has(challenge.name)
                     ? 'Challenge Completed' 
-                    : startedChallenges.has(challenge.name) 
+                    : startedChallenges.get(competitionId)?.has(challenge.name)
                       ? 'Complete Challenge' 
                       : 'Start Challenge'}
               </Button>

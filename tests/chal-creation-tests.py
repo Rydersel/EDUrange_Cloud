@@ -7,8 +7,8 @@ class TestInstanceManagerAPI(unittest.TestCase):
 
     def test_start_challenge(self):
         payload = {
-            "user_id": "testuser",
-            "challenge_image": "gcr.io/edurangectf/debiantest"
+            "user_id": "cm6vek5c300008qdd2i97djbg",
+            "challenge_image": "registry.rydersel.cloud/bandit1"
         }
         response = requests.post(f"{self.BASE_URL}/start-challenge", json=payload)
 

@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Terminal, ArrowRight, Check, Trophy, Info, X } from 'lucide-react';
+import ActivityLogger from '../../utils/ActivityLogger';
 
-const Sidebar = ({ questions, onSelectQuestion, completedQuestions, currentQuestionId }) => (
+const Sidebar = ({ questions, onSelectQuestion, completedQuestions, currentQuestionId, groupChallengeId }) => (
   <div className="w-full md:w-64 bg-black border-r border-green-700 p-4 overflow-y-auto font-mono text-green-400">
     <h2 className="text-xl font-bold mb-4 text-green-500">Mission Objectives</h2>
     {questions.map((question, index) => (
@@ -15,14 +16,14 @@ const Sidebar = ({ questions, onSelectQuestion, completedQuestions, currentQuest
         <span className="flex items-center flex-grow">
           <Terminal className="w-4 h-4 mr-2 flex-shrink-0" />
           <span className={`whitespace-nowrap overflow-hidden text-ellipsis ${
-            completedQuestions.includes(question.id) ? 'line-through text-green-600' : ''
+            completedQuestions.some(q => q.questionId === question.id && q.groupChallengeId === groupChallengeId) ? 'line-through text-green-600' : ''
           }`}>
             {`Objective ${index + 1}`}
           </span>
         </span>
         <span className="flex items-center ml-2 flex-shrink-0">
           <span className={`px-1 text-xs rounded whitespace-nowrap ${
-            completedQuestions.includes(question.id) ? 'bg-green-600' : 'bg-green-800'
+            completedQuestions.some(q => q.questionId === question.id && q.groupChallengeId === groupChallengeId) ? 'bg-green-600' : 'bg-green-800'
           }`}>
             {question.points} pts
           </span>
@@ -60,43 +61,171 @@ const JumbledText = ({ text, isJumbling }) => {
   return <span>{displayText}</span>;
 };
 
+const MAX_RETRIES = 3;
+const RETRY_DELAY = 2000; // 2 seconds
+
+async function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function getChallengeInstanceId() {
+  // First try to get the ID from environment variable
+  if (typeof process !== 'undefined' && process.env.NEXT_PUBLIC_CHALLENGE_POD_NAME) {
+    console.log('✅ Using challenge instance ID from NEXT_PUBLIC_CHALLENGE_POD_NAME:', process.env.NEXT_PUBLIC_CHALLENGE_POD_NAME);
+    return process.env.NEXT_PUBLIC_CHALLENGE_POD_NAME;
+  }
+
+  // Fallback to hostname parsing
+  if (typeof window !== 'undefined') {
+    const hostname = window.location.hostname;
+    console.log('🔍 Falling back to extracting challenge instance ID from hostname:', hostname);
+    
+    // Extract everything before the first .rydersel.cloud
+    const match = hostname.split('.rydersel.cloud')[0];
+    if (match) {
+      console.log('✅ Successfully extracted challenge instance ID from hostname:', match);
+      return match;
+    }
+    
+    console.error("❌ Failed to extract challenge instance ID from hostname:", hostname);
+  }
+  console.error("❌ Could not determine challenge instance ID");
+  return null;
+}
+
+async function fetchWithRetry(url, options = {}, retries = MAX_RETRIES) {
+  for (let i = 0; i < retries; i++) {
+    try {
+      console.log(`📡 Attempt ${i + 1}/${retries} - Fetching:`, url);
+      const response = await fetch(url, options);
+      
+      if (response.ok) {
+        const data = await response.json();
+        console.log('✅ Fetch successful:', { url, data });
+        return { ok: true, data };
+      }
+      
+      const errorText = await response.text();
+      console.warn(`⚠️ Attempt ${i + 1}/${retries} failed:`, {
+        status: response.status,
+        statusText: response.statusText,
+        errorText
+      });
+      
+      if (i < retries - 1) {
+        console.log(`🔄 Retrying in ${RETRY_DELAY}ms...`);
+        await sleep(RETRY_DELAY);
+      }
+    } catch (error) {
+      console.error(`❌ Attempt ${i + 1}/${retries} error:`, error);
+      if (i < retries - 1) {
+        console.log(`🔄 Retrying in ${RETRY_DELAY}ms...`);
+        await sleep(RETRY_DELAY);
+      }
+    }
+  }
+  
+  return { ok: false };
+}
+
 export default function ChallengePrompt() {
   const [challengeData, setChallengeData] = useState(null);
   const [currentQuestionId, setCurrentQuestionId] = useState(null);
   const [answers, setAnswers] = useState({});
-  const [completedQuestions, setCompletedQuestions] = useState(() => {
-    const saved = localStorage.getItem('completedQuestions');
-    return saved ? JSON.parse(saved) : [];
-  });
+  const [completedQuestions, setCompletedQuestions] = useState([]);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [showCorrectAnimation, setShowCorrectAnimation] = useState(false);
   const [showIncorrectAnimation, setShowIncorrectAnimation] = useState(false);
   const [showInfoPage, setShowInfoPage] = useState(false);
   const [userPoints, setUserPoints] = useState(0);
   const [userId, setUserId] = useState(null);
+  const [groupChallengeId, setGroupChallengeId] = useState(null);
 
   useEffect(() => {
     const fetchChallengeData = async () => {
+      console.log('🔄 Starting challenge data fetch...');
       try {
-        const response = await fetch('/api/config');
-        const data = await response.json();
-        const challengeApp = data.find(app => app.id === 'challenge-prompt');
-        setChallengeData(challengeApp.challenge);
-        setCurrentQuestionId(challengeApp.challenge.pages[0].questions[0].id);
-
-        // Fetch initial user points
         const challengeInstanceId = getChallengeInstanceId();
-        const instanceResponse = await fetch(`https://database.rydersel.cloud/get_challenge_instance?challenge_instance_id=${challengeInstanceId}`);
-        const instanceData = await instanceResponse.json();
-        const userId = instanceData.userId;
-        setUserId(userId);
-        console.log(userId)
+        if (!challengeInstanceId) {
+          console.error("❌ No challenge instance ID found, aborting data fetch");
+          return;
+        }
 
-        const pointsResponse = await fetch(`https://database.rydersel.cloud/get_points?user_id=${userId}`);
-        const { points } = await pointsResponse.json();
-        setUserPoints(points);
+        console.log('📡 Fetching challenge instance details...', { challengeInstanceId });
+        
+        // Try both URL formats
+        const urls = [
+          `https://database.rydersel.cloud/get_challenge_instance?challenge_instance_id=${challengeInstanceId}`,
+          `https://database.rydersel.cloud/api/get_challenge_instance?challenge_instance_id=${challengeInstanceId}`
+        ];
+
+        let instanceData = null;
+        for (const url of urls) {
+          const result = await fetchWithRetry(url);
+          if (result.ok) {
+            instanceData = result.data;
+            break;
+          }
+        }
+
+        if (!instanceData) {
+          throw new Error('Failed to fetch challenge instance after all retries');
+        }
+
+        console.log('✅ Received challenge instance data:', instanceData);
+        
+        setUserId(instanceData.userId);
+        setGroupChallengeId(instanceData.groupChallengeId);
+        console.log('📝 Updated state with instance data:', {
+          userId: instanceData.userId,
+          groupChallengeId: instanceData.groupChallengeId
+        });
+
+        // Only proceed if we have both user ID and group challenge ID
+        if (instanceData.userId && instanceData.groupChallengeId) {
+          // Fetch completed questions with retry
+          const completedResult = await fetchWithRetry(
+            `https://database.rydersel.cloud/question/completed?user_id=${instanceData.userId}&group_challenge_id=${instanceData.groupChallengeId}`
+          );
+          
+          if (completedResult.ok) {
+            const completedQuestionData = completedResult.data.completed_questions;
+            console.log('✅ Fetched completed questions:', completedQuestionData);
+            setCompletedQuestions(completedQuestionData);
+          }
+
+          // Fetch user points with retry
+          const pointsResult = await fetchWithRetry(
+            `https://database.rydersel.cloud/get_points?user_id=${instanceData.userId}&group_id=${instanceData.groupId}`
+          );
+          
+          if (pointsResult.ok) {
+            setUserPoints(pointsResult.data.points);
+          }
+        }
+
+        // Get challenge config with retry
+        const configResult = await fetchWithRetry('/api/config');
+        if (configResult.ok) {
+          const challengeApp = configResult.data.find(app => app.id === 'challenge-prompt');
+          if (challengeApp && challengeApp.challenge) {
+            console.log('📝 Setting challenge data and initial question');
+            setChallengeData(challengeApp.challenge);
+            setCurrentQuestionId(challengeApp.challenge.pages[0].questions[0].id);
+            // Set the groupChallengeId from the challenge config
+            if (challengeApp.challenge.groupChallengeId) {
+              setGroupChallengeId(challengeApp.challenge.groupChallengeId);
+              console.log('📝 Set groupChallengeId from config:', challengeApp.challenge.groupChallengeId);
+            }
+          } else {
+            console.error('❌ Challenge app or challenge data not found in config');
+          }
+        }
       } catch (error) {
-        console.error('Failed to fetch challenge data:', error);
+        console.error('❌ Failed to fetch challenge data:', {
+          error: error.message,
+          stack: error.stack
+        });
       }
     };
 
@@ -113,10 +242,6 @@ export default function ChallengePrompt() {
     };
   }, []);
 
-  useEffect(() => {
-    localStorage.setItem('completedQuestions', JSON.stringify(completedQuestions));
-  }, [completedQuestions]);
-
   const allQuestions = challengeData?.pages.flatMap(page => page.questions) || [];
   const currentQuestion = allQuestions.find(q => q.id === currentQuestionId);
   const allQuestionsCompleted = completedQuestions.length === allQuestions.length;
@@ -130,65 +255,148 @@ export default function ChallengePrompt() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (answers[currentQuestionId]) {
-      try {
-        const response = await fetch('/api/config', {
+    console.log('🔄 Starting answer submission...', {
+      questionId: currentQuestionId,
+      groupChallengeId,
+      hasAnswer: !!answers[currentQuestionId]
+    });
+
+    if (!answers[currentQuestionId] || !groupChallengeId || !userId) {
+      console.error("❌ Missing required data for submission:", {
+        hasAnswer: !!answers[currentQuestionId],
+        groupChallengeId,
+        userId
+      });
+      return;
+    }
+
+    try {
+      console.log('📡 Verifying answer...');
+      // First verify answer is correct
+      const verifyResponse = await fetch('/api/config', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          questionId: currentQuestionId,
+          answer: answers[currentQuestionId].trim()
+        }),
+      });
+
+      if (!verifyResponse.ok) {
+        console.error('❌ Failed to verify answer:', {
+          status: verifyResponse.status,
+          statusText: verifyResponse.statusText,
+          response: await verifyResponse.text()
+        });
+        throw new Error(`Failed to verify answer: ${verifyResponse.statusText}`);
+      }
+
+      const verifyData = await verifyResponse.json();
+      console.log('✅ Answer verification result:', verifyData);
+
+      // Log the question attempt
+      await ActivityLogger.logQuestionAttempt(
+        userId,
+        challengeData.id,
+        groupChallengeId,
+        {
+          questionId: currentQuestionId,
+          answer: answers[currentQuestionId].trim(),
+          isCorrect: verifyData.isCorrect,
+          points: currentQuestion.points
+        }
+      );
+
+      if (verifyData.isCorrect) {
+        console.log('📡 Fetching question details...');
+        // Get question details for points
+        const questionResponse = await fetch(`https://database.rydersel.cloud/question/details?question_id=${currentQuestionId}`);
+        if (!questionResponse.ok) {
+          console.error('❌ Failed to get question details:', {
+            status: questionResponse.status,
+            statusText: questionResponse.statusText
+          });
+          throw new Error(`Failed to get question details: ${questionResponse.statusText}`);
+        }
+        const questionData = await questionResponse.json();
+        console.log('✅ Received question details:', questionData);
+        
+        console.log('📡 Completing question...', {
+          userId,
+          questionId: currentQuestionId,
+          groupChallengeId,
+          points: questionData.points
+        });
+        
+        // Complete question and award points
+        const completeResponse = await fetch('https://database.rydersel.cloud/question/complete', {
           method: 'POST',
           headers: {
-            'Content-Type': 'application/json',
+            'Content-Type': 'application/json'
           },
           body: JSON.stringify({
-            questionId: currentQuestionId,
-            answer: answers[currentQuestionId].trim()
-          }),
+            user_id: userId,
+            question_id: currentQuestionId,
+            group_challenge_id: groupChallengeId,
+            points: questionData.points
+          })
         });
 
-        const { isCorrect, newPoints } = await response.json();
-
-        if (isCorrect) {
-          setCompletedQuestions(prev => [...prev, currentQuestionId]);
-          setShowCorrectAnimation(true);
-          setTimeout(() => setShowCorrectAnimation(false), 2000);
-          setUserPoints(newPoints);
-
-          // Add points to the user
-          const questionPoints = currentQuestion.points;
-
-          try {
-            console.log(`sending points: ${userId}, ${questionPoints}`);
-            const addPointsResponse = await fetch('https://database.rydersel.cloud/add_points', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json'
-              },
-              body: JSON.stringify({
-                user_id: userId,
-                points: questionPoints
-              })
-            });
-
-            if (!addPointsResponse.ok) {
-              throw new Error(`HTTP error! status: ${addPointsResponse.status}`);
-            }
-
-            const pointsData = await addPointsResponse.json();
-            setUserPoints(pointsData.points);
-          } catch (error) {
-            console.error('Failed to add points:', error);
-          }
-        } else {
-          setShowIncorrectAnimation(true);
-          setTimeout(() => setShowIncorrectAnimation(false), 1000);
+        if (!completeResponse.ok) {
+          const errorText = await completeResponse.text();
+          console.error('❌ Failed to complete question:', {
+            status: completeResponse.status,
+            statusText: completeResponse.statusText,
+            response: errorText
+          });
+          throw new Error(`Failed to complete question: ${completeResponse.statusText}`);
         }
-      } catch (error) {
-        console.error('Failed to verify answer:', error);
+
+        const completionData = await completeResponse.json();
+        console.log('✅ Question completed successfully:', completionData);
+
+        // Log the question completion
+        await ActivityLogger.logQuestionCompletion(
+          userId,
+          challengeData.id,
+          groupChallengeId,
+          {
+            questionId: currentQuestionId,
+            pointsEarned: questionData.points,
+            totalAttempts: completionData.attempts || 1,
+            completionTime: new Date().toISOString()
+          }
+        );
+        
+        setUserPoints(completionData.points.points);
+        setCompletedQuestions(prev => [...prev, { questionId: currentQuestionId, groupChallengeId }]);
+        setShowCorrectAnimation(true);
+        setTimeout(() => setShowCorrectAnimation(false), 2000);
+        
+        console.log('📝 Updated state after completion:', {
+          newPoints: completionData.points.points,
+          completedQuestions: [...completedQuestions, { questionId: currentQuestionId, groupChallengeId }]
+        });
+      } else {
+        console.log('❌ Incorrect answer submitted');
+        setShowIncorrectAnimation(true);
+        setTimeout(() => setShowIncorrectAnimation(false), 1000);
       }
+    } catch (error) {
+      console.error('❌ Error submitting answer:', {
+        error: error.message,
+        stack: error.stack
+      });
     }
   };
 
   const renderQuestion = () => {
     if (!currentQuestion) return null;
-    const isCompleted = completedQuestions.includes(currentQuestionId);
+    const isCompleted = completedQuestions.some(q => 
+      q.questionId === currentQuestionId && q.groupChallengeId === groupChallengeId
+    );
     return (
       <div className="mb-4">
         <div className="flex items-center mb-2">
@@ -229,29 +437,44 @@ export default function ChallengePrompt() {
     );
   };
 
-  const renderCompletionPage = () => (
-    <div className="text-center">
-      <Trophy className="w-16 h-16 text-green-400 mx-auto mb-4" />
-      <h2 className="text-2xl font-bold text-green-300 mb-4">Challenge Completed!</h2>
-      <div className="mb-6">
-        {allQuestions.map((question, index) => (
-          <div key={question.id} className="flex justify-between items-center mb-2">
-            <span className="text-green-400">Objective {index + 1}</span>
-            <div className="flex items-center">
-              <span className="text-green-200 mr-2">{question.points} pts</span>
-              <Check className="w-5 h-5 text-green-400" />
-            </div>
-          </div>
-        ))}
+  const renderCompletionPage = () => {
+    const allQuestionsCompleted = allQuestions.every(question =>
+      completedQuestions.some(q => 
+        q.questionId === question.id && q.groupChallengeId === groupChallengeId
+      )
+    );
+    
+    return (
+      <div className="text-center">
+        <Trophy className="w-16 h-16 text-green-400 mx-auto mb-4" />
+        <h2 className="text-2xl font-bold text-green-300 mb-4">Challenge Completed!</h2>
+        <div className="mb-6">
+          {allQuestions.map((question, index) => {
+            const isCompleted = completedQuestions.some(q => 
+              q.questionId === question.id && q.groupChallengeId === groupChallengeId
+            );
+            return (
+              <div key={question.id} className="flex justify-between items-center mb-2">
+                <span className="text-green-400">Objective {index + 1}</span>
+                <div className="flex items-center">
+                  <span className="text-green-200 mr-2">{question.points} pts</span>
+                  {isCompleted && <Check className="w-5 h-5 text-green-400" />}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        {allQuestionsCompleted && (
+          <button
+            onClick={() => console.log("Challenge completed!")}
+            className="bg-green-600 hover:bg-green-500 text-white font-bold py-2 px-4 rounded transition duration-300 ease-in-out"
+          >
+            Complete Challenge
+          </button>
+        )}
       </div>
-      <button
-        onClick={() => console.log("Challenge completed!")}
-        className="bg-green-600 hover:bg-green-500 text-white font-bold py-2 px-4 rounded transition duration-300 ease-in-out"
-      >
-        Complete Challenge
-      </button>
-    </div>
-  );
+    );
+  };
 
   const renderInfoPage = () => (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -297,6 +520,7 @@ export default function ChallengePrompt() {
         onSelectQuestion={setCurrentQuestionId}
         completedQuestions={completedQuestions}
         currentQuestionId={currentQuestionId}
+        groupChallengeId={groupChallengeId}
       />
       <div className="flex-grow p-4 md:p-8 overflow-y-auto">
         <div className="max-w-2xl mx-auto">
@@ -353,15 +577,6 @@ export default function ChallengePrompt() {
   );
 }
 
-function getChallengeInstanceId() {
-  if (typeof window !== 'undefined') {
-    const hostname = window.location.hostname;
-    const parts = hostname.split('.');
-    return parts[0];
-  }
-  console.log("Failed to get challenge instance id");
-  return 'null';
-}
 export const displayChallengePrompt = (props) => {
   return <ChallengePrompt {...props} />;
 };

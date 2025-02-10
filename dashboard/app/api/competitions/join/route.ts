@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
+import { ActivityLogger } from '@/lib/activity-logger';
+import { ActivityEventType } from '@prisma/client';
 
 export async function POST(req: Request) {
   try {
@@ -13,7 +15,7 @@ export async function POST(req: Request) {
     const { code } = await req.json();
 
     // Find valid access code
-    const accessCode = await prisma.CompetitionAccessCode.findFirst({
+    const accessCode = await prisma.competitionAccessCode.findFirst({
       where: {
         code,
         OR: [
@@ -31,7 +33,7 @@ export async function POST(req: Request) {
     }
 
     // Check if user is already a member
-    const existingMember = await prisma.CompetitionGroup.findFirst({
+    const existingMember = await prisma.competitionGroup.findFirst({
       where: {
         id: accessCode.groupId,
         members: {
@@ -47,7 +49,7 @@ export async function POST(req: Request) {
     }
 
     // Add user to competition
-    await prisma.CompetitionGroup.update({
+    await prisma.competitionGroup.update({
       where: {
         id: accessCode.groupId
       },
@@ -59,6 +61,37 @@ export async function POST(req: Request) {
         }
       }
     });
+
+    // Increment the usedCount of the access code
+    await prisma.competitionAccessCode.update({
+      where: { id: accessCode.id },
+      data: { usedCount: { increment: 1 } }
+    });
+
+    // Log the access code usage
+    await ActivityLogger.logAccessCodeEvent(
+      ActivityEventType.ACCESS_CODE_USED,
+      session.user.id,
+      accessCode.id,
+      accessCode.groupId,
+      {
+        code: code,
+        usedAt: new Date().toISOString(),
+        groupName: accessCode.group.name
+      }
+    );
+
+    // Log the group join event
+    await ActivityLogger.logGroupEvent(
+      ActivityEventType.GROUP_JOINED,
+      session.user.id,
+      accessCode.groupId,
+      {
+        groupName: accessCode.group.name,
+        joinedAt: new Date().toISOString(),
+        joinedVia: 'access_code'
+      }
+    );
 
     return NextResponse.json({
       message: 'Successfully joined competition',

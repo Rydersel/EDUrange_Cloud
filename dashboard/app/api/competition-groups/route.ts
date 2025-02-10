@@ -5,6 +5,8 @@ import { authOptions } from '@/lib/auth';
 import { Session } from 'next-auth';
 import { z } from 'zod';
 import { extractChallengePoints } from '@/lib/utils';
+import { ActivityLogger } from '@/lib/activity-logger';
+import { ActivityEventType } from '@prisma/client';
 
 interface CustomSession extends Session {
   user: {
@@ -74,6 +76,18 @@ export async function POST(request: Request) {
         },
       },
     });
+
+    // Log group creation
+    await ActivityLogger.logGroupEvent(
+      'GROUP_CREATED' as ActivityEventType,
+      session.user.id,
+      group.id,
+      {
+        groupName: group.name,
+        createdBy: session.user.id,
+        createdAt: new Date().toISOString()
+      }
+    );
 
     // Add challenges to the group with points from appConfigs
     await prisma.groupChallenge.createMany({

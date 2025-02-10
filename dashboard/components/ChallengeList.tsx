@@ -32,6 +32,8 @@ interface Challenge {
   };
   points: number;
   completed: boolean;
+  totalQuestions: number;
+  completedQuestions: number;
 }
 
 interface ChallengeListProps {
@@ -43,8 +45,8 @@ export function ChallengeList({ competitionId }: ChallengeListProps) {
   const [searchQuery, setSearchQuery] = useState("")
   const [hideCompleted, setHideCompleted] = useState(false)
   const [expandedChallenge, setExpandedChallenge] = useState<string | null>(null)
-  const [startedChallenges, setStartedChallenges] = useState<Set<string>>(new Set())
-  const [completedChallenges, setCompletedChallenges] = useState<Set<string>>(new Set())
+  const [startedChallenges, setStartedChallenges] = useState<Map<string, Set<string>>>(new Map())
+  const [completedChallenges, setCompletedChallenges] = useState<Map<string, Set<string>>>(new Map())
   const [selectedDifficulty, setSelectedDifficulty] = useState("all")
   const [selectedCategory, setSelectedCategory] = useState("all")
   const [sortByDifficulty, setSortByDifficulty] = useState<"asc" | "desc" | null>(null)
@@ -66,12 +68,27 @@ export function ChallengeList({ competitionId }: ChallengeListProps) {
         setChallenges(data.challenges.map((c: any) => ({
           id: c.id,
           name: c.name,
-          difficulty: c.difficulty || 'MEDIUM', // Default to MEDIUM if not provided
-          AppsConfig: c.AppsConfig || '[]', // Default to empty array if not provided
+          difficulty: c.difficulty || 'MEDIUM',
+          AppsConfig: c.AppsConfig || '[]',
           challengeType: c.challengeType,
           points: c.points,
-          completed: c.completed
+          completed: c.completed,
+          totalQuestions: c.totalQuestions,
+          completedQuestions: c.completedQuestions
         })));
+
+        // Update completedChallenges map based on API response
+        const newCompletedChallenges = new Map<string, Set<string>>();
+        const completedSet = new Set<string>();
+        data.challenges.forEach((c: any) => {
+          if (c.completed) {
+            completedSet.add(c.name);
+          }
+        });
+        if (completedSet.size > 0) {
+          newCompletedChallenges.set(competitionId, completedSet);
+        }
+        setCompletedChallenges(newCompletedChallenges);
       } catch (error) {
         console.error('Error fetching challenges:', error);
         toast({
@@ -94,7 +111,7 @@ export function ChallengeList({ competitionId }: ChallengeListProps) {
                           description.toLowerCase().includes(searchQuery.toLowerCase());
       const matchesDifficulty = selectedDifficulty === "all" || challenge.difficulty.toLowerCase() === selectedDifficulty;
       const matchesCategory = selectedCategory === "all" || challenge.challengeType.name.toLowerCase() === selectedCategory.toLowerCase();
-      const matchesCompletion = !hideCompleted || !completedChallenges.has(challenge.name);
+      const matchesCompletion = !hideCompleted || !completedChallenges.get(competitionId)?.has(challenge.name);
 
       return matchesSearch && matchesDifficulty && matchesCategory && matchesCompletion;
     });
@@ -108,7 +125,7 @@ export function ChallengeList({ competitionId }: ChallengeListProps) {
     }
 
     return filtered;
-  }, [challenges, searchQuery, selectedDifficulty, selectedCategory, hideCompleted, completedChallenges, sortByDifficulty]);
+  }, [challenges, searchQuery, selectedDifficulty, selectedCategory, hideCompleted, completedChallenges, competitionId, sortByDifficulty]);
 
   const handleDifficultyClick = (difficulty: string) => {
     setClickCount(prev => {
@@ -135,9 +152,11 @@ export function ChallengeList({ competitionId }: ChallengeListProps) {
 
   const handleChallengeComplete = (challengeName: string) => {
     setCompletedChallenges(prev => {
-      const newSet = new Set(prev);
-      newSet.add(challengeName);
-      return newSet;
+      const newMap = new Map(prev);
+      const competitionChallenges = newMap.get(competitionId) || new Set();
+      competitionChallenges.add(challengeName);
+      newMap.set(competitionId, competitionChallenges);
+      return newMap;
     });
   };
 

@@ -1,7 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
+import { ActivityLogger } from '@/lib/activity-logger';
+import { z } from 'zod';
 
 const prisma = new PrismaClient();
+
+const userUpdateSchema = z.object({
+  name: z.string().optional(),
+  image: z.string().optional(),
+});
 
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
   const { id } = params;
@@ -11,6 +20,16 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
   }
 
   try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user) {
+      return new NextResponse('Unauthorized', { status: 401 });
+    }
+
+    // Users can only view their own profile unless they're an admin
+    if (session.user.id !== id && session.user.role !== 'ADMIN') {
+      return new NextResponse('Forbidden', { status: 403 });
+    }
+
     const user = await prisma.user.findUnique({
       where: { id },
       include: {
@@ -21,13 +40,13 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
     });
 
     if (!user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+      return new NextResponse('User not found', { status: 404 });
     }
 
     return NextResponse.json(user);
   } catch (error) {
     console.error('Error fetching user:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return new NextResponse('Internal Server Error', { status: 500 });
   }
 }
 
@@ -51,13 +70,44 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
   const { id } = params;
 
   try {
-    await prisma.user.delete({
+    const session = await getServerSession(authOptions);
+    if (!session?.user || session.user.role !== 'ADMIN') {
+      return new NextResponse('Unauthorized', { status: 401 });
+    }
+
+    // Get user data before deletion for logging
+    const user = await prisma.user.findUnique({
       where: { id },
+      select: {
+        email: true,
+        name: true,
+        role: true
+      }
     });
-    return NextResponse.json({ message: 'User deleted successfully' });
+
+    if (!user) {
+      return new NextResponse('User not found', { status: 404 });
+    }
+
+    // Delete the user
+    await prisma.user.delete({
+      where: { id }
+    });
+
+    // Log the deletion
+    await ActivityLogger.logUserDeletion(id, {
+      deletedBy: session.user.id,
+      userData: {
+        email: user.email,
+        name: user.name,
+        role: user.role
+      }
+    });
+
+    return new NextResponse(null, { status: 204 });
   } catch (error) {
-    console.error('Failed to delete user:', error);
-    return NextResponse.json({ error: 'Failed to delete user' }, { status: 500 });
+    console.error('Error deleting user:', error);
+    return new NextResponse('Internal Server Error', { status: 500 });
   }
 }
 
@@ -66,3 +116,66 @@ export const config = {
     bodyParser: false,
   },
 };
+
+export async function PATCH(
+  req: Request,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user) {
+      return new NextResponse('Unauthorized', { status: 401 });
+    }
+
+    // Users can only update their own profile unless they're an admin
+    if (session.user.id !== params.id && session.user.role !== 'ADMIN') {
+      return new NextResponse('Forbidden', { status: 403 });
+    }
+
+    const body = await req.json();
+    const { name, image } = userUpdateSchema.parse(body);
+
+    // Get current user data for logging changes
+    const currentUser = await prisma.user.findUnique({
+      where: { id: params.id },
+      select: { name: true, image: true }
+    });
+
+    if (!currentUser) {
+      return new NextResponse('User not found', { status: 404 });
+    }
+
+    // Update user
+    const updatedUser = await prisma.user.update({
+      where: { id: params.id },
+      data: {
+        name: name || undefined,
+        image: image || undefined,
+      },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        image: true,
+        role: true
+      }
+    });
+
+    // Log the update
+    await ActivityLogger.logUserUpdate(params.id, {
+      updatedBy: session.user.id,
+      changes: {
+        name: name !== currentUser.name ? { from: currentUser.name, to: name } : undefined,
+        image: image !== currentUser.image ? { from: currentUser.image, to: image } : undefined
+      }
+    });
+
+    return NextResponse.json(updatedUser);
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return new NextResponse(JSON.stringify(error.errors), { status: 400 });
+    }
+    console.error('Error updating user:', error);
+    return new NextResponse('Internal Server Error', { status: 500 });
+  }
+}

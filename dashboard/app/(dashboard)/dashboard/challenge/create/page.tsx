@@ -266,7 +266,7 @@ export default function CreateChallengePage() {
         description: "Challenge created successfully",
       });
 
-      router.push("/dashboard/challenges");
+      router.push("/dashboard/challenge");
     } catch (error) {
       toast({
         title: "Error",

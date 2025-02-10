@@ -3,6 +3,8 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { User } from "@prisma/client";
+import { ActivityLogger } from '@/lib/activity-logger';
+import { ActivityEventType } from '@prisma/client';
 
 export async function POST(req: Request) {
   try {
@@ -70,11 +72,25 @@ export async function POST(req: Request) {
       data: { status: "terminated" },
     });
 
-    return NextResponse.json({ success: true });
+    // Log the instance deletion
+    await ActivityLogger.logChallengeEvent(
+      'CHALLENGE_INSTANCE_DELETED' as ActivityEventType,
+      session.user.id,
+      instance.challengeId,
+      instanceId,
+      {
+        terminatedBy: session.user.id,
+        competitionId: instance.competitionId,
+        terminationTime: new Date().toISOString(),
+        wasInstructor: isInstructor
+      }
+    );
+
+    return NextResponse.json({ message: "Challenge instance terminated successfully" });
   } catch (error) {
-    console.error("Error terminating challenge:", error);
+    console.error("Error terminating challenge instance:", error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Failed to terminate challenge" },
+      { error: error instanceof Error ? error.message : "Failed to terminate challenge instance" },
       { status: 500 }
     );
   }

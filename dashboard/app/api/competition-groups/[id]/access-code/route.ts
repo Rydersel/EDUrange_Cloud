@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
+import { ActivityLogger } from '@/lib/activity-logger';
+import { ActivityEventType } from '@prisma/client';
 
 function generateAccessCode(): string {
   const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
@@ -42,21 +44,32 @@ export async function POST(
     }
 
     // Generate and save new access code
-    const accessCode = await prisma.$transaction(async (tx) => {
-      const result = await tx.$queryRaw`
-        INSERT INTO "CompetitionAccessCode" (id, code, "groupId", "createdBy", "expiresAt", "createdAt")
-        VALUES (
-          gen_random_uuid(),
-          ${generateAccessCode()},
-          ${params.id},
-          ${session.user.id},
-          ${expiresAt ? new Date(expiresAt) : null},
-          NOW()
-        )
-        RETURNING *
-      `;
-      return (result as any[])[0];
+    const code = generateAccessCode();
+    const accessCode = await prisma.competitionAccessCode.create({
+      data: {
+        code,
+        groupId: params.id,
+        createdBy: session.user.id,
+        expiresAt: expiresAt ? new Date(expiresAt) : null,
+      },
+      include: {
+        group: true
+      }
     });
+
+    // Log access code generation
+    await ActivityLogger.logAccessCodeEvent(
+      ActivityEventType.ACCESS_CODE_GENERATED,
+      session.user.id,
+      accessCode.id,
+      params.id,
+      {
+        code: code,
+        expiresAt: expiresAt ? new Date(expiresAt).toISOString() : null,
+        groupName: accessCode.group.name,
+        generatedAt: new Date().toISOString()
+      }
+    );
 
     return NextResponse.json(accessCode);
   } catch (error) {

@@ -20,136 +20,170 @@ export async function POST(
       return new NextResponse('Unauthorized', { status: 401 });
     }
 
-    // Parse and validate request body
     const body = await request.json();
-    const { answer } = completionSchema.parse(body);
+    const { answer } = body;
 
-    // Get the group challenge to verify it exists and user has access
-    const groupChallenge = await prisma.groupChallenge.findFirst({
+    // Get the group challenge
+    const groupChallenge = await prisma.groupChallenge.findUnique({
       where: {
-        groupId: params.groupId,
+        challengeId_groupId: {
+          challengeId: params.challengeId,
+          groupId: params.groupId,
+        },
+      },
+      include: {
+        challenge: {
+          include: {
+            questions: true,
+          },
+        },
+      },
+    });
+
+    if (!groupChallenge) {
+      return new NextResponse('Challenge not found', { status: 404 });
+    }
+
+    // Find the question
+    const question = groupChallenge.challenge.questions.find(
+      (q) => q.id === params.questionId
+    );
+
+    if (!question) {
+      return new NextResponse('Question not found', { status: 404 });
+    }
+
+    // Check if already completed
+    const existingCompletion = await prisma.questionCompletion.findUnique({
+      where: {
+        userId_questionId_groupChallengeId: {
+          userId: session.user.id,
+          questionId: params.questionId,
+          groupChallengeId: groupChallenge.id,
+        },
+      },
+    });
+
+    if (existingCompletion) {
+      return new NextResponse('Question already completed', { status: 400 });
+    }
+
+    // Record the attempt
+    const isCorrect = answer === question.answer;
+    await prisma.questionAttempt.create({
+      data: {
+        questionId: params.questionId,
+        userId: session.user.id,
+        groupChallengeId: groupChallenge.id,
+        answer: answer,
+        isCorrect: isCorrect,
+      },
+    });
+
+    // Log the attempt
+    await prisma.activityLog.create({
+      data: {
+        eventType: 'QUESTION_ATTEMPTED',
+        userId: session.user.id,
         challengeId: params.challengeId,
-        group: {
-          members: {
-            some: {
-              id: session.user.id
-            }
-          }
+        groupId: params.groupId,
+        metadata: {
+          questionId: params.questionId,
+          isCorrect: isCorrect,
+          attemptedAnswer: answer
         }
       }
     });
 
-    if (!groupChallenge) {
-      return new NextResponse('Challenge not found or access denied', { status: 404 });
-    }
+    // If correct answer, create completion
+    if (isCorrect) {
+      const completion = await prisma.questionCompletion.create({
+        data: {
+          questionId: params.questionId,
+          userId: session.user.id,
+          groupChallengeId: groupChallenge.id,
+          pointsEarned: question.points,
+        },
+      });
 
-    // Get the question to verify answer
-    const question = await prisma.$queryRaw<{ id: string; answer: string; points: number }[]>`
-      SELECT id, answer, points
-      FROM "ChallengeQuestion"
-      WHERE id = ${params.questionId}
-      AND "challengeId" = ${params.challengeId}
-      LIMIT 1
-    `;
-
-    if (!question || question.length === 0) {
-      return new NextResponse('Question not found', { status: 404 });
-    }
-
-    // Check if question is already completed
-    const existingCompletion = await prisma.$queryRaw<{ id: string }[]>`
-      SELECT id
-      FROM "QuestionCompletion"
-      WHERE "userId" = ${session.user.id}
-      AND "questionId" = ${params.questionId}
-      AND "groupChallengeId" = ${groupChallenge.id}
-      LIMIT 1
-    `;
-
-    if (existingCompletion && existingCompletion.length > 0) {
-      return new NextResponse('Question already completed', { status: 400 });
-    }
-
-    // Verify answer
-    if (answer.toLowerCase() !== question[0].answer.toLowerCase()) {
-      return new NextResponse('Incorrect answer', { status: 400 });
-    }
-
-    // Create completion record
-    const completion = await prisma.$executeRaw`
-      INSERT INTO "QuestionCompletion" ("id", "userId", "questionId", "groupChallengeId", "pointsEarned", "completedAt")
-      VALUES (
-        gen_random_uuid(),
-        ${session.user.id},
-        ${params.questionId},
-        ${groupChallenge.id},
-        ${question[0].points},
-        NOW()
-      )
-      RETURNING *
-    `;
-
-    // Check if all questions are completed
-    const [allQuestionsCount, completedQuestionsCount] = await Promise.all([
-      prisma.$queryRaw<[{ count: number }]>`
-        SELECT COUNT(*) as count
-        FROM "ChallengeQuestion"
-        WHERE "challengeId" = ${params.challengeId}
-      `,
-      prisma.$queryRaw<[{ count: number }]>`
-        SELECT COUNT(*) as count
-        FROM "QuestionCompletion" qc
-        JOIN "ChallengeQuestion" cq ON qc."questionId" = cq.id
-        WHERE qc."userId" = ${session.user.id}
-        AND qc."groupChallengeId" = ${groupChallenge.id}
-        AND cq."challengeId" = ${params.challengeId}
-      `
-    ]);
-
-    const allCompleted = allQuestionsCount[0].count === completedQuestionsCount[0].count;
-
-    // If all questions are completed, create a challenge completion
-    if (allCompleted) {
-      // Get total points earned
-      const totalPoints = await prisma.$queryRaw<[{ total: number }]>`
-        SELECT SUM("pointsEarned") as total
-        FROM "QuestionCompletion"
-        WHERE "userId" = ${session.user.id}
-        AND "groupChallengeId" = ${groupChallenge.id}
-      `;
-
-      // Create challenge completion
-      await prisma.$executeRaw`
-        INSERT INTO "ChallengeCompletion" ("id", "userId", "groupChallengeId", "pointsEarned", "completedAt")
-        VALUES (
-          gen_random_uuid(),
-          ${session.user.id},
-          ${groupChallenge.id},
-          ${totalPoints[0].total},
-          NOW()
-        )
-      `;
-
-      // Log the activity
+      // Log the completion
       await prisma.activityLog.create({
         data: {
-          eventType: 'CHALLENGE_COMPLETED',
+          eventType: 'QUESTION_COMPLETED',
           userId: session.user.id,
           challengeId: params.challengeId,
           groupId: params.groupId,
           metadata: {
-            totalPoints: totalPoints[0].total
+            questionId: params.questionId,
+            pointsEarned: question.points
           }
         }
       });
+
+      // Check if all questions are completed
+      const completedQuestions = await prisma.questionCompletion.findMany({
+        where: {
+          userId: session.user.id,
+          groupChallengeId: groupChallenge.id,
+        },
+      });
+
+      const allCompleted =
+        completedQuestions.length === groupChallenge.challenge.questions.length;
+
+      // If all questions are completed, create a challenge completion
+      if (allCompleted) {
+        // Get total points earned
+        const totalPoints = await prisma.$queryRaw<[{ total: number }]>`
+          SELECT SUM("pointsEarned") as total
+          FROM "QuestionCompletion"
+          WHERE "userId" = ${session.user.id}
+          AND "groupChallengeId" = ${groupChallenge.id}
+        `;
+
+        // Create challenge completion
+        await prisma.$executeRaw`
+          INSERT INTO "ChallengeCompletion" ("id", "userId", "groupChallengeId", "pointsEarned", "completedAt")
+          VALUES (
+            gen_random_uuid(),
+            ${session.user.id},
+            ${groupChallenge.id},
+            ${totalPoints[0].total},
+            NOW()
+          )
+        `;
+
+        // Log the activity
+        await prisma.activityLog.create({
+          data: {
+            eventType: 'CHALLENGE_COMPLETED',
+            userId: session.user.id,
+            challengeId: params.challengeId,
+            groupId: params.groupId,
+            metadata: {
+              totalPoints: totalPoints[0].total,
+              totalAttempts: await prisma.questionAttempt.count({
+                where: {
+                  userId: session.user.id,
+                  groupChallengeId: groupChallenge.id
+                }
+              })
+            }
+          }
+        });
+      }
+
+      return NextResponse.json({
+        success: true,
+        completion,
+        challengeCompleted: allCompleted
+      });
+    } else {
+      return NextResponse.json({
+        success: false,
+        message: 'Incorrect answer'
+      });
     }
-
-    return NextResponse.json({
-      success: true,
-      completion,
-      challengeCompleted: allCompleted
-    });
-
   } catch (error) {
     if (error instanceof z.ZodError) {
       return new NextResponse(JSON.stringify(error.errors), { status: 400 });

@@ -4,6 +4,8 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { User } from "@prisma/client";
 import { transformToWebOSFormat, transformQuestionsToPromptApp } from "@/lib/webos/transform";
+import { ActivityLogger } from '@/lib/activity-logger';
+import { ActivityEventType } from '@prisma/client';
 
 export async function POST(req: Request) {
   try {
@@ -158,6 +160,20 @@ export async function POST(req: Request) {
         flag: "null", // Let sync service update this
       },
     });
+
+    // Log challenge instance creation
+    await ActivityLogger.logChallengeEvent(
+      'CHALLENGE_INSTANCE_CREATED' as ActivityEventType,
+      session.user.id,
+      challengeId,
+      challengeInstance.id,
+      {
+        competitionId,
+        challengeImage: challenge.challengeImage,
+        challengeUrl: instanceData.challenge_url,
+        creationTime: new Date().toISOString()
+      }
+    );
 
     return NextResponse.json(challengeInstance);
   } catch (error) {

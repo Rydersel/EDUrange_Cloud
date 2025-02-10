@@ -41,7 +41,7 @@ def get_flag(secret_name):
 # Add a new challenge instance to the Prisma database
 async def add_challenge_instance(instance):
     logging.info(f"Adding new instance: {instance['challenge_url']}")
-    flag = get_flag(instance.get('flag_secret_name', 'null'))
+    flag = get_flag(instance.get('flag_secret_name', None))
     
     # Get challenge ID directly from instance data
     challenge_id = instance.get('challenge_id', None)
@@ -64,66 +64,92 @@ async def add_challenge_instance(instance):
         logging.error("No challenge ID found for instance")
         return None
     
+    # Get required user_id and competition_id
+    user_id = instance.get('user_id')
+    competition_id = instance.get('competition_id')
+    
+    if not user_id or not competition_id:
+        logging.error("Missing required user_id or competition_id")
+        return None
+    
     # Create the challenge instance
-    challenge_instance = await prisma.challengeinstance.create(
-        data={
-            'id': instance['pod_name'],
-            'challengeId': challenge_id,
-            'userId': instance.get('user_id', 'null'),
-            'competitionId': instance.get('competition_id', 'null'),
-            'challengeImage': instance.get('challenge_image', 'null'),
-            'challengeUrl': instance.get('challenge_url', 'null'),
-            'status': instance.get('status', 'creating'),  # Default to creating if not specified
-            'flagSecretName': instance.get('flag_secret_name', 'null'),
-            'flag': flag
-        }
-    )
-
-    # Log the challenge start event
-    await prisma.activitylog.create(
-        data={
-            'eventType': 'CHALLENGE_STARTED',
-            'userId': instance.get('user_id', 'null'),
-            'challengeId': challenge_id,
-            'groupId': instance.get('competition_id', None),
-            'metadata': {
-                'instanceId': challenge_instance.id,
-                'startTime': datetime.now().isoformat()
+    try:
+        challenge_instance = await prisma.challengeinstance.create(
+            data={
+                'id': instance['pod_name'],
+                'challengeId': challenge_id,
+                'userId': user_id,
+                'competitionId': competition_id,
+                'challengeImage': instance.get('challenge_image', ''),
+                'challengeUrl': instance.get('challenge_url', ''),
+                'status': instance.get('status', 'creating'),
+                'flagSecretName': instance.get('flag_secret_name', ''),
+                'flag': flag or ''
             }
-        }
-    )
+        )
 
-    return challenge_instance
+        # Log the challenge start event
+        await prisma.activitylog.create(
+            data={
+                'eventType': 'CHALLENGE_STARTED',
+                'userId': user_id,
+                'challengeId': challenge_id,
+                'challengeInstanceId': challenge_instance.id,
+                'groupId': competition_id,
+                'severity': 'INFO',
+                'metadata': {
+                    'instanceId': challenge_instance.id,
+                    'startTime': datetime.now().isoformat()
+                }
+            }
+        )
+
+        return challenge_instance
+    except Exception as e:
+        logging.error(f"Error creating challenge instance: {e}")
+        return None
 
 
 # Remove a challenge instance from the Prisma database
 async def remove_challenge_instance(instance_id):
     logging.info(f"Removing instance with ID: {instance_id}")
     
-    # Get the instance before deleting it
-    instance = await prisma.challengeinstance.find_unique(
-        where={'id': instance_id}
-    )
-    
-    if instance:
+    try:
+        # Get the instance before deleting it
+        instance = await prisma.challengeinstance.find_unique(
+            where={'id': instance_id}
+        )
+        
+        if not instance:
+            logging.warning(f"Instance {instance_id} not found for deletion")
+            return
+        
         # Delete the instance
         await prisma.challengeinstance.delete(
             where={'id': instance_id}
         )
         
-        # Log the completion in activity log if status was "completed"
-        if instance.status == "completed":
-            await prisma.activitylog.create(
-                data={
-                    'eventType': 'CHALLENGE_COMPLETED',
-                    'userId': instance.userId,
-                    'challengeId': instance.challengeId,
-                    'metadata': {
-                        'instanceId': instance_id,
-                        'completionTime': datetime.now().isoformat()
-                    }
+        # Log the instance deletion
+        await prisma.activitylog.create(
+            data={
+                'eventType': 'CHALLENGE_INSTANCE_DELETED',
+                'userId': instance.userId,
+                'challengeId': instance.challengeId,
+                'challengeInstanceId': instance_id,
+                'groupId': instance.competitionId,
+                'severity': 'INFO',
+                'metadata': {
+                    'instanceId': instance_id,
+                    'deletionTime': datetime.now().isoformat(),
+                    'previousStatus': instance.status
                 }
-            )
+            }
+        )
+        
+        logging.info(f"Successfully removed instance {instance_id}")
+    except Exception as e:
+        logging.error(f"Error removing challenge instance {instance_id}: {e}")
+        raise  # Re-raise the exception to be handled by the caller
 
 
 #  Update a challenge instance in the Prisma db

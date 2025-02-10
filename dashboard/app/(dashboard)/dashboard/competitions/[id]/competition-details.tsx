@@ -250,7 +250,44 @@ export function CompetitionDetails({ competition, isInstructor }: CompetitionDet
                             <TableCell>{member.groupPoints[0]?.points || 0}</TableCell>
                             {isInstructor && (
                               <TableCell>
-                                <Button variant="ghost" size="sm">View Details</Button>
+                                <div className="flex gap-2">
+                                  <Button variant="ghost" size="sm">View Details</Button>
+                                  <Button 
+                                    variant="destructive" 
+                                    size="sm"
+                                    onClick={async () => {
+                                      if (!confirm('Are you sure you want to reset this user\'s progress? This action cannot be undone.')) {
+                                        return;
+                                      }
+                                      
+                                      try {
+                                        const response = await fetch(`/api/competition-groups/${competition.id}/users/${member.id}/reset`, {
+                                          method: 'POST'
+                                        });
+                                        
+                                        if (!response.ok) {
+                                          throw new Error('Failed to reset user progress');
+                                        }
+                                        
+                                        toast({
+                                          title: "Success",
+                                          description: "User progress has been reset",
+                                        });
+                                        
+                                        // Refresh the page to show updated data
+                                        router.refresh();
+                                      } catch (error) {
+                                        toast({
+                                          title: "Error",
+                                          description: "Failed to reset user progress",
+                                          variant: "destructive",
+                                        });
+                                      }
+                                    }}
+                                  >
+                                    Reset Progress
+                                  </Button>
+                                </div>
                               </TableCell>
                             )}
                           </TableRow>

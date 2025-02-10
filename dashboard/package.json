@@ -2,6 +2,9 @@
   "name": "edurangeclouddashboard",
   "version": "0.1.0",
   "private": true,
+  "prisma": {
+    "seed": "ts-node prisma/seeds/seed-challenges.ts"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",

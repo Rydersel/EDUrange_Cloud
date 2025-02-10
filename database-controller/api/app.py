@@ -163,26 +163,42 @@ def get_challenge_instance():
         return jsonify({'error': 'challenge_instance_id is required'}), 400
 
     try:
+        # First get the challenge instance
         challenge_instance = loop.run_until_complete(prisma.challengeinstance.find_unique(
             where={'id': challenge_instance_id},
             include={'user': True}  # Include user information
         ))
-        if challenge_instance:
-            challenge_instance_dict = challenge_instance.dict()
-            return jsonify({
-                'id': challenge_instance_dict['id'],
-                'challengeId': challenge_instance_dict['challengeId'],
-                'userId': challenge_instance_dict['userId'],
-                'challengeImage': challenge_instance_dict['challengeImage'],
-                'challengeUrl': challenge_instance_dict['challengeUrl'],
-                'creationTime': challenge_instance_dict['creationTime'],
-                'status': challenge_instance_dict['status'],
-                'flagSecretName': challenge_instance_dict['flagSecretName'],
-                'flag': challenge_instance_dict['flag'],
-                'user': challenge_instance_dict['user']
-            })
-        else:
+        
+        if not challenge_instance:
             return jsonify({'error': 'Challenge instance not found'}), 404
+
+        challenge_instance_dict = challenge_instance.dict()
+
+        # Find the group challenge for this instance
+        group_challenge = loop.run_until_complete(prisma.groupchallenge.find_first(
+            where={
+                'challengeId': challenge_instance_dict['challengeId'],
+                'groupId': challenge_instance_dict['competitionId']
+            }
+        ))
+
+        # Create response with all needed data
+        response_data = {
+            'id': challenge_instance_dict['id'],
+            'challengeId': challenge_instance_dict['challengeId'],
+            'userId': challenge_instance_dict['userId'],
+            'challengeImage': challenge_instance_dict['challengeImage'],
+            'challengeUrl': challenge_instance_dict['challengeUrl'],
+            'creationTime': challenge_instance_dict['creationTime'],
+            'status': challenge_instance_dict['status'],
+            'flagSecretName': challenge_instance_dict['flagSecretName'],
+            'flag': challenge_instance_dict['flag'],
+            'user': challenge_instance_dict['user'],
+            'groupChallengeId': group_challenge.id if group_challenge else None,
+            'groupId': group_challenge.groupId if group_challenge else None
+        }
+
+        return jsonify(response_data)
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -257,6 +273,7 @@ def join_competition():
         loop.run_until_complete(prisma.activitylog.create(
             data={
                 'eventType': 'GROUP_JOINED',
+                'severity': 'INFO',
                 'userId': data['userId'],
                 'groupId': competition.id,
                 'metadata': {'accessCode': data['code']}
@@ -285,8 +302,10 @@ def generate_access_code():
         loop.run_until_complete(prisma.activitylog.create(
             data={
                 'eventType': 'ACCESS_CODE_GENERATED',
+                'severity': 'INFO',
                 'userId': data['createdBy'],
                 'groupId': data['groupId'],
+                'accessCodeId': access_code.id,
                 'metadata': {'code': data['code']}
             }
         ))
@@ -327,6 +346,7 @@ def complete_challenge():
         loop.run_until_complete(prisma.activitylog.create(
             data={
                 'eventType': 'CHALLENGE_COMPLETED',
+                'severity': 'INFO',
                 'userId': data['userId'],
                 'challengeId': data['challengeId'],
                 'groupId': data['groupId'],
@@ -424,6 +444,189 @@ def get_user_progress(group_id, user_id):
             'completionPercentage': (len([p for p in progress if p['completed']]) / len(progress)) * 100 if progress else 0
         })
     except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/question/complete', methods=['POST'])
+def complete_question():
+    data = request.json
+    user_id = data.get('user_id')
+    question_id = data.get('question_id')
+    group_challenge_id = data.get('group_challenge_id')
+    points = data.get('points')
+
+    if not all([user_id, question_id, group_challenge_id, points]):
+        return jsonify({'error': 'Missing required fields'}), 400
+
+    try:
+        # Check if question is already completed
+        existing_completion = loop.run_until_complete(prisma.questioncompletion.find_unique(
+            where={
+                'userId_questionId_groupChallengeId': {
+                    'userId': user_id,
+                    'questionId': question_id,
+                    'groupChallengeId': group_challenge_id
+                }
+            }
+        ))
+
+        if existing_completion:
+            return jsonify({'error': 'Question already completed'}), 400
+
+        # Create completion record
+        completion = loop.run_until_complete(prisma.questioncompletion.create(
+            data={
+                'userId': user_id,
+                'questionId': question_id,
+                'groupChallengeId': group_challenge_id,
+                'pointsEarned': points
+            }
+        ))
+
+        # Get group ID from group challenge
+        group_challenge = loop.run_until_complete(prisma.groupchallenge.find_unique(
+            where={'id': group_challenge_id},
+            include={'group': True}
+        ))
+
+        if not group_challenge:
+            return jsonify({'error': 'Group challenge not found'}), 404
+
+        # Add points to user's competition total
+        group_points = loop.run_until_complete(prisma.grouppoints.upsert(
+            where={
+                'userId_groupId': {
+                    'userId': user_id,
+                    'groupId': group_challenge.group.id
+                }
+            },
+            data={
+                'create': {
+                    'userId': user_id,
+                    'groupId': group_challenge.group.id,
+                    'points': points
+                },
+                'update': {
+                    'points': {
+                        'increment': points
+                    }
+                }
+            }
+        ))
+
+        return jsonify({
+            'completion': completion.dict(),
+            'points': group_points.dict()
+        })
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/question/completed', methods=['GET'])
+def get_completed_questions():
+    user_id = request.args.get('user_id')
+    group_challenge_id = request.args.get('group_challenge_id')
+
+    if not user_id or not group_challenge_id:
+        return jsonify({'error': 'user_id and group_challenge_id are required'}), 400
+
+    try:
+        completions = loop.run_until_complete(prisma.questioncompletion.find_many(
+            where={
+                'userId': user_id,
+                'groupChallengeId': group_challenge_id
+            }
+        ))
+        
+        return jsonify({
+            'completed_questions': [completion.dict() for completion in completions]
+        })
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/question/details', methods=['GET'])
+def get_question_details():
+    question_id = request.args.get('question_id')
+
+    if not question_id:
+        return jsonify({'error': 'question_id is required'}), 400
+
+    try:
+        question = loop.run_until_complete(prisma.challengequestion.find_unique(
+            where={'id': question_id}
+        ))
+        
+        if not question:
+            return jsonify({'error': 'Question not found'}), 404
+
+        return jsonify(question.dict())
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/challenge/details', methods=['GET'])
+def get_challenge_details():
+    challenge_id = request.args.get('challenge_id')
+
+    if not challenge_id:
+        return jsonify({'error': 'challenge_id is required'}), 400
+
+    try:
+        challenge = loop.run_until_complete(prisma.challenges.find_unique(
+            where={'id': challenge_id},
+            include={
+                'questions': {
+                    'orderBy': {
+                        'order': 'asc'
+                    }
+                },
+                'challengeType': True,
+                'appConfigs': True
+            }
+        ))
+        
+        if not challenge:
+            return jsonify({'error': 'Challenge not found'}), 404
+
+        challenge_dict = challenge.dict()
+        return jsonify({
+            'id': challenge_dict['id'],
+            'name': challenge_dict['name'],
+            'description': challenge_dict['description'],
+            'difficulty': challenge_dict['difficulty'],
+            'type': challenge_dict['challengeType']['name'],
+            'questions': challenge_dict['questions'],
+            'appConfigs': challenge_dict['appConfigs']
+        })
+    except Exception as e:
+        print(f"Error in get_challenge_details: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/activity/log', methods=['POST'])
+def log_activity():
+    data = request.json
+    try:
+        # Validate required fields
+        if not all(k in data for k in ['eventType', 'userId']):
+            return jsonify({'error': 'eventType and userId are required'}), 400
+
+        # Create activity log entry with new fields
+        activity_log = loop.run_until_complete(prisma.activitylog.create(
+            data={
+                'eventType': data['eventType'],
+                'severity': data.get('severity', 'INFO'),
+                'userId': data['userId'],
+                'challengeId': data.get('challengeId'),
+                'groupId': data.get('groupId'),
+                'challengeInstanceId': data.get('challengeInstanceId'),
+                'accessCodeId': data.get('accessCodeId'),
+                'metadata': data.get('metadata', {})
+            }
+        ))
+
+        return jsonify(activity_log.dict())
+    except Exception as e:
+        print(f"Error in log_activity: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 # For Dev

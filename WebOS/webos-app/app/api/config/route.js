@@ -156,24 +156,107 @@ let config = null;
 
 export async function GET(req) {
   try {
-    const response = await fetch('http://127.0.0.1:5000/config', {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    });
+    // Get challenge instance ID from hostname
+    const hostname = req.headers.get('host');
+    const instanceId = hostname.split('.')[0];
 
-    if (!response.ok) {
-      throw new Error('Failed to fetch config from bridge');
+    // Get default apps config from environment variable
+    const defaultApps = process.env.NEXT_PUBLIC_APPS_CONFIG ? 
+      JSON.parse(process.env.NEXT_PUBLIC_APPS_CONFIG) : 
+      defaultConfig;
+
+    // Get challenge instance details first
+    const instanceResponse = await fetch(`https://database.rydersel.cloud/get_challenge_instance?challenge_instance_id=${instanceId}`);
+    if (!instanceResponse.ok) {
+      console.warn("Failed to fetch challenge instance details");
+      return NextResponse.json(defaultApps, { status: 200 });
     }
 
-    const data = await response.json();
-    config = data;
-    return NextResponse.json(data, { status: response.status });
+    const instanceData = await instanceResponse.json();
+    console.log('Received instance data:', instanceData);
+
+    // Get challenge details using the challengeId from instance data
+    const challengeResponse = await fetch(`https://database.rydersel.cloud/challenge/details?challenge_id=${instanceData.challengeId}`);
+    if (!challengeResponse.ok) {
+      console.warn("Failed to fetch challenge details:", await challengeResponse.text());
+      return NextResponse.json(defaultApps, { status: 200 });
+    }
+
+    const challengeConfig = await challengeResponse.json();
+    console.log('Received challenge config:', challengeConfig);
+
+    // Validate challenge config has required fields
+    if (!challengeConfig.questions || !Array.isArray(challengeConfig.questions)) {
+      console.warn("Challenge config missing questions array:", challengeConfig);
+      return NextResponse.json(defaultApps, { status: 200 });
+    }
+
+    // Create a map of app configs from the challenge
+    const challengeAppConfigs = {};
+    if (challengeConfig.appConfigs) {
+      challengeConfig.appConfigs.forEach(appConfig => {
+        challengeAppConfigs[appConfig.appId] = appConfig;
+      });
+    }
+
+    // Merge default apps with challenge-specific configurations
+    const appConfig = defaultApps.map(app => {
+      // If this app has challenge-specific config, merge it
+      if (challengeAppConfigs[app.id]) {
+        const challengeAppConfig = challengeAppConfigs[app.id];
+        return {
+          ...app,
+          title: challengeAppConfig.title || app.title,
+          icon: challengeAppConfig.icon || app.icon,
+          width: challengeAppConfig.width || app.width,
+          height: challengeAppConfig.height || app.height,
+          disabled: challengeAppConfig.disabled,
+          favourite: challengeAppConfig.favourite,
+          desktop_shortcut: challengeAppConfig.desktop_shortcut,
+          launch_on_startup: challengeAppConfig.launch_on_startup,
+          ...(challengeAppConfig.additional_config && { additional_config: challengeAppConfig.additional_config })
+        };
+      }
+      
+      // Special handling for challenge-prompt app
+      if (app.id === "challenge-prompt") {
+        return {
+          ...app,
+          description: challengeConfig.description,
+          challenge: {
+            type: "single",
+            title: challengeConfig.name,
+            description: challengeConfig.description,
+            flagSecretName: instanceData.flagSecretName,
+            groupChallengeId: instanceData.groupChallengeId,
+            pages: [
+              {
+                instructions: challengeConfig.description,
+                questions: challengeConfig.questions.map(q => ({
+                  id: q.id,
+                  type: q.type || "text",
+                  content: q.content,
+                  points: q.points,
+                  ...(q.type !== 'flag' && { answer: q.answer })
+                }))
+              }
+            ]
+          }
+        };
+      }
+
+      return app;
+    });
+
+    config = appConfig;
+    return NextResponse.json(appConfig, { status: 200 });
   } catch (error) {
     console.warn("Failed to fetch config, using default config:", error.message);
-    config = defaultConfig;
-    return NextResponse.json(defaultConfig, { status: 200 });
+    const defaultApps = process.env.NEXT_PUBLIC_APPS_CONFIG ? 
+      JSON.parse(process.env.NEXT_PUBLIC_APPS_CONFIG) : 
+      defaultConfig;
+    config = defaultApps;
+    return NextResponse.json(defaultApps, { status: 200 });
   }
 }
 
@@ -197,33 +280,36 @@ export async function POST(req) {
     }
 
     if (question.type === 'flag') {
-      // Verify flag using the provided API
-      const flagResponse = await fetch('https://eductf.rydersel.cloud/instance-manager/api/get-secret', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          secret_name: challengeConfig.flagSecretName,
-          namespace: 'default'
-        }),
-      });
+      try {
+        // Verify flag using the instance manager API
+        const flagResponse = await fetch('https://eductf.rydersel.cloud/instance-manager/api/get-secret', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            secret_name: challengeConfig.flagSecretName,
+            namespace: 'default'
+          }),
+        });
 
-      if (!flagResponse.ok) {
-        throw new Error('Failed to fetch flag');
+        if (!flagResponse.ok) {
+          console.error('Failed to fetch flag:', await flagResponse.text());
+          return NextResponse.json({ error: 'Failed to verify flag' }, { status: 500 });
+        }
+
+        const { secret_value } = await flagResponse.json();
+        return NextResponse.json({ isCorrect: answer === secret_value }, { status: 200 });
+      } catch (error) {
+        console.error('Error verifying flag:', error);
+        return NextResponse.json({ error: 'Failed to verify flag' }, { status: 500 });
       }
-
-      const { secret_value } = await flagResponse.json();
-      const isCorrect = answer === secret_value;
-
-      return NextResponse.json({ isCorrect }, { status: 200 });
     } else {
       // For non-flag questions, check against the hardcoded answer
-      const isCorrect = answer === question.answer;
-      return NextResponse.json({ isCorrect }, { status: 200 });
+      return NextResponse.json({ isCorrect: answer === question.answer }, { status: 200 });
     }
   } catch (error) {
     console.error("Error verifying answer:", error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    return NextResponse.json({ error: 'Internal Server Error', details: error.message }, { status: 500 });
   }
 }

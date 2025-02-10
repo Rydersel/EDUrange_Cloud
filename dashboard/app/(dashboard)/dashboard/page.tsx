@@ -7,8 +7,6 @@ import {
   CardHeader,
   CardTitle
 } from '@/components/ui/card';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {redirect} from "next/navigation";
 import {getServerSession} from "next-auth/next";
 import authConfig from "@/auth.config";

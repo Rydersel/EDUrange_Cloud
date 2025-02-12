@@ -1,134 +1,129 @@
-// @ts-ignore
-import { NextAuthConfig } from 'next-auth';
+/* eslint-disable no-console */
+import type { Session, User as AuthUser, Account, Profile } from 'next-auth';
+import type { AuthOptions } from 'next-auth';
+import type { Adapter } from 'next-auth/adapters';
 import CredentialsProvider from 'next-auth/providers/credentials';
 import GithubProvider from 'next-auth/providers/github';
 import { PrismaAdapter } from '@auth/prisma-adapter';
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, UserRole, ActivityEventType } from '@prisma/client';
+import { ActivityLogger } from './lib/activity-logger';
+import { User } from 'next-auth';
+
+declare module 'next-auth' {
+  interface Session {
+    user: {
+      id: string;
+      name?: string | null;
+      email?: string | null;
+      image?: string | null;
+      role: UserRole;
+    }
+  }
+
+  interface User {
+    id: string;
+    name?: string | null;
+    email: string;
+    role: UserRole;
+  }
+}
 
 const prisma = new PrismaClient();
 
-const authConfig: NextAuthConfig = {
-  adapter: PrismaAdapter(prisma),
+interface OAuthUser extends User {
+  email: string;
+  name?: string | null;
+  image?: string | null;
+}
+
+const authConfig: AuthOptions = {
+  adapter: PrismaAdapter(prisma) as Adapter,
+  session: {
+    strategy: "database",
+    maxAge: 30 * 24 * 60 * 60, // 30 days
+  },
   providers: [
     GithubProvider({
       clientId: process.env.AUTH_GITHUB_ID ?? '',
       clientSecret: process.env.AUTH_GITHUB_SECRET ?? '',
     }),
-    CredentialsProvider({
-      credentials: {
-        email: { type: 'email', label: 'Email', placeholder: 'your-email@example.com' },
-        password: { type: 'password', label: 'Password', placeholder: 'your-password' }
-      },
-      async authorize(credentials, req) {
-        const { email, password } = credentials ?? {};
-
-        if (!email || !password) {
-          console.log("Missing email or password");
-          return null;
-        }
-
-        const user = await prisma.user.findUnique({ where: { email } });
-
-        if (user && user.password === password) {
-          console.log("User authenticated successfully", user);
-          return { id: user.id.toString(), name: user.name, email: user.email, admin: user.admin };
-        } else {
-          console.log("User not found or incorrect password");
-          return null;
-        }
-      }
-    })
   ],
   pages: {
     signIn: '/' // Sign-in page
   },
   callbacks: {
-    async redirect({ url, baseUrl }) {
-      console.log("Redirecting to dashboard");
-      return url.startsWith(baseUrl) ? '/dashboard' : baseUrl;
+    async redirect({ url, baseUrl }: { url: string; baseUrl: string }) {
+      return url.startsWith(baseUrl) ? '/home' : baseUrl;
     },
-    async session({ session, token }) {
-      if (token) {
-        session.user.id = token.id;
-        session.user.admin = token.admin;
-        console.log("Session created", session);
+    async session({ session, user }: { session: Session; user: AuthUser & { role: UserRole } }) {
+      if (session.user) {
+        session.user.id = user.id;
+        session.user.role = user.role;
       }
       return session;
     },
-    async jwt({ token, user }) {
-      if (user) {
-        token.id = user.id;
-        token.admin = user.admin;
-        console.log("JWT token created", token);
-      }
-      return token;
-    },
     async signIn({ user, account, profile }) {
-      console.log("SignIn callback invoked", { user, account, profile });
+      try {
+        if (account?.type === 'oauth') {
+          const oauthUser = user as OAuthUser;
+          const existingUser = await prisma.user.findUnique({ where: { email: oauthUser.email } });
 
-      const existingAccount = await prisma.account.findUnique({
-        where: {
-          provider_providerAccountId: {
-            provider: account.provider,
-            providerAccountId: account.providerAccountId,
-          },
-        },
-      });
+          if (!existingUser) {
+            // This is a new user registration
+            const newUser = await prisma.user.create({
+              data: {
+                email: oauthUser.email,
+                name: oauthUser.name || null,
+                image: oauthUser.image || null,
+              },
+            });
 
-      if (existingAccount) {
-        console.log("Account already exists", existingAccount);
-        return true;
-      } else {
-        const existingUser = await prisma.user.findUnique({ where: { email: user.email } });
+            // Log the registration
+            await ActivityLogger.logUserEvent(
+              'USER_REGISTERED' as ActivityEventType,
+              newUser.id,
+              {
+                provider: account.provider,
+                email: oauthUser.email,
+                name: oauthUser.name
+              }
+            );
 
-        if (existingUser) {
-          await prisma.account.create({
-            data: {
-              userId: existingUser.id,
-              provider: account.provider,
-              providerAccountId: account.providerAccountId,
-              type: account.type,
-              access_token: account.access_token,
-              token_type: account.token_type,
-              scope: account.scope,
-              id_token: account.id_token,
-              session_state: account.session_state,
-              refresh_token: account.refresh_token,
-              expires_at: account.expires_at,
-            }
-          });
-          console.log("Linked new OAuth account to existing user", existingUser);
-          return true;
-        } else {
-          const newUser = await prisma.user.create({
-            data: {
-              name: user.name,
-              email: user.email,
-              image: user.image,
-              admin: false, // Set the default value for admin
-            },
-          });
-          await prisma.account.create({
-            data: {
-              userId: newUser.id,
-              provider: account.provider,
-              providerAccountId: account.providerAccountId,
-              type: account.type,
-              access_token: account.access_token,
-              token_type: account.token_type,
-              scope: account.scope,
-              id_token: account.id_token,
-              session_state: account.session_state,
-              refresh_token: account.refresh_token,
-              expires_at: account.expires_at,
-            }
-          });
-          console.log("Created new user and linked OAuth account", newUser);
-          return true;
+            // Create OAuth account
+            await prisma.account.create({
+              data: {
+                userId: newUser.id,
+                provider: account.provider,
+                providerAccountId: account.providerAccountId,
+                type: account.type,
+                access_token: account.access_token,
+                token_type: account.token_type,
+                scope: account.scope,
+                id_token: account.id_token,
+                session_state: account.session_state,
+                refresh_token: account.refresh_token,
+                expires_at: account.expires_at,
+              }
+            });
+          } else {
+            // This is a login
+            await ActivityLogger.logUserEvent(
+              'USER_LOGGED_IN' as ActivityEventType,
+              existingUser.id,
+              {
+                provider: account.provider,
+                loginTime: new Date().toISOString()
+              }
+            );
+          }
         }
+        return true;
+      } catch (error) {
+        console.error('Error in signIn callback:', error);
+        return false;
       }
     }
   }
-};
+}
 
 export default authConfig;

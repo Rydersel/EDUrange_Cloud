@@ -27,7 +27,10 @@ def start_challenge():
         challenge_image = request.json['challenge_image']
         apps_config = request.json.get('apps_config', None)
         chal_type = request.json.get('chal_type')
+        competition_id = request.json.get('competition_id')
 
+        if not competition_id:
+            return jsonify({"error": "competition_id is required"}), 400
 
     except KeyError as e:
         logging.error(f"Missing key in JSON payload: {e}")
@@ -39,36 +42,51 @@ def start_challenge():
             challenge_image=challenge_image,
             yaml_path='templates/full-os-challenge-template.yaml',
             run_as_root=True,
-            apps_config=apps_config
+            apps_config=apps_config,
+            competition_id=competition_id
         )
-        deployment_name, challenge_url, secret_name = full_os_challenge.create_pod_service_and_ingress()
+        deployment_name, challenge_url, terminal_url, secret_name = full_os_challenge.create_pod_service_and_ingress()
+        return jsonify({
+            "success": True,
+            "challenge_url": challenge_url,
+            "terminal_url": terminal_url,
+            "deployment_name": deployment_name,
+            "flag_secret_name": secret_name
+        }), 200
     elif chal_type == 'web':
         web_challenge = WebChallenge(
             user_id=user_id,
             challenge_image=challenge_image,
             yaml_path='templates/web-challenge-template.yaml',
-            # TODO switch to a hardcoded cdn link or something like that
-            apps_config=apps_config
+            apps_config=apps_config,
+            competition_id=competition_id
         )
         deployment_name, challenge_url, secret_name = web_challenge.create_pod_service_and_ingress()
+        return jsonify({
+            "success": True,
+            "challenge_url": challenge_url,
+            "deployment_name": deployment_name,
+            "flag_secret_name": secret_name
+        }), 200
     elif chal_type == 'metasploit':
         metasploit_challenge = MetasploitChallenge(
             user_id=user_id,
             attack_image=f"{challenge_image}-attack",
             defence_image=f"{challenge_image}-defence",  # Target System
             yaml_path='templates/metasploit-challenge-template.yaml',
-            apps_config=apps_config
+            apps_config=apps_config,
+            competition_id=competition_id
         )
         deployment_name, challenge_url, terminal_url, secret_name = metasploit_challenge.create_pod_service_and_ingress()
+        return jsonify({
+            "success": True,
+            "challenge_url": challenge_url,
+            "terminal_url": terminal_url,
+            "deployment_name": deployment_name,
+            "flag_secret_name": secret_name
+        }), 200
     else:
         return jsonify({"error": "Invalid challenge type"}), 400
-
-    if not challenge_url:
-        response = jsonify({"error": "Invalid URL provided"}), 400
-        logging.error(f"Invalid URL provided: challenge_url={challenge_url}")
-        return response
-
-    return jsonify({"success": True, "challenge_url": challenge_url, "deployment_name": deployment_name}), 200
 
 
 @app.route('/api/end-challenge', methods=['POST'])

@@ -1,3 +1,75 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: registry-config
+data:
+  config.yml: |
+    version: 0.1
+    log:
+      level: debug
+    storage:
+      filesystem:
+        rootdirectory: /var/lib/registry
+      delete:
+        enabled: true
+      cache:
+        blobdescriptor: inmemory
+      maintenance:
+        readonly:
+          enabled: false
+        uploadpurging:
+          enabled: true
+          age: 168h
+          interval: 24h
+          dryrun: false
+    http:
+      addr: :5000
+      headers:
+        X-Content-Type-Options: [nosniff]
+    health:
+      storagedriver:
+        enabled: true
+        interval: 10s
+        threshold: 3
+    gc:
+      disabled: false
+    repositories:
+      "*":
+        tags:
+          retention:
+            enabled: true
+            count: 3
+            order: asc
+            visual: false
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: registry-pv
+spec:
+  capacity:
+    storage: 10Gi
+  volumeMode: Filesystem
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: manual
+  hostPath:
+    path: /mnt/data/registry
+    type: DirectoryOrCreate
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: registry-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: manual
+  resources:
+    requests:
+      storage: 10Gi
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -14,17 +86,65 @@ spec:
       labels:
         app: docker-registry
     spec:
-      containers:
-      - name: registry
-        image: registry:2
-        ports:
-        - containerPort: 5000
+      initContainers:
+      - name: init-permissions
+        image: busybox
+        command: ['sh', '-c', 'mkdir -p /var/lib/registry/docker && chown -R 1000:1000 /var/lib/registry']
+        securityContext:
+          runAsUser: 0
+          runAsNonRoot: false
         volumeMounts:
         - name: registry-storage
           mountPath: /var/lib/registry
+      containers:
+      - name: registry
+        image: registry:2
+        securityContext:
+          runAsUser: 1000
+          runAsNonRoot: true
+        ports:
+        - containerPort: 5000
+        env:
+        - name: REGISTRY_HTTP_ADDR
+          value: ":5000"
+        - name: REGISTRY_STORAGE_FILESYSTEM_ROOTDIRECTORY
+          value: "/var/lib/registry"
+        - name: REGISTRY_LOG_LEVEL
+          value: "debug"
+        - name: REGISTRY_STORAGE_DELETE_ENABLED
+          value: "true"
+        volumeMounts:
+        - name: registry-storage
+          mountPath: /var/lib/registry
+        - name: registry-config
+          mountPath: /etc/docker/registry/config.yml
+          subPath: config.yml
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "200m"
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 5000
+          initialDelaySeconds: 10
+          periodSeconds: 30
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 5000
+          initialDelaySeconds: 5
+          periodSeconds: 10
       volumes:
       - name: registry-storage
-        emptyDir: {}
+        persistentVolumeClaim:
+          claimName: registry-pvc
+      - name: registry-config
+        configMap:
+          name: registry-config
 ---
 apiVersion: v1
 kind: Service
@@ -44,11 +164,17 @@ spec:
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: docker-registry-ingress
+  name: docker-registry
   annotations:
-    kubernetes.io/ingress.class: "nginx"
-    nginx.ingress.kubernetes.io/proxy-body-size: "0" # Prevents 413 Request Entity Too Large Error
+    nginx.ingress.kubernetes.io/proxy-body-size: "0"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "600"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
 spec:
+  tls:
+  - hosts:
+    - registry.rydersel.cloud
+    secretName: registry-tls
   rules:
   - host: registry.rydersel.cloud
     http:
@@ -60,8 +186,3 @@ spec:
             name: docker-registry
             port:
               number: 80
-  tls:
-    - hosts:
-        - registry.rydersel.cloud
-      secretName: wildcard-domain-certificate-prod
-

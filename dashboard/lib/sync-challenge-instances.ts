@@ -4,12 +4,31 @@ import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
+// Add retry logic for API calls
+async function fetchWithRetry(url: string, options = {}, retries = 3) {
+  for (let i = 0; i < retries; i++) {
+    try {
+      const response = await fetch(url, options);
+      if (!response.ok) {
+        throw new Error(`Request failed with status ${response.status}`);
+      }
+      return await response.json();
+    } catch (error) {
+      if (i < retries - 1) {
+        console.warn(`Retrying... (${i + 1}/${retries})`);
+      } else {
+        console.error('Failed to fetch after retries:', error);
+        throw error;
+      }
+    }
+  }
+}
+
 async function syncChallengeInstances() {
   try {
-    const response = await fetch('https://eductf.rydersel.cloud/instance-manager/api/list-challenge-pods');
-    const data = await response.json();
+    const data = await fetchWithRetry('https://eductf.rydersel.cloud/instance-manager/api/list-challenge-pods');
 
-    if (response.ok) {
+    if (data.ok) {
       const activePods = data.challenge_pods;
 
       // Clear existing challenge instances

@@ -9,9 +9,6 @@ console.log(`POD_NAME: ${env.POD_NAME}`);
 console.log(`CONTAINER_NAME: ${env.CONTAINER_NAME}`);
 console.log(`KUBERNETES_HOST: ${env.KUBERNETES_HOST}`);
 console.log(`KUBERNETES_NAMESPACE: ${env.KUBERNETES_NAMESPACE}`);
-console.log(`KUBERNETES_SERVICE_TOKEN: ${env.KUBERNETES_SERVICE_ACCOUNT_TOKEN}`);
-
-// For security reasons, do not log the token ... Fuck you im doing it
 
 app.get("/", express.static("public"));
 app.use("/static", express.static("public/static"));

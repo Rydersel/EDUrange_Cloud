@@ -32,8 +32,18 @@ spec:
     - containerPort: 3000
       name: webos-http
     env:
-    - name: CHALLENGE_API_URL
+    - name: NEXT_PUBLIC_POD_NAME
+      value: "$(POD_NAME)"
+    - name: NEXT_PUBLIC_APPS_CONFIG
+      value: "$(NEXT_PUBLIC_APPS_CONFIG)"
+    - name: NEXT_PUBLIC_CHALLENGE_POD_NAME
+      value: "$(POD_NAME)"
+    - name: NEXT_PUBLIC_CHALLENGE_API_URL
       value: "http://localhost:5000/execute"
+    - name: NEXT_PUBLIC_TERMINAL_URL
+      value: "https://terminal-$(POD_NAME).$(INGRESS_URL)"
+    - name: NEXT_PUBLIC_CHALLENGE_URL
+      value: "https://$(POD_NAME).$(INGRESS_URL)"
   - name: terminal
     image: registry.rydersel.cloud/terminal
     ports:

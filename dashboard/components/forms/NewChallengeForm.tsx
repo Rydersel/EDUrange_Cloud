@@ -49,11 +49,15 @@ export default function NewChallengeForm({ userId }) {
 
     async function fetchChallenges() {
       try {
-        const challengesResponse = await fetch('/api/challenges');
-        const challenges = await challengesResponse.json();
-        setChallenges(challenges);
+        const response = await fetch('/api/challenges');
+        if (!response.ok) {
+          throw new Error('Failed to fetch challenges');
+        }
+        const data = await response.json();
+        console.log('Fetched challenges:', data); // Debug log
+        setChallenges(data);
       } catch (error) {
-        console.error('Error fetching data:', error);
+        console.error('Error fetching challenges:', error);
       }
     }
 
@@ -117,39 +121,34 @@ export default function NewChallengeForm({ userId }) {
     try {
       const appsConfigToUse = overriddenConfig.length > 0 ? overriddenConfig : appsConfig;
       const appsConfigString = JSON.stringify(appsConfigToUse);
-      const newUserId = generateUserId(userEmail); // Generate the new user ID format
 
-      const response = await fetch('https://eductf.rydersel.cloud/instance-manager/api/start-challenge', {
+      const response = await fetch('/api/challenges/instance', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          user_id: userId,
-          challenge_instance_id: uuidv4(),
-          challenge_image: challengeImage,
-          apps_config: appsConfigString,
-          chal_type: challengeType
+          challengeImage,
+          appsConfig: appsConfigString,
+          challengeType
         }),
       });
 
-      const contentType = response.headers.get('content-type');
-      let result;
-      if (contentType && contentType.includes('application/json')) {
-        result = await response.json();
-      } else {
-        throw new Error('Invalid response format');
+      if (!response.ok) {
+        const error = await response.text();
+        throw new Error(error);
       }
 
-      if (response.ok) {
+      const result = await response.json();
+
+      if (result.success) {
         router.push('/dashboard/challenge');
       } else {
-        console.log("Waiting for Challenge URL");
-        alert(result.error || 'Error creating challenge');
+        throw new Error(result.error || 'Failed to create challenge');
       }
     } catch (error) {
       console.error('Error creating challenge:', error);
-      alert('Error creating challenge');
+      alert(error.message || 'Error creating challenge');
     } finally {
       setLoading(false);
     }
@@ -159,10 +158,15 @@ export default function NewChallengeForm({ userId }) {
     setSelectedChallengeId(selectedChallengeId);
     const selectedChallenge = challenges.find(challenge => challenge.id === selectedChallengeId);
     if (selectedChallenge) {
-      setAppsConfig(selectedChallenge.AppsConfig);
-      setOverriddenConfig(selectedChallenge.AppsConfig);
-      setChallengeType(selectedChallenge.challengeType.name);
-      setChallengeImage(selectedChallenge.challengeImage);
+      console.log('Selected challenge:', selectedChallenge); // Debug log
+      setChallengeType(selectedChallenge.challengeType?.name || '');
+      setChallengeImage(selectedChallenge.challengeImage || '');
+      
+      // Set app configs if available
+      if (selectedChallenge.appConfigs && selectedChallenge.appConfigs.length > 0) {
+        setAppsConfig(selectedChallenge.appConfigs);
+        setOverriddenConfig(selectedChallenge.appConfigs);
+      }
     }
   };
 

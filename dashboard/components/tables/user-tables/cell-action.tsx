@@ -1,32 +1,46 @@
 'use client';
 import { AlertModal } from '@/components/modal/alert-modal';
-import { UpdateUserModal } from '@/components/modal/update-user-modal';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
-import { User } from '@prisma/client';
-import { Edit, MoreHorizontal, Trash } from 'lucide-react';
+import { User, UserRole, Session } from '@prisma/client';
+import { Edit, MoreHorizontal, Trash, Shield } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
+import { useSession } from 'next-auth/react';
+import { toast } from 'sonner';
+
+interface UserWithRelations extends User {
+  sessions: Session[];
+  memberOf: { id: string; name: string }[];
+  instructorGroups: { id: string; name: string }[];
+  challengeCompletions: { id: string; pointsEarned: number }[];
+}
 
 interface CellActionProps {
-  data: User;
+  data: UserWithRelations;
 }
 
 export const CellAction: React.FC<CellActionProps> = ({ data }) => {
   const [loading, setLoading] = useState(false);
   const [alertOpen, setAlertOpen] = useState(false);
-  const [updateOpen, setUpdateOpen] = useState(false);
   const router = useRouter();
+  const { data: session } = useSession();
 
-  const onConfirm = async () => {
-    setLoading(true);
+  // Only allow admins to perform these actions
+  if (!session?.user || session.user.role !== 'ADMIN') {
+    return null;
+  }
+
+  const onDelete = async () => {
     try {
+      setLoading(true);
       const response = await fetch(`/api/users/${data.id}`, {
         method: 'DELETE',
       });
@@ -35,37 +49,37 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
         throw new Error('Failed to delete user');
       }
 
-      const result = await response.json();
-      console.log('User deleted successfully:', result);
+      toast.success('User deleted successfully');
       router.refresh();
     } catch (error) {
-      console.error('Error deleting user:', error);
+      toast.error('Error deleting user');
+      console.error('Error:', error);
     } finally {
       setLoading(false);
       setAlertOpen(false);
     }
   };
 
-  const handleUpdate = async (updatedUser: Partial<User>) => {
-    setLoading(true);
+  const onRoleChange = async (newRole: UserRole) => {
     try {
-      const response = await fetch(`/api/users/${data.id}`, {
-        method: 'PUT',
+      setLoading(true);
+      const response = await fetch(`/api/users/${data.id}/role`, {
+        method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(updatedUser),
+        body: JSON.stringify({ role: newRole }),
       });
 
       if (!response.ok) {
-        throw new Error('Failed to update user');
+        throw new Error('Failed to update user role');
       }
 
-      const result = await response.json();
-      console.log('User updated successfully:', result);
+      toast.success('User role updated successfully');
       router.refresh();
     } catch (error) {
-      console.error('Error updating user:', error);
+      toast.error('Error updating user role');
+      console.error('Error:', error);
     } finally {
       setLoading(false);
     }
@@ -76,16 +90,10 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
       <AlertModal
         isOpen={alertOpen}
         onClose={() => setAlertOpen(false)}
-        onConfirm={onConfirm}
+        onConfirm={onDelete}
         loading={loading}
       />
-      <UpdateUserModal
-        isOpen={updateOpen}
-        onClose={() => setUpdateOpen(false)}
-        user={data}
-        onUpdate={handleUpdate}
-      />
-      <DropdownMenu modal={false}>
+      <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button variant="ghost" className="h-8 w-8 p-0">
             <span className="sr-only">Open menu</span>
@@ -94,12 +102,38 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
           <DropdownMenuLabel>Actions</DropdownMenuLabel>
-
-          <DropdownMenuItem onClick={() => setUpdateOpen(true)}>
-            <Edit className="mr-2 h-4 w-4" /> Update
+          <DropdownMenuItem
+            onClick={() => router.push(`/dashboard/users/${data.id}`)}
+          >
+            <Edit className="mr-2 h-4 w-4" /> View Details
           </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => setAlertOpen(true)}>
-            <Trash className="mr-2 h-4 w-4" /> Delete
+          <DropdownMenuSeparator />
+          <DropdownMenuLabel>Change Role</DropdownMenuLabel>
+          <DropdownMenuItem
+            onClick={() => onRoleChange('ADMIN')}
+            disabled={data.role === 'ADMIN'}
+          >
+            <Shield className="mr-2 h-4 w-4" /> Make Admin
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            onClick={() => onRoleChange('INSTRUCTOR')}
+            disabled={data.role === 'INSTRUCTOR'}
+          >
+            <Shield className="mr-2 h-4 w-4" /> Make Instructor
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            onClick={() => onRoleChange('STUDENT')}
+            disabled={data.role === 'STUDENT'}
+          >
+            <Shield className="mr-2 h-4 w-4" /> Make Student
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem
+            onClick={() => setAlertOpen(true)}
+            className="text-red-600"
+            disabled={data.id === session?.user?.id}
+          >
+            <Trash className="mr-2 h-4 w-4" /> Delete User
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>

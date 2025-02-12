@@ -17,7 +17,7 @@ export default async function ChallengesPage() {
   // @ts-ignore
   const user = await prisma.user.findUnique({ where: { email: session.user.email } });
 
-  if (!user  || !user.admin) {
+  if (!user  || !user.role.includes('ADMIN')) {
     redirect('/invalid-permission'); // Redirect if not admin
   }
 
@@ -25,7 +25,7 @@ export default async function ChallengesPage() {
     <div className="flex-1 space-y-4 p-4 pt-6 md:p-8">
       <BreadCrumb items={breadcrumbItems} />
       <InstanceComponent />
-      
+
     </div>
   );
 }

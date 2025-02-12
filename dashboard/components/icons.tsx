@@ -4,7 +4,7 @@ import {
   Check,
   ChevronLeft,
   ChevronRight,
-  CircuitBoardIcon,
+  CircuitBoard,
   Command,
   CreditCard,
   File,
@@ -12,10 +12,10 @@ import {
   HelpCircle,
   Image,
   Laptop,
-  LayoutDashboardIcon,
+  LayoutDashboard,
   Loader2,
   LogIn,
-  LucideIcon,
+  LogOut,
   LucideProps,
   Moon,
   MoreVertical,
@@ -26,25 +26,26 @@ import {
   Trash,
   Twitter,
   User,
-  User2Icon,
-  UserX2Icon,
-  X
+  User2,
+  UserX2,
+  X,
+  Trophy,
 } from 'lucide-react';
 
-export type Icon = LucideIcon;
+export type Icon = typeof LogIn;
 
 export const Icons = {
-  dashboard: LayoutDashboardIcon,
+  dashboard: LayoutDashboard,
   logo: Command,
   login: LogIn,
   close: X,
-  profile: User2Icon,
+  profile: User2,
   spinner: Loader2,
-  kanban: CircuitBoardIcon,
+  kanban: CircuitBoard,
   chevronLeft: ChevronLeft,
   chevronRight: ChevronRight,
   trash: Trash,
-  employee: UserX2Icon,
+  employee: UserX2,
   post: FileText,
   page: File,
   media: Image,
@@ -60,6 +61,7 @@ export const Icons = {
   sun: SunMedium,
   moon: Moon,
   laptop: Laptop,
+  trophy: Trophy,
   gitHub: ({ ...props }: LucideProps) => (
     <svg
       aria-hidden="true"
@@ -78,5 +80,6 @@ export const Icons = {
     </svg>
   ),
   twitter: Twitter,
-  check: Check
+  check: Check,
+  circuit: CircuitBoard,
 };

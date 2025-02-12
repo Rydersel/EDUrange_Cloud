@@ -25,10 +25,19 @@ export interface AppConfig {
   width: number;
   height: number;
   disableScrolling?: boolean;
-  url?: string; // Optional
-  description?: string; // Optional
-  questions?: any[]; // Optional
-  launch_on_startup?: boolean; // Optional
+  url?: string;
+  description?: string;
+  questions?: any[];
+  launch_on_startup?: boolean;
+  pages?: Array<{
+    instructions: string;
+    questions?: Array<{
+      type?: string;
+      content: string;
+      id?: string;
+      points: number;
+    }>;
+  }>;
 }
 
 export type User = {
@@ -93,7 +102,7 @@ export const defaultAppsConfig: AppConfig[] = [
 export const navItems: NavItem[] = [
   {
     title: 'Home',
-    href: '/dashboard/home',
+    href: '/home',
     icon: 'logo',
     label: 'home'
   },
@@ -110,10 +119,25 @@ export const navItems: NavItem[] = [
     label: 'Challenges'
   },
   {
+    title: 'Competitions',
+    href: '/dashboard/competitions',
+    icon: 'trophy',
+    label: 'competitions'
+  },
+  {
     title: 'Users',
     href: '/dashboard/users',
     icon: 'user',
-    label: 'users'
+    label: 'users',
+    adminOnly: true
+  },
+  {
+    title: 'Logs',
+    href: '/dashboard/logs',
+    icon: 'circuit',
+    label: 'logs',
+    adminOnly: true
   }
-
 ];
+
+export const IMG_MAX_LIMIT = 3;

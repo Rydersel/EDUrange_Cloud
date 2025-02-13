@@ -1,40 +1,39 @@
-import { ActivityEventType } from '@prisma/client';
-import { prisma } from './prisma';
+import axios from 'axios';
 import * as dotenv from 'dotenv';
 import path from 'path';
 
-// Load environment variables from .env file
+// Load environment variables
 dotenv.config({ path: path.resolve(process.cwd(), '.env') });
 
 const DATABASE_API_URL = process.env.DATABASE_API_URL || 'http://localhost:8000';
 
-type LogSeverity = 'INFO' | 'WARNING' | 'ERROR' | 'CRITICAL';
+// Define event types to match backend
+export enum ActivityEventType {
+  CHALLENGE_STARTED = "CHALLENGE_STARTED",
+  CHALLENGE_COMPLETED = "CHALLENGE_COMPLETED",
+  GROUP_JOINED = "GROUP_JOINED",
+  GROUP_CREATED = "GROUP_CREATED",
+  GROUP_LEFT = "GROUP_LEFT",
+  GROUP_DELETED = "GROUP_DELETED",
+  GROUP_UPDATED = "GROUP_UPDATED",
+  GROUP_MEMBER_REMOVED = "GROUP_MEMBER_REMOVED",
+  ACCESS_CODE_GENERATED = "ACCESS_CODE_GENERATED",
+  ACCESS_CODE_USED = "ACCESS_CODE_USED",
+  ACCESS_CODE_EXPIRED = "ACCESS_CODE_EXPIRED",
+  ACCESS_CODE_DELETED = "ACCESS_CODE_DELETED",
+  USER_REGISTERED = "USER_REGISTERED",
+  USER_LOGGED_IN = "USER_LOGGED_IN",
+  USER_ROLE_CHANGED = "USER_ROLE_CHANGED",
+  USER_UPDATED = "USER_UPDATED",
+  USER_DELETED = "USER_DELETED",
+  CHALLENGE_INSTANCE_CREATED = "CHALLENGE_INSTANCE_CREATED",
+  CHALLENGE_INSTANCE_DELETED = "CHALLENGE_INSTANCE_DELETED",
+  QUESTION_ATTEMPTED = "QUESTION_ATTEMPTED",
+  QUESTION_COMPLETED = "QUESTION_COMPLETED",
+  SYSTEM_ERROR = "SYSTEM_ERROR"
+}
 
-// Define all possible event types to ensure type safety
-const EVENT_TYPES = {
-  CHALLENGE_STARTED: 'CHALLENGE_STARTED',
-  CHALLENGE_COMPLETED: 'CHALLENGE_COMPLETED',
-  CHALLENGE_INSTANCE_CREATED: 'CHALLENGE_INSTANCE_CREATED',
-  CHALLENGE_INSTANCE_DELETED: 'CHALLENGE_INSTANCE_DELETED',
-  GROUP_JOINED: 'GROUP_JOINED',
-  GROUP_CREATED: 'GROUP_CREATED',
-  GROUP_LEFT: 'GROUP_LEFT',
-  GROUP_DELETED: 'GROUP_DELETED',
-  GROUP_UPDATED: 'GROUP_UPDATED',
-  GROUP_MEMBER_REMOVED: 'GROUP_MEMBER_REMOVED',
-  ACCESS_CODE_GENERATED: 'ACCESS_CODE_GENERATED',
-  ACCESS_CODE_EXPIRED: 'ACCESS_CODE_EXPIRED',
-  ACCESS_CODE_DELETED: 'ACCESS_CODE_DELETED',
-  ACCESS_CODE_USED: 'ACCESS_CODE_USED',
-  QUESTION_ATTEMPTED: 'QUESTION_ATTEMPTED',
-  QUESTION_COMPLETED: 'QUESTION_COMPLETED',
-  USER_REGISTERED: 'USER_REGISTERED',
-  USER_LOGGED_IN: 'USER_LOGGED_IN',
-  USER_ROLE_CHANGED: 'USER_ROLE_CHANGED',
-  USER_UPDATED: 'USER_UPDATED',
-  USER_DELETED: 'USER_DELETED',
-  SYSTEM_ERROR: 'SYSTEM_ERROR'
-} as const;
+export type LogSeverity = 'INFO' | 'WARNING' | 'ERROR' | 'CRITICAL';
 
 interface LogActivityParams {
   eventType: ActivityEventType;
@@ -48,35 +47,21 @@ interface LogActivityParams {
 }
 
 export class ActivityLogger {
-  static async logActivity({
-    eventType,
-    userId,
-    severity = 'INFO',
-    challengeId,
-    groupId,
-    challengeInstanceId,
-    accessCodeId,
-    metadata
-  }: LogActivityParams) {
+  static async logActivity(params: LogActivityParams) {
     try {
-      const data = {
-        eventType,
-        userId,
-        challengeId,
-        groupId,
-        challengeInstanceId,
-        accessCodeId,
-        metadata,
-        timestamp: new Date()
+      // Add timestamp to metadata if not present
+      if (!params.metadata.timestamp) {
+        params.metadata.timestamp = new Date().toISOString();
+      }
+
+      // Convert metadata to JSON string
+      const payload = {
+        ...params,
+        metadata: JSON.stringify(params.metadata)
       };
 
-      if (severity) {
-        Object.assign(data, { severity });
-      }
-      
-      return await prisma.activityLog.create({
-        data
-      });
+      const response = await axios.post(`${DATABASE_API_URL}/activity/log`, payload);
+      return response.data;
     } catch (error) {
       console.error('Error logging activity:', error);
       return null;
@@ -91,11 +76,11 @@ export class ActivityLogger {
     challengeInstanceId: string | undefined,
     metadata: Record<string, any>
   ) {
-    const severityMap: Record<string, LogSeverity> = {
-      'CHALLENGE_STARTED': 'INFO',
-      'CHALLENGE_COMPLETED': 'INFO',
-      'CHALLENGE_INSTANCE_CREATED': 'INFO',
-      'CHALLENGE_INSTANCE_DELETED': 'INFO'
+    const severityMap: Partial<Record<ActivityEventType, LogSeverity>> = {
+      [ActivityEventType.CHALLENGE_STARTED]: 'INFO',
+      [ActivityEventType.CHALLENGE_COMPLETED]: 'INFO',
+      [ActivityEventType.CHALLENGE_INSTANCE_CREATED]: 'INFO',
+      [ActivityEventType.CHALLENGE_INSTANCE_DELETED]: 'INFO'
     };
 
     return this.logActivity({
@@ -104,10 +89,7 @@ export class ActivityLogger {
       challengeId,
       challengeInstanceId,
       severity: severityMap[eventType] || 'INFO',
-      metadata: {
-        timestamp: new Date().toISOString(),
-        ...metadata
-      }
+      metadata
     });
   }
 
@@ -119,11 +101,11 @@ export class ActivityLogger {
     groupId: string,
     metadata: Record<string, any>
   ) {
-    const severityMap: Record<string, LogSeverity> = {
-      'ACCESS_CODE_GENERATED': 'INFO',
-      'ACCESS_CODE_EXPIRED': 'WARNING',
-      'ACCESS_CODE_DELETED': 'WARNING',
-      'ACCESS_CODE_USED': 'INFO'
+    const severityMap: Partial<Record<ActivityEventType, LogSeverity>> = {
+      [ActivityEventType.ACCESS_CODE_GENERATED]: 'INFO',
+      [ActivityEventType.ACCESS_CODE_EXPIRED]: 'WARNING',
+      [ActivityEventType.ACCESS_CODE_DELETED]: 'WARNING',
+      [ActivityEventType.ACCESS_CODE_USED]: 'INFO'
     };
 
     return this.logActivity({
@@ -132,10 +114,7 @@ export class ActivityLogger {
       accessCodeId,
       groupId,
       severity: severityMap[eventType] || 'INFO',
-      metadata: {
-        timestamp: new Date().toISOString(),
-        ...metadata
-      }
+      metadata
     });
   }
 
@@ -146,13 +125,13 @@ export class ActivityLogger {
     groupId: string,
     metadata: Record<string, any>
   ) {
-    const severityMap: Record<string, LogSeverity> = {
-      'GROUP_CREATED': 'INFO',
-      'GROUP_JOINED': 'INFO',
-      'GROUP_LEFT': 'INFO',
-      'GROUP_DELETED': 'WARNING',
-      'GROUP_UPDATED': 'INFO',
-      'GROUP_MEMBER_REMOVED': 'WARNING'
+    const severityMap: Partial<Record<ActivityEventType, LogSeverity>> = {
+      [ActivityEventType.GROUP_CREATED]: 'INFO',
+      [ActivityEventType.GROUP_JOINED]: 'INFO',
+      [ActivityEventType.GROUP_LEFT]: 'INFO',
+      [ActivityEventType.GROUP_DELETED]: 'WARNING',
+      [ActivityEventType.GROUP_UPDATED]: 'INFO',
+      [ActivityEventType.GROUP_MEMBER_REMOVED]: 'WARNING'
     };
 
     return this.logActivity({
@@ -160,10 +139,7 @@ export class ActivityLogger {
       userId,
       groupId,
       severity: severityMap[eventType] || 'INFO',
-      metadata: {
-        timestamp: new Date().toISOString(),
-        ...metadata
-      }
+      metadata
     });
   }
 
@@ -173,29 +149,26 @@ export class ActivityLogger {
     userId: string,
     metadata: Record<string, any>
   ) {
-    const severityMap: Record<string, LogSeverity> = {
-      'USER_REGISTERED': 'INFO',
-      'USER_LOGGED_IN': 'INFO',
-      'USER_ROLE_CHANGED': 'WARNING',
-      'USER_UPDATED': 'INFO',
-      'USER_DELETED': 'WARNING'
+    const severityMap: Partial<Record<ActivityEventType, LogSeverity>> = {
+      [ActivityEventType.USER_REGISTERED]: 'INFO',
+      [ActivityEventType.USER_LOGGED_IN]: 'INFO',
+      [ActivityEventType.USER_ROLE_CHANGED]: 'WARNING',
+      [ActivityEventType.USER_UPDATED]: 'INFO',
+      [ActivityEventType.USER_DELETED]: 'WARNING'
     };
 
     return this.logActivity({
       eventType,
       userId,
       severity: severityMap[eventType] || 'INFO',
-      metadata: {
-        timestamp: new Date().toISOString(),
-        ...metadata
-      }
+      metadata
     });
   }
 
   // System Error
   static async logSystemError(userId: string, metadata: Record<string, any>) {
     return this.logActivity({
-      eventType: EVENT_TYPES.SYSTEM_ERROR as ActivityEventType,
+      eventType: ActivityEventType.SYSTEM_ERROR,
       userId,
       severity: 'ERROR',
       metadata: {
@@ -213,9 +186,9 @@ export class ActivityLogger {
     groupId: string,
     metadata: Record<string, any>
   ) {
-    const severityMap: Record<string, LogSeverity> = {
-      'QUESTION_ATTEMPTED': 'INFO',
-      'QUESTION_COMPLETED': 'INFO'
+    const severityMap: Partial<Record<ActivityEventType, LogSeverity>> = {
+      [ActivityEventType.QUESTION_ATTEMPTED]: 'INFO',
+      [ActivityEventType.QUESTION_COMPLETED]: 'INFO'
     };
 
     return this.logActivity({
@@ -224,10 +197,7 @@ export class ActivityLogger {
       challengeId,
       groupId,
       severity: severityMap[eventType] || 'INFO',
-      metadata: {
-        timestamp: new Date().toISOString(),
-        ...metadata
-      }
+      metadata
     });
   }
 
@@ -244,7 +214,7 @@ export class ActivityLogger {
     }
   ) {
     return this.logQuestionEvent(
-      'QUESTION_ATTEMPTED' as ActivityEventType,
+      ActivityEventType.QUESTION_ATTEMPTED,
       userId,
       challengeId,
       groupId,
@@ -264,11 +234,11 @@ export class ActivityLogger {
     }
   ) {
     return this.logQuestionEvent(
-      'QUESTION_COMPLETED' as ActivityEventType,
+      ActivityEventType.QUESTION_COMPLETED,
       userId,
       challengeId,
       groupId,
       metadata
     );
   }
-} 
+}

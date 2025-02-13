@@ -77,6 +77,106 @@ enum LogSeverity {
 
 ## Implementation Details
 
+### Architecture Overview
+The activity logging system follows a client-server architecture:
+
+1. Frontend (Next.js Dashboard):
+   - Uses the ActivityLogger service to send events to the Database-API
+   - Handles event type validation and data formatting
+   - Manages error handling and retries
+
+2. Database-API (Flask):
+   - Exposes `/api/log` endpoint for activity logging
+   - Validates incoming event data
+   - Handles database operations via Prisma
+   - Manages error handling and response codes
+
+### Frontend Implementation
+
+The `ActivityLogger` class in `dashboard/lib/activity-logger.ts` provides centralized logging functionality:
+
+```typescript
+class ActivityLogger {
+  private static async logActivity({
+    eventType,
+    userId,
+    severity = 'INFO',
+    challengeId,
+    groupId,
+    challengeInstanceId,
+    accessCodeId,
+    metadata
+  }: LogActivityParams): Promise<void> {
+    try {
+      await axios.post(`${DATABASE_API_URL}/api/log`, {
+        eventType,
+        userId,
+        severity,
+        challengeId,
+        groupId,
+        challengeInstanceId,
+        accessCodeId,
+        metadata: metadata ? JSON.stringify(metadata) : null,
+        timestamp: new Date().toISOString()
+      });
+    } catch (error) {
+      console.error('Failed to log activity:', error);
+      // Error handling logic
+    }
+  }
+
+  // Specialized logging methods remain unchanged
+}
+```
+
+### Database-API Implementation
+
+The Flask API endpoint in `database-controller/api/app.py` handles activity logging:
+
+```python
+@app.route('/api/log', methods=['POST'])
+async def log_activity():
+    try:
+        data = request.json
+        
+        # Validate event type
+        if not isinstance(data['eventType'], str) or data['eventType'] not in ActivityEventType.__members__:
+            return jsonify({'error': 'Invalid event type'}), 400
+            
+        # Create activity log
+        await prisma.activitylog.create({
+            'data': {
+                'eventType': data['eventType'],
+                'userId': data['userId'],
+                'severity': data.get('severity', 'INFO'),
+                'challengeId': data.get('challengeId'),
+                'groupId': data.get('groupId'),
+                'challengeInstanceId': data.get('challengeInstanceId'),
+                'accessCodeId': data.get('accessCodeId'),
+                'metadata': data.get('metadata'),
+                'timestamp': data.get('timestamp', datetime.now().isoformat())
+            }
+        })
+        
+        return jsonify({'status': 'success'}), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+```
+
+### Error Handling
+
+1. Frontend:
+   - Handles network errors with retry logic
+   - Validates event types before sending
+   - Provides detailed error messages for debugging
+
+2. Database-API:
+   - Validates input data format and required fields
+   - Handles database connection errors
+   - Returns appropriate HTTP status codes
+   - Logs internal errors for monitoring
+
 ### ActivityLogger Service
 The `ActivityLogger` class provides centralized logging functionality with specialized methods for different event types:
 
@@ -184,23 +284,23 @@ await ActivityLogger.logQuestionAttempt(
 ## Integration Points
 
 1. User Management:
-   - Registration
-   - Login
-   - Profile updates
-   - Role changes
+   - Registration (auth.config.ts)
+   - Login (auth.config.ts)
+   - Profile updates (users/[id]/route.ts)
+   - Role changes (users/[id]/role/route.ts)
 
 2. Challenge System:
-   - Instance creation/deletion
-   - Challenge starts/completions
-   - Question attempts/completions
+   - Instance creation/deletion (challenges/[id]/route.ts)
+   - Challenge starts (challenges/start/route.ts)
+   - Challenge termination (challenges/terminate/route.ts)
 
 3. Competition Groups:
-   - Group creation/deletion
-   - Member management
-   - Access code operations
+   - Group creation/deletion (competition-groups/route.ts)
+   - Member management (competition-groups/[id]/users/route.ts)
+   - Access code operations (competition-groups/[id]/access-code/route.ts)
 
 4. WebOS Integration:
-   - Question attempts logging
+   - Question attempts (WebOS/webos-app/components/apps/challenge_prompt.js)
    - Challenge interaction tracking
 
 ## Viewing Logs

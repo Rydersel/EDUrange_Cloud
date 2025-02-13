@@ -3,8 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { User } from "@prisma/client";
-import { ActivityLogger } from '@/lib/activity-logger';
-import { ActivityEventType } from '@prisma/client';
+import { ActivityLogger, ActivityEventType } from '@/lib/activity-logger';
 
 export async function POST(req: Request) {
   try {
@@ -74,15 +73,14 @@ export async function POST(req: Request) {
 
     // Log the instance deletion
     await ActivityLogger.logChallengeEvent(
-      'CHALLENGE_INSTANCE_DELETED' as ActivityEventType,
+      ActivityEventType.CHALLENGE_INSTANCE_DELETED,
       session.user.id,
       instance.challengeId,
-      instanceId,
+      instance.id,
       {
-        terminatedBy: session.user.id,
-        competitionId: instance.competitionId,
-        terminationTime: new Date().toISOString(),
-        wasInstructor: isInstructor
+        challengeImage: instance.challengeImage,
+        challengeUrl: instance.challengeUrl,
+        deletionTime: new Date().toISOString()
       }
     );
 

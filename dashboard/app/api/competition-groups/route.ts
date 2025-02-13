@@ -5,8 +5,7 @@ import { authOptions } from '@/lib/auth';
 import { Session } from 'next-auth';
 import { z } from 'zod';
 import { extractChallengePoints } from '@/lib/utils';
-import { ActivityLogger } from '@/lib/activity-logger';
-import { ActivityEventType } from '@prisma/client';
+import { ActivityLogger, ActivityEventType } from '@/lib/activity-logger';
 
 interface CustomSession extends Session {
   user: {
@@ -23,7 +22,7 @@ const createGroupSchema = z.object({
   name: z.string().min(1, 'Name is required'),
   description: z.string().optional(),
   startDate: z.string().transform(str => new Date(str)),
-  endDate: z.string().optional().transform(str => str ? new Date(str) : undefined),
+  endDate: z.string().nullable().optional().transform(str => str ? new Date(str) : null),
   challengeIds: z.array(z.string()),
   instructorIds: z.array(z.string()),
   generateAccessCode: z.boolean(),
@@ -79,13 +78,15 @@ export async function POST(request: Request) {
 
     // Log group creation
     await ActivityLogger.logGroupEvent(
-      'GROUP_CREATED' as ActivityEventType,
+      ActivityEventType.GROUP_CREATED,
       session.user.id,
       group.id,
       {
         groupName: group.name,
-        createdBy: session.user.id,
-        createdAt: new Date().toISOString()
+        description: group.description,
+        startDate: group.startDate,
+        endDate: group.endDate,
+        timestamp: new Date().toISOString()
       }
     );
 
@@ -100,12 +101,19 @@ export async function POST(request: Request) {
 
     // Generate access code if requested
     if (validatedData.generateAccessCode) {
+      const code = generateAccessCode();
       await prisma.competitionAccessCode.create({
         data: {
-          code: generateAccessCode(),
+          code,
           groupId: group.id,
           createdBy: session.user.id,
         },
+      });
+      
+      return NextResponse.json({ 
+        success: true, 
+        groupId: group.id,
+        accessCode: code
       });
     }
 

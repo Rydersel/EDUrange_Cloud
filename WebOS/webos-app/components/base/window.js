@@ -166,6 +166,12 @@ export class Window extends Component {
         });
     }
 
+    getOpenInstancesCount = () => {
+        // Implement the logic to count open instances of the window
+        // This is a placeholder and should be replaced with the actual implementation
+        return 0;
+    }
+
     render() {
         const appConfig = this.props.apps.find(app => app.id === this.props.id.split('-')[0]);
         const disableScrolling = appConfig && appConfig.disableScrolling ? 'overflow-hidden' : 'overflow-y-auto';
@@ -192,7 +198,7 @@ export class Window extends Component {
                 >
                     <WindowYBorder resize={this.handleHorizontalResize} />
                     <WindowXBorder resize={this.handleVerticalResize} />
-                    <WindowTopBar title={`${this.props.title} ${this.props.id.includes('-') ? this.props.id.split('-')[1] : ''}`} />
+                    <WindowTopBar title={this.props.title} />
                     <WindowEditButtons minimize={this.minimizeWindow} maximize={this.maximizeWindow} isMaximized={this.state.maximized} close={this.closeWindow} id={this.id} />
                     {this.id === "settings" ? (
                         <Settings changeBackgroundImage={this.props.changeBackgroundImage} currBgImgName={this.props.bg_image_name} />

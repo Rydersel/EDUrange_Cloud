@@ -9,7 +9,7 @@ import {
   CardTitle
 } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Plus } from 'lucide-react';
+import { Plus, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { format } from "date-fns";
@@ -36,6 +36,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { useRouter } from "next/navigation";
 
 interface Competition {
   id: string;
@@ -63,6 +74,7 @@ interface CompetitionsListProps {
     upcoming: Competition[];
     past: Competition[];
   };
+  isAdmin: boolean;
 }
 
 type ExpiryOption = {
@@ -84,13 +96,16 @@ const getExpiryDate = (option: ExpiryOption) => {
   return option.getValue?.();
 };
 
-const CompetitionCard = ({ competition }: { competition: Competition }) => {
+const CompetitionCard = ({ competition, isAdmin }: { competition: Competition; isAdmin: boolean }) => {
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [showDialog, setShowDialog] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [accessCode, setAccessCode] = useState<string | null>(null);
   const [expiryOption, setExpiryOption] = useState<ExpiryOption>(EXPIRY_OPTIONS[0]);
   const [copied, setCopied] = useState(false);
   const { toast } = useToast();
+  const router = useRouter();
 
   const totalPoints = competition.challenges.reduce((sum, c) => sum + (c.points || 0), 0);
   const averageProgress = competition.members.length > 0
@@ -141,15 +156,58 @@ const CompetitionCard = ({ competition }: { competition: Competition }) => {
     setExpiryOption(EXPIRY_OPTIONS[0]);
   };
 
+  const handleDelete = async () => {
+    try {
+      setIsDeleting(true);
+      const response = await fetch(`/api/competition-groups/${competition.id}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to delete competition');
+      }
+
+      toast({
+        title: "Success",
+        description: "Competition deleted successfully",
+      });
+      router.refresh();
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to delete competition",
+        variant: "destructive",
+      });
+    } finally {
+      setIsDeleting(false);
+      setShowDeleteDialog(false);
+    }
+  };
+
   return (
     <>
       <Card>
         <CardHeader>
-          <CardTitle>{competition.name}</CardTitle>
-          <CardDescription>
-            {competition.startDate ? `Started ${format(new Date(competition.startDate), 'PPP')}` : 'Not started'} • 
-            {competition._count.members} participants
-          </CardDescription>
+          <div className="flex justify-between items-start">
+            <div>
+              <CardTitle>{competition.name}</CardTitle>
+              <CardDescription>
+                {competition.startDate ? `Started ${format(new Date(competition.startDate), 'PPP')}` : 'Not started'} • 
+                {competition._count.members} participants
+              </CardDescription>
+            </div>
+            {isAdmin && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="text-destructive hover:text-destructive"
+                onClick={() => setShowDeleteDialog(true)}
+                disabled={isDeleting}
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            )}
+          </div>
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
@@ -272,11 +330,45 @@ const CompetitionCard = ({ competition }: { competition: Competition }) => {
           )}
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure you want to delete &ldquo;{competition.name}&rdquo;?</AlertDialogTitle>
+            <AlertDialogDescription className="space-y-2">
+              <p>This action is permanent and cannot be undone. The following data will be deleted:</p>
+              <ul className="list-disc list-inside text-sm">
+                <li>All competition challenges and their configurations</li>
+                <li>All participant memberships and their scores</li>
+                <li>All competition access codes</li>
+              </ul>
+              <p className="text-sm mt-2">Note: Activity logs will be preserved for audit purposes.</p>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>No, keep competition</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDelete}
+              disabled={isDeleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {isDeleting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                'Yes, delete competition'
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 };
 
-export function CompetitionsList({ competitions }: CompetitionsListProps) {
+export function CompetitionsList({ competitions, isAdmin }: CompetitionsListProps) {
   return (
     <ScrollArea className="h-full">
       <div className="flex-1 space-y-4 p-4 pt-6 md:p-8">
@@ -305,7 +397,7 @@ export function CompetitionsList({ competitions }: CompetitionsListProps) {
           <TabsContent value="active" className="space-y-4">
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               {competitions.active.map((competition) => (
-                <CompetitionCard key={competition.id} competition={competition} />
+                <CompetitionCard key={competition.id} competition={competition} isAdmin={isAdmin} />
               ))}
               {competitions.active.length === 0 && (
                 <Card>
@@ -323,7 +415,7 @@ export function CompetitionsList({ competitions }: CompetitionsListProps) {
           <TabsContent value="upcoming" className="space-y-4">
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               {competitions.upcoming.map((competition) => (
-                <CompetitionCard key={competition.id} competition={competition} />
+                <CompetitionCard key={competition.id} competition={competition} isAdmin={isAdmin} />
               ))}
               {competitions.upcoming.length === 0 && (
                 <Card>
@@ -341,7 +433,7 @@ export function CompetitionsList({ competitions }: CompetitionsListProps) {
           <TabsContent value="past" className="space-y-4">
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               {competitions.past.map((competition) => (
-                <CompetitionCard key={competition.id} competition={competition} />
+                <CompetitionCard key={competition.id} competition={competition} isAdmin={isAdmin} />
               ))}
               {competitions.past.length === 0 && (
                 <Card>

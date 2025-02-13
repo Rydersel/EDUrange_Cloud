@@ -2,8 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import { ActivityLogger } from '@/lib/activity-logger';
-import { ActivityEventType } from '@prisma/client';
+import { ActivityLogger, ActivityEventType } from '@/lib/activity-logger';
 
 export async function DELETE(
   req: Request,
@@ -61,9 +60,9 @@ export async function DELETE(
       accessCode.id,
       params.id,
       {
-        code: params.code,
+        code: accessCode.code,
         deletedBy: session.user.id,
-        deletedAt: new Date().toISOString()
+        timestamp: new Date().toISOString()
       }
     );
 

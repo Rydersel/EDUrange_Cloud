@@ -1,30 +1,36 @@
 import React from 'react'
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
+import { cn } from '@/lib/utils';
+import { buttonVariants } from '@/components/ui/button';
+import { useSession } from 'next-auth/react';
+import { navItems } from '@/constants/data';
 
-interface NavigationProps {
-  filter: string
-  setFilter: (filter: string) => void
-}
+export function Navigation() {
+  const pathname = usePathname();
+  const { data: session } = useSession();
+  const isAdmin = session?.user?.role === 'ADMIN';
 
-export function Navigation({ filter, setFilter }: NavigationProps) {
   return (
-    <nav className="mb-8">
-      <ul className="flex space-x-6">
-        {["All Challenges", "Active", "Retired", "Favorites", "Unreleased"].map((item) => (
-          <li key={item}>
-            <button
-              onClick={() => setFilter(item.toLowerCase())}
-              className={`px-3 py-2 rounded-lg transition-colors ${
-                filter === item.toLowerCase()
-                  ? "bg-[#1E2B1E] text-white"
-                  : "text-gray-400 hover:text-white hover:bg-[#1E2B1E]/50"
-              }`}
-            >
-              {item}
-            </button>
-          </li>
+    <nav className="flex items-center space-x-4 lg:space-x-6">
+      {navItems
+        .filter((route) => !route.adminOnly || isAdmin)
+        .map((route) => (
+          <Link
+            key={route.href}
+            href={route.href}
+            className={cn(
+              buttonVariants({ variant: 'ghost' }),
+              pathname === route.href || pathname.startsWith(route.href + '/')
+                ? 'bg-muted hover:bg-muted'
+                : 'hover:bg-transparent hover:text-primary',
+              'justify-start'
+            )}
+          >
+            {route.title}
+          </Link>
         ))}
-      </ul>
     </nav>
-  )
+  );
 }
 

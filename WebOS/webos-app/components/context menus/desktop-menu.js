@@ -1,18 +1,23 @@
-
-
 import React, { useState, useEffect } from 'react'
 
 function DesktopMenu(props) {
-
-    const [isFullScreen, setIsFullScreen] = useState(false)
+    const [isFullScreen, setIsFullScreen] = useState(false);
+    const [menuStyle, setMenuStyle] = useState({});
+    const { position = { x: 0, y: 0 } } = props;
 
     useEffect(() => {
         document.addEventListener('fullscreenchange', checkFullScreen);
+        
+        // Calculate menu position on client side
+        setMenuStyle({
+            left: Math.min(position.x, window.innerWidth - 208), // 208px is menu width (w-52)
+            top: Math.min(position.y, window.innerHeight - 200), // 200px is approximate menu height
+        });
+
         return () => {
             document.removeEventListener('fullscreenchange', checkFullScreen);
         };
-    }, [])
-
+    }, [position]);
 
     const openTerminal = () => {
         props.openApp("terminal");
@@ -23,29 +28,29 @@ function DesktopMenu(props) {
     }
 
     const checkFullScreen = () => {
-        if (document.fullscreenElement) {
-            setIsFullScreen(true)
-        } else {
-            setIsFullScreen(false)
+        if (typeof document !== 'undefined') {
+            setIsFullScreen(!!document.fullscreenElement);
         }
     }
 
     const goFullScreen = () => {
-        // make website full screen
+        if (typeof document === 'undefined') return;
+        
         try {
             if (document.fullscreenElement) {
-                document.exitFullscreen()
+                document.exitFullscreen();
             } else {
-                document.documentElement.requestFullscreen()
+                document.documentElement.requestFullscreen();
             }
         }
         catch (e) {
-            console.log(e)
+            console.log(e);
         }
     }
 
     return (
         <div id="desktop-menu"
+             style={menuStyle}
              className={(props.active ? " block " : " hidden ") + " cursor-default w-52 context-menu-bg border text-left font-light border-gray-900 rounded text-white py-4 absolute z-50 text-sm"}>
             <div onClick={openSettings} className="w-full py-0.5 hover:bg-ub-warm-grey hover:bg-opacity-20 mb-1.5">
                 <span className="ml-5">Change Wallpaper</span>
@@ -61,10 +66,9 @@ function DesktopMenu(props) {
             <Devider/>
             <div onClick={() => {
                 localStorage.clear();
-                window.location.reload()
+                window.location.reload();
             }} className="w-full block cursor-default py-0.5 hover:bg-ub-warm-grey hover:bg-opacity-20 mb-1.5">
                 <span className="ml-5">Restart System</span>
-
             </div>
         </div>
     )
@@ -77,6 +81,5 @@ function Devider() {
         </div>
     );
 }
-
 
 export default DesktopMenu

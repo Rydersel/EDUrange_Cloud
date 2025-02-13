@@ -4,8 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { User } from "@prisma/client";
 import { transformToWebOSFormat, transformQuestionsToPromptApp } from "@/lib/webos/transform";
-import { ActivityLogger } from '@/lib/activity-logger';
-import { ActivityEventType } from '@prisma/client';
+import { ActivityLogger, ActivityEventType } from '@/lib/activity-logger';
 
 export async function POST(req: Request) {
   try {
@@ -37,13 +36,16 @@ export async function POST(req: Request) {
       );
     }
 
-    // Get challenge details with questions
+    // Get challenge details
     const challenge = await prisma.challenges.findUnique({
       where: { id: challengeId },
       include: {
         appConfigs: true,
-        questions: true,
-      },
+        questions: {
+          orderBy: { order: 'asc' }
+        },
+        challengeType: true
+      }
     });
 
     if (!challenge) {
@@ -161,17 +163,16 @@ export async function POST(req: Request) {
       },
     });
 
-    // Log challenge instance creation
+    // Log challenge start
     await ActivityLogger.logChallengeEvent(
-      'CHALLENGE_INSTANCE_CREATED' as ActivityEventType,
+      ActivityEventType.CHALLENGE_INSTANCE_CREATED,
       session.user.id,
       challengeId,
       challengeInstance.id,
       {
-        competitionId,
-        challengeImage: challenge.challengeImage,
-        challengeUrl: instanceData.challenge_url,
-        creationTime: new Date().toISOString()
+        challengeName: challenge.name,
+        challengeType: challenge.challengeType.name,
+        startTime: new Date().toISOString()
       }
     );
 
@@ -183,4 +184,4 @@ export async function POST(req: Request) {
       { status: 500 }
     );
   }
-} 
+}

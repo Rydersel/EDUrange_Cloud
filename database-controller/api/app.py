@@ -1,10 +1,22 @@
+import logging
+
 from flask import Flask, request, jsonify
 from prisma import Prisma
 from dotenv import load_dotenv
 import asyncio
 from flask_cors import CORS
 from datetime import datetime
+import json
+from enum import Enum
+from typing import Optional, Dict, Any
 
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
+logger = logging.getLogger(__name__)
 
 load_dotenv()  # Load environmental variables
 
@@ -16,7 +28,90 @@ prisma = Prisma()
 # Create an event loop and connect to Prisma database
 loop = asyncio.new_event_loop()
 asyncio.set_event_loop(loop)
-loop.run_until_complete(prisma.connect())
+try:
+    loop.run_until_complete(prisma.connect())
+    logger.info("Successfully connected to database")
+except Exception as e:
+    logger.error(f"Failed to connect to database: {str(e)}")
+    raise
+
+# Define the ActivityEventType enum to match Prisma schema
+class ActivityEventType(str, Enum):
+    CHALLENGE_STARTED = "CHALLENGE_STARTED"
+    CHALLENGE_COMPLETED = "CHALLENGE_COMPLETED"
+    GROUP_JOINED = "GROUP_JOINED"
+    GROUP_CREATED = "GROUP_CREATED"
+    GROUP_LEFT = "GROUP_LEFT"
+    GROUP_DELETED = "GROUP_DELETED"
+    GROUP_UPDATED = "GROUP_UPDATED"
+    GROUP_MEMBER_REMOVED = "GROUP_MEMBER_REMOVED"
+    ACCESS_CODE_GENERATED = "ACCESS_CODE_GENERATED"
+    ACCESS_CODE_USED = "ACCESS_CODE_USED"
+    ACCESS_CODE_EXPIRED = "ACCESS_CODE_EXPIRED"
+    ACCESS_CODE_DELETED = "ACCESS_CODE_DELETED"
+    USER_REGISTERED = "USER_REGISTERED"
+    USER_LOGGED_IN = "USER_LOGGED_IN"
+    USER_ROLE_CHANGED = "USER_ROLE_CHANGED"
+    USER_UPDATED = "USER_UPDATED"
+    USER_DELETED = "USER_DELETED"
+    CHALLENGE_INSTANCE_CREATED = "CHALLENGE_INSTANCE_CREATED"
+    CHALLENGE_INSTANCE_DELETED = "CHALLENGE_INSTANCE_DELETED"
+    QUESTION_ATTEMPTED = "QUESTION_ATTEMPTED"
+    QUESTION_COMPLETED = "QUESTION_COMPLETED"
+    SYSTEM_ERROR = "SYSTEM_ERROR"
+
+# Define the LogSeverity enum to match Prisma schema
+class LogSeverity(str, Enum):
+    INFO = "INFO"
+    WARNING = "WARNING"
+    ERROR = "ERROR"
+    CRITICAL = "CRITICAL"
+
+@app.route('/activity/log', methods=['POST'])
+def log_activity():
+    data = request.json
+    logger.debug(f"Received activity log request: {data.get('eventType')} for user {data.get('userId')}")
+
+    # Validate required fields
+    if not data.get('eventType') or not data.get('userId'):
+        logger.warning("Missing required fields in activity log request")
+        return jsonify({'error': 'eventType and userId are required'}), 400
+
+    try:
+        # Validate event type
+        if data['eventType'] not in [e.value for e in ActivityEventType]:
+            logger.warning(f"Invalid event type received: {data['eventType']}")
+            return jsonify({'error': f'Invalid event type: {data["eventType"]}'}), 400
+
+        # Validate severity if provided
+        if data.get('severity') and data['severity'] not in [s.value for s in LogSeverity]:
+            logger.warning(f"Invalid severity received: {data['severity']}")
+            return jsonify({'error': f'Invalid severity: {data["severity"]}'}), 400
+
+        # Prepare activity log data
+        log_data = {
+            'eventType': data['eventType'],
+            'userId': data['userId'],
+            'severity': data.get('severity', 'INFO'),
+            'metadata': data.get('metadata', {}),
+        }
+
+        # Add optional fields if they exist
+        optional_fields = ['challengeId', 'groupId', 'challengeInstanceId', 'accessCodeId']
+        for field in optional_fields:
+            if data.get(field):
+                log_data[field] = data[field]
+
+        # Create activity log entry
+        activity_log = loop.run_until_complete(prisma.activitylog.create(
+            data=log_data
+        ))
+        logger.info(f"Activity logged successfully: {data['eventType']}")
+        return jsonify(activity_log.dict()), 201
+
+    except Exception as e:
+        logger.error(f"Failed to log activity: {str(e)}")
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/add_points', methods=['POST'])
 def add_points():
@@ -25,7 +120,10 @@ def add_points():
     group_id = data.get('group_id')
     points = data.get('points')
 
+    logger.debug(f"Received points update request: {points} points for user {user_id} in group {group_id}")
+
     if not user_id or not group_id or not points:
+        logger.warning("Missing required fields in add_points request")
         return jsonify({'error': 'user_id, group_id, and points are required'}), 400
 
     try:
@@ -40,9 +138,11 @@ def add_points():
         ))
 
         if not user:
+            logger.warning(f"User not found: {user_id}")
             return jsonify({'error': 'User not found'}), 404
-        
+
         if not user.memberOf:
+            logger.warning(f"User {user_id} is not a member of group {group_id}")
             return jsonify({'error': 'User is not a member of this group'}), 403
 
         # Get current points
@@ -75,9 +175,10 @@ def add_points():
                 'points': new_points
             }
         ))
-
+        logger.info(f"Points updated successfully: User {user_id} now has {updated_points.points} points in group {group_id}")
         return jsonify(updated_points.dict())
     except Exception as e:
+        logger.error(f"Failed to update points: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/set_points', methods=['POST'])
@@ -103,7 +204,7 @@ def set_points():
 
         if not user:
             return jsonify({'error': 'User not found'}), 404
-        
+
         if not user.memberOf:
             return jsonify({'error': 'User is not a member of this group'}), 403
 
@@ -146,7 +247,7 @@ def get_points():
                 }
             }
         ))
-        
+
         if group_points:
             return jsonify({'points': group_points.points})
         else:
@@ -168,7 +269,7 @@ def get_challenge_instance():
             where={'id': challenge_instance_id},
             include={'user': True}  # Include user information
         ))
-        
+
         if not challenge_instance:
             return jsonify({'error': 'Challenge instance not found'}), 404
 
@@ -425,7 +526,7 @@ def get_user_progress(group_id, user_id):
             challenge_dict = challenge.dict()
             is_completed = len(challenge_dict['completions']) > 0
             points_earned = challenge_dict['completions'][0]['pointsEarned'] if is_completed else 0
-            
+
             progress.append({
                 'challengeId': challenge_dict['challengeId'],
                 'challengeName': challenge_dict['challenge']['name'],
@@ -433,7 +534,7 @@ def get_user_progress(group_id, user_id):
                 'completed': is_completed,
                 'pointsEarned': points_earned
             })
-            
+
             total_points += challenge_dict['points']
             earned_points += points_earned
 
@@ -536,7 +637,7 @@ def get_completed_questions():
                 'groupChallengeId': group_challenge_id
             }
         ))
-        
+
         return jsonify({
             'completed_questions': [completion.dict() for completion in completions]
         })
@@ -555,7 +656,7 @@ def get_question_details():
         question = loop.run_until_complete(prisma.challengequestion.find_unique(
             where={'id': question_id}
         ))
-        
+
         if not question:
             return jsonify({'error': 'Question not found'}), 404
 
@@ -567,8 +668,10 @@ def get_question_details():
 @app.route('/challenge/details', methods=['GET'])
 def get_challenge_details():
     challenge_id = request.args.get('challenge_id')
+    logger.debug(f"Fetching challenge details for: {challenge_id}")
 
     if not challenge_id:
+        logger.warning("Missing challenge_id in request")
         return jsonify({'error': 'challenge_id is required'}), 400
 
     try:
@@ -584,10 +687,12 @@ def get_challenge_details():
                 'appConfigs': True
             }
         ))
-        
+
         if not challenge:
+            logger.warning(f"Challenge not found: {challenge_id}")
             return jsonify({'error': 'Challenge not found'}), 404
 
+        logger.info(f"Successfully retrieved challenge: {challenge_id}")
         challenge_dict = challenge.dict()
         return jsonify({
             'id': challenge_dict['id'],
@@ -599,34 +704,7 @@ def get_challenge_details():
             'appConfigs': challenge_dict['appConfigs']
         })
     except Exception as e:
-        print(f"Error in get_challenge_details: {str(e)}")
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/activity/log', methods=['POST'])
-def log_activity():
-    data = request.json
-    try:
-        # Validate required fields
-        if not all(k in data for k in ['eventType', 'userId']):
-            return jsonify({'error': 'eventType and userId are required'}), 400
-
-        # Create activity log entry with new fields
-        activity_log = loop.run_until_complete(prisma.activitylog.create(
-            data={
-                'eventType': data['eventType'],
-                'severity': data.get('severity', 'INFO'),
-                'userId': data['userId'],
-                'challengeId': data.get('challengeId'),
-                'groupId': data.get('groupId'),
-                'challengeInstanceId': data.get('challengeInstanceId'),
-                'accessCodeId': data.get('accessCodeId'),
-                'metadata': data.get('metadata', {})
-            }
-        ))
-
-        return jsonify(activity_log.dict())
-    except Exception as e:
-        print(f"Error in log_activity: {str(e)}")
+        logger.error(f"Error fetching challenge details: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 # For Dev

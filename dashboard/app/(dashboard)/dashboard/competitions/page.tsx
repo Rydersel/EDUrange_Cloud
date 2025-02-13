@@ -10,10 +10,25 @@ export default async function CompetitionsPage() {
     redirect('/')
   }
 
+  // Check if user is admin
+  const user = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: { role: true }
+  });
+
+  const isAdmin = user?.role === 'ADMIN';
+
   const now = new Date();
 
-  const competitions = await prisma.competitionGroup.findMany({
-    include: {
+  const rawCompetitions = await prisma.competitionGroup.findMany({
+    select: {
+      id: true,
+      name: true,
+      description: true,
+      startDate: true,
+      endDate: true,
+      createdAt: true,
+      updatedAt: true,
       _count: {
         select: {
           members: true,
@@ -21,13 +36,30 @@ export default async function CompetitionsPage() {
         }
       },
       challenges: {
-        include: {
-          challenge: true,
+        select: {
+          points: true,
         }
       },
-      members: true,
-    },
+      members: {
+        select: {
+          id: true,
+          groupPoints: {
+            select: {
+              points: true
+            }
+          }
+        }
+      }
+    }
   });
+
+  // Transform the data to match the Competition type
+  const competitions = rawCompetitions.map(comp => ({
+    ...comp,
+    members: comp.members.map(member => ({
+      points: member.groupPoints[0]?.points || 0
+    }))
+  }));
 
   // Sort competitions into categories
   const active = competitions.filter((c) =>
@@ -38,5 +70,5 @@ export default async function CompetitionsPage() {
     c.endDate && c.endDate < now
   );
 
-  return <CompetitionsList competitions={{ active, upcoming, past }} />;
+  return <CompetitionsList competitions={{ active, upcoming, past }} isAdmin={isAdmin} />;
 }

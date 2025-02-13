@@ -23,7 +23,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
-import { AlertCircle, CalendarIcon, ChevronLeft, GripVertical, X, Loader2 } from 'lucide-react';
+import { AlertCircle, CalendarIcon, ChevronLeft, GripVertical, X, Loader2, Check, Copy } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -147,6 +147,10 @@ export default function CreateCompetitionPage() {
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [challengeTypes, setChallengeTypes] = useState<Record<string, ChallengeTypeGroup>>({});
   const [instructors, setInstructors] = useState<Instructor[]>([]);
+  const [showAccessCodeDialog, setShowAccessCodeDialog] = useState(false);
+  const [accessCode, setAccessCode] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  const [createdCompetitionId, setCreatedCompetitionId] = useState<string | null>(null);
   const {toast} = useToast();
 
 
@@ -313,6 +317,14 @@ export default function CreateCompetitionPage() {
     return Object.keys(errors).length === 0;
   };
 
+  const handleCopy = async () => {
+    if (accessCode) {
+      await navigator.clipboard.writeText(accessCode);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!validateForm()) return;
@@ -333,13 +345,21 @@ export default function CreateCompetitionPage() {
       }
 
       const data = await response.json();
+      setCreatedCompetitionId(data.groupId);
+      
+      // If generateAccessCode was true, show the dialog with the code
+      if (form.generateAccessCode && data.accessCode) {
+        setAccessCode(data.accessCode);
+        setShowAccessCodeDialog(true);
+      } else {
+        // Redirect to the new competition page
+        window.location.href = `/dashboard/competitions/${data.groupId}`;
+      }
+
       toast({
         title: 'Success',
         description: 'Competition created successfully',
       });
-
-      // Redirect to the new competition page
-      window.location.href = `/dashboard/competitions/${data.groupId}`;
     } catch (error) {
       console.error('Error creating competition:', error);
       toast({
@@ -425,7 +445,7 @@ export default function CreateCompetitionPage() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label>Start Date</Label>
+                  <Label>Start Date and Time</Label>
                   <Popover>
                     <PopoverTrigger asChild>
                       <Button
@@ -436,16 +456,65 @@ export default function CreateCompetitionPage() {
                           )}
                       >
                         <CalendarIcon className="mr-2 h-4 w-4"/>
-                        {form.startDate ? format(form.startDate, "PPP") : "Pick a date"}
+                        {form.startDate ? format(form.startDate, "PPP p") : "Pick a date and time"}
                       </Button>
                     </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0">
-                      <Calendar
-                          mode="single"
-                          selected={form.startDate ?? undefined}
-                          onSelect={handleDateSelect('startDate')}
-                          disabled={(date) => date < new Date()}
-                      />
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <div className="p-4 border-b border-border">
+                        <Calendar
+                            mode="single"
+                            selected={form.startDate ?? undefined}
+                            onSelect={handleDateSelect('startDate')}
+                            initialFocus
+                        />
+                        <div className="mt-4">
+                          <Label>Time</Label>
+                          <div className="flex items-center space-x-2">
+                            <div>
+                              <Input
+                                  type="number"
+                                  min="0"
+                                  max="23"
+                                  placeholder="HH"
+                                  value={form.startDate ? format(form.startDate, 'HH') : ''}
+                                  onChange={(e) => {
+                                    const hours = parseInt(e.target.value);
+                                    if (hours >= 0 && hours <= 23) {
+                                      const date = form.startDate || new Date();
+                                      const newDate = new Date(date);
+                                      newDate.setHours(hours);
+                                      setForm(prev => ({...prev, startDate: newDate}));
+                                    }
+                                  }}
+                                  className="w-20"
+                              />
+                            </div>
+                            <span className="text-lg">:</span>
+                            <div>
+                              <Input
+                                  type="number"
+                                  min="0"
+                                  max="59"
+                                  placeholder="MM"
+                                  value={form.startDate ? format(form.startDate, 'mm') : ''}
+                                  onChange={(e) => {
+                                    const minutes = parseInt(e.target.value);
+                                    if (minutes >= 0 && minutes <= 59) {
+                                      const date = form.startDate || new Date();
+                                      const newDate = new Date(date);
+                                      newDate.setMinutes(minutes);
+                                      setForm(prev => ({...prev, startDate: newDate}));
+                                    }
+                                  }}
+                                  className="w-20"
+                              />
+                            </div>
+                          </div>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Hours (0-23) : Minutes (0-59)
+                          </p>
+                        </div>
+                      </div>
                     </PopoverContent>
                   </Popover>
                   {formErrors.startDate && (
@@ -454,7 +523,7 @@ export default function CreateCompetitionPage() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label>End Date (Optional)</Label>
+                  <Label>End Date and Time (Optional)</Label>
                   <Popover>
                     <PopoverTrigger asChild>
                       <Button
@@ -465,16 +534,68 @@ export default function CreateCompetitionPage() {
                           )}
                       >
                         <CalendarIcon className="mr-2 h-4 w-4"/>
-                        {form.endDate ? format(form.endDate, "PPP") : "Pick a date"}
+                        {form.endDate ? format(form.endDate, "PPP p") : "Pick a date and time"}
                       </Button>
                     </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0">
-                      <Calendar
-                          mode="single"
-                          selected={form.endDate ?? undefined}
-                          onSelect={handleDateSelect('endDate')}
-                          disabled={(date) => date < (form.startDate ?? new Date())}
-                      />
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <div className="p-4 border-b border-border">
+                        <Calendar
+                            mode="single"
+                            selected={form.endDate ?? undefined}
+                            onSelect={handleDateSelect('endDate')}
+                            disabled={(date) => date < (form.startDate ?? new Date())}
+                            initialFocus
+                        />
+                        <div className="mt-4">
+                          <Label>Time</Label>
+                          <div className="flex items-center space-x-2">
+                            <div>
+                              <Input
+                                  type="number"
+                                  min="0"
+                                  max="23"
+                                  placeholder="HH"
+                                  value={form.endDate ? format(form.endDate, 'HH') : ''}
+                                  onChange={(e) => {
+                                    const hours = parseInt(e.target.value);
+                                    if (hours >= 0 && hours <= 23) {
+                                      const date = form.endDate || new Date();
+                                      const newDate = new Date(date);
+                                      newDate.setHours(hours);
+                                      setForm(prev => ({...prev, endDate: newDate}));
+                                    }
+                                  }}
+                                  className="w-20"
+                                  disabled={!form.endDate}
+                              />
+                            </div>
+                            <span className="text-lg">:</span>
+                            <div>
+                              <Input
+                                  type="number"
+                                  min="0"
+                                  max="59"
+                                  placeholder="MM"
+                                  value={form.endDate ? format(form.endDate, 'mm') : ''}
+                                  onChange={(e) => {
+                                    const minutes = parseInt(e.target.value);
+                                    if (minutes >= 0 && minutes <= 59) {
+                                      const date = form.endDate || new Date();
+                                      const newDate = new Date(date);
+                                      newDate.setMinutes(minutes);
+                                      setForm(prev => ({...prev, endDate: newDate}));
+                                    }
+                                  }}
+                                  className="w-20"
+                                  disabled={!form.endDate}
+                              />
+                            </div>
+                          </div>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Hours (0-23) : Minutes (0-59)
+                          </p>
+                        </div>
+                      </div>
                     </PopoverContent>
                   </Popover>
                 </div>
@@ -628,6 +749,52 @@ export default function CreateCompetitionPage() {
               </Alert>
           )}
         </div>
+
+        <Dialog open={showAccessCodeDialog} onOpenChange={(open) => {
+          setShowAccessCodeDialog(open);
+          if (!open && createdCompetitionId) {
+            // Redirect to the competition page when dialog is closed
+            window.location.href = `/dashboard/competitions/${createdCompetitionId}`;
+          }
+        }}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Access Code Generated</DialogTitle>
+              <DialogDescription>
+                Share this code with participants to join the competition:
+              </DialogDescription>
+            </DialogHeader>
+            <div className="flex items-center justify-center space-x-2 p-4">
+              <code className="bg-muted px-4 py-2 rounded-md text-lg font-mono">
+                {accessCode}
+              </code>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={handleCopy}
+              >
+                {copied ? (
+                  <Check className="h-4 w-4" />
+                ) : (
+                  <Copy className="h-4 w-4" />
+                )}
+              </Button>
+            </div>
+            <div className="text-center text-sm text-muted-foreground">
+              <p>This code will never expire.</p>
+            </div>
+            <div className="mt-4 flex justify-end">
+              <Button onClick={() => {
+                setShowAccessCodeDialog(false);
+                if (createdCompetitionId) {
+                  window.location.href = `/dashboard/competitions/${createdCompetitionId}`;
+                }
+              }}>
+                Continue to Competition
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
       </form>
   );
 }

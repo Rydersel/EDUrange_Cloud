@@ -5,8 +5,8 @@ import type { Adapter } from 'next-auth/adapters';
 import CredentialsProvider from 'next-auth/providers/credentials';
 import GithubProvider from 'next-auth/providers/github';
 import { PrismaAdapter } from '@auth/prisma-adapter';
-import { PrismaClient, UserRole, ActivityEventType } from '@prisma/client';
-import { ActivityLogger } from './lib/activity-logger';
+import { PrismaClient, UserRole } from '@prisma/client';
+import { ActivityLogger, ActivityEventType } from './lib/activity-logger';
 import { User } from 'next-auth';
 
 declare module 'next-auth' {
@@ -80,12 +80,12 @@ const authConfig: AuthOptions = {
 
             // Log the registration
             await ActivityLogger.logUserEvent(
-              'USER_REGISTERED' as ActivityEventType,
+              ActivityEventType.USER_REGISTERED,
               newUser.id,
               {
-                provider: account.provider,
                 email: oauthUser.email,
-                name: oauthUser.name
+                name: oauthUser.name,
+                timestamp: new Date().toISOString()
               }
             );
 
@@ -108,11 +108,12 @@ const authConfig: AuthOptions = {
           } else {
             // This is a login
             await ActivityLogger.logUserEvent(
-              'USER_LOGGED_IN' as ActivityEventType,
+              ActivityEventType.USER_LOGGED_IN,
               existingUser.id,
               {
-                provider: account.provider,
-                loginTime: new Date().toISOString()
+                email: existingUser.email,
+                name: existingUser.name,
+                timestamp: new Date().toISOString()
               }
             );
           }

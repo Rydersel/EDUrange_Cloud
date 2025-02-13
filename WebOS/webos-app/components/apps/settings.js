@@ -9,9 +9,45 @@ const MenuItem = ({ label, isActive, onClick }) => (
   </button>
 );
 
+const ToggleSwitch = ({ isEnabled, onToggle, label }) => (
+  <div className="flex items-center justify-between py-2">
+    <span className="text-gray-300">{label}</span>
+    <button
+      onClick={onToggle}
+      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${
+        isEnabled ? 'bg-blue-600' : 'bg-gray-600'
+      }`}
+    >
+      <span
+        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+          isEnabled ? 'translate-x-6' : 'translate-x-1'
+        }`}
+      />
+    </button>
+  </div>
+);
+
 export function Settings(props) {
   const [activeSection, setActiveSection] = useState('general');
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isDockHoverEnabled, setIsDockHoverEnabled] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('dock-hover-enabled') === 'true';
+    }
+    return true;
+  });
+  const [dockScale, setDockScale] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return parseFloat(localStorage.getItem('dock-scale')) || 1;
+    }
+    return 1;
+  });
+  const [isBattlefrontEnabled, setIsBattlefrontEnabled] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('battlefront-animation-enabled') === 'true';
+    }
+    return false;
+  });
 
   const wallpapers = {
     "wall-1": "./images/wallpapers/wall-1.webp",
@@ -42,12 +78,40 @@ export function Settings(props) {
     }
   };
 
+  const toggleDockHover = () => {
+    const newValue = !isDockHoverEnabled;
+    setIsDockHoverEnabled(newValue);
+    localStorage.setItem('dock-hover-enabled', newValue);
+    // Update dock class
+    const dock = document.querySelector('.dock-bar');
+    if (dock) {
+      dock.classList.toggle('dock-hover-enabled', newValue);
+    }
+  };
+
+  const toggleBattlefrontAnimation = () => {
+    const newValue = !isBattlefrontEnabled;
+    setIsBattlefrontEnabled(newValue);
+    localStorage.setItem('battlefront-animation-enabled', newValue);
+  };
+
   const resetInstance = () => {
     document.cookie.split(";").forEach(function(c) {
       document.cookie = c.replace(/^ +/, "").replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/");
     });
     localStorage.clear();
     window.location.reload();
+  };
+
+  const handleDockScaleChange = (e) => {
+    const newScale = parseFloat(e.target.value);
+    setDockScale(newScale);
+    localStorage.setItem('dock-scale', newScale);
+    // Update dock scale
+    const dock = document.querySelector('.dock-bar');
+    if (dock) {
+      dock.style.setProperty('--dock-scale', newScale);
+    }
   };
 
   const renderGeneralSection = () => (
@@ -61,10 +125,29 @@ export function Settings(props) {
       </button>
       <button
         onClick={resetInstance}
-        className="bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded w-full"
+        className="bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded mb-4 w-full"
       >
         Reset Instance
       </button>
+      <div className="pt-2 border-t border-gray-600">
+        <ToggleSwitch
+          isEnabled={isDockHoverEnabled}
+          onToggle={toggleDockHover}
+          label="Dock Hover Effect"
+        />
+        <div className="mt-4">
+          <label className="block text-gray-300 mb-2">Dock Scale: {dockScale.toFixed(2)}x</label>
+          <input
+            type="range"
+            min="0.5"
+            max="1.5"
+            step="0.1"
+            value={dockScale}
+            onChange={handleDockScaleChange}
+            className="w-full h-2 bg-gray-600 rounded-lg appearance-none cursor-pointer"
+          />
+        </div>
+      </div>
     </div>
   );
 
@@ -88,6 +171,19 @@ export function Settings(props) {
             style={{ backgroundImage: `url(${wallpapers[name]})`, backgroundSize: "cover", backgroundRepeat: "no-repeat", backgroundPosition: "center center" }}
           ></button>
         ))}
+      </div>
+    </div>
+  );
+
+  const renderSpecialSection = () => (
+    <div className="p-4 text-gray-300">
+      <h2 className="text-2xl font-bold mb-4">Special Features</h2>
+      <div className="pt-2">
+        <ToggleSwitch
+          isEnabled={isBattlefrontEnabled}
+          onToggle={toggleBattlefrontAnimation}
+          label="Battlefront Animation"
+        />
       </div>
     </div>
   );
@@ -122,6 +218,11 @@ export function Settings(props) {
           onClick={() => setActiveSection('wallpaper')}
         />
         <MenuItem
+          label="Special"
+          isActive={activeSection === 'special'}
+          onClick={() => setActiveSection('special')}
+        />
+        <MenuItem
           label="About"
           isActive={activeSection === 'about'}
           onClick={() => setActiveSection('about')}
@@ -130,6 +231,7 @@ export function Settings(props) {
       <div className="w-3/4 overflow-y-auto bg-gray-800 relative z-20">
         {activeSection === 'general' && renderGeneralSection()}
         {activeSection === 'wallpaper' && renderWallpaperSection()}
+        {activeSection === 'special' && renderSpecialSection()}
         {activeSection === 'about' && renderAboutSection()}
       </div>
     </div>

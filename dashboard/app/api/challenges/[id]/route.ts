@@ -2,8 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import { ActivityLogger } from '@/lib/activity-logger';
-import { ActivityEventType } from '@prisma/client';
+import { ActivityLogger, ActivityEventType } from '@/lib/activity-logger';
 
 export async function GET(
   req: Request,
@@ -37,6 +36,20 @@ export async function GET(
         challengeName: challenge.name,
         challengeType: challenge.challengeType.name,
         startTime: new Date().toISOString()
+      }
+    );
+
+    // Log challenge instance creation
+    await ActivityLogger.logChallengeEvent(
+      ActivityEventType.CHALLENGE_INSTANCE_CREATED,
+      session.user.id,
+      params.id,
+      undefined,
+      {
+        competitionId: undefined,
+        challengeImage: challenge.challengeImage,
+        challengeUrl: undefined,
+        creationTime: new Date().toISOString()
       }
     );
 

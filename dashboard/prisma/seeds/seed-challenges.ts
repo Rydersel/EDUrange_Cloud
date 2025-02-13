@@ -143,7 +143,7 @@ async function main() {
   // Create a test challenge using the challenge type
   const challenge = await prisma.challenges.create({
     data: {
-      name: 'Bandit-2',
+      name: 'Bandit-1',
       challengeImage: 'registry.rydersel.cloud/bandit1',
       difficulty: ChallengeDifficulty.MEDIUM,
       challengeTypeId: challengeType.id,

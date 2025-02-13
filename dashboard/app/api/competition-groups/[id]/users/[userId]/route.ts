@@ -2,8 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import { ActivityLogger } from '@/lib/activity-logger';
-import { ActivityEventType } from '@prisma/client';
+import { ActivityLogger, ActivityEventType } from '@/lib/activity-logger';
 
 export async function DELETE(
   req: Request,
@@ -54,17 +53,19 @@ export async function DELETE(
         params.userId,
         params.id,
         {
-          groupName: group.name
+          leftBy: 'self',
+          timestamp: new Date().toISOString()
         }
       );
     } else {
       await ActivityLogger.logGroupEvent(
         ActivityEventType.GROUP_MEMBER_REMOVED,
-        params.userId,
+        session.user.id,
         params.id,
         {
+          removedUserId: params.userId,
           removedBy: session.user.id,
-          groupName: group.name
+          timestamp: new Date().toISOString()
         }
       );
     }

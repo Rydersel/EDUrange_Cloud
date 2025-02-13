@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import { ActivityLogger } from '@/lib/activity-logger';
+import { ActivityLogger, ActivityEventType } from '@/lib/activity-logger';
 import { UserRole } from '@prisma/client';
 import { z } from 'zod';
 
@@ -46,11 +46,16 @@ export async function PATCH(
     });
 
     // Log the role change
-    await ActivityLogger.logUserRoleChange(params.id, {
-      previousRole: currentUser.role,
-      newRole: role,
-      changedBy: session.user.id
-    });
+    await ActivityLogger.logUserEvent(
+      ActivityEventType.USER_ROLE_CHANGED,
+      params.id,
+      {
+        changedBy: session.user.id,
+        oldRole: currentUser.role,
+        newRole: role,
+        timestamp: new Date().toISOString()
+      }
+    );
 
     return NextResponse.json(updatedUser);
   } catch (error) {

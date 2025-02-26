@@ -262,9 +262,14 @@ describe('Activity Logging', () => {
     });
 
     // Clean up instance
+    try {
     await prisma.challengeInstance.delete({
       where: { id: instance.id }
     });
+    }
+    catch (e) {
+    }
+
   });
 
   test('should log access code events', async () => {

@@ -1,18 +1,47 @@
-# docker buildx build --platform linux/amd64,linux/arm64 -t registry.rydersel.cloud/terminal . --push
+# docker buildx build --platform linux/amd64 -t registry.rydersel.cloud/terminal . --push
 
-FROM node:15.0.1-alpine3.12
+# Build stage
+FROM node:20-alpine AS builder
 
 WORKDIR /app
 
+# Copy package files
 COPY package*.json ./
 
-RUN npm install
+# Install dependencies
+RUN npm ci
 
+# Copy source files
 COPY . .
 
-CMD ["npm", "run", "dev"]
+# Build the application
+RUN npm run build
 
+# Production stage
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Copy package files
+COPY package*.json ./
+
+# Install production dependencies only
+RUN npm ci --only=production
+
+# Copy built files from builder stage
+COPY --from=builder /app/public ./public
+COPY --from=builder /app/server ./server
+
+# Set environment variables
+ENV NODE_ENV=production
+ENV PORT=3001
+
+# Expose the port
 EXPOSE 3001
+
+# Start the server
+CMD ["node", "server/index.js"]
+
 
 
 

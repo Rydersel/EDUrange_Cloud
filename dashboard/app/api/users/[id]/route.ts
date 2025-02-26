@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import { ActivityLogger } from '@/lib/activity-logger';
+import { ActivityLogger, ActivityEventType } from '@/lib/activity-logger';
 import { z } from 'zod';
 
 const prisma = new PrismaClient();
@@ -95,14 +95,14 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
     });
 
     // Log the deletion
-    await ActivityLogger.logUserDeletion(id, {
-      deletedBy: session.user.id,
-      userData: {
-        email: user.email,
-        name: user.name,
-        role: user.role
+    await ActivityLogger.logUserEvent(
+      ActivityEventType.USER_DELETED,
+      id,
+      {
+        deletedBy: session.user.id,
+        timestamp: new Date().toISOString()
       }
-    });
+    );
 
     return new NextResponse(null, { status: 204 });
   } catch (error) {
@@ -162,13 +162,15 @@ export async function PATCH(
     });
 
     // Log the update
-    await ActivityLogger.logUserUpdate(params.id, {
-      updatedBy: session.user.id,
-      changes: {
-        name: name !== currentUser.name ? { from: currentUser.name, to: name } : undefined,
-        image: image !== currentUser.image ? { from: currentUser.image, to: image } : undefined
+    await ActivityLogger.logUserEvent(
+      ActivityEventType.USER_UPDATED,
+      params.id,
+      {
+        updatedBy: session.user.id,
+        updatedFields: Object.keys(body),
+        timestamp: new Date().toISOString()
       }
-    });
+    );
 
     return NextResponse.json(updatedUser);
   } catch (error) {

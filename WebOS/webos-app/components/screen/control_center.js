@@ -1,5 +1,3 @@
-
-
 import React from 'react';
 import App from '../base/base_app';
 
@@ -83,7 +81,7 @@ export class Control_center extends React.Component {
             }
 
             appsJsx.push(
-                <div key={index} className="control-center-app">
+                <div key={index} className="control-center-app -my-3">
                     <App {...props} />
                 </div>
             );
@@ -101,10 +99,10 @@ export class Control_center extends React.Component {
 
     render() {
         return (
-            <div ref={this.controlCenterRef} className={`control-center absolute h-full top-7 w-full z-20 pl-12 justify-center md:pl-20 border-black border-opacity-60 bg-black bg-opacity-70 ${this.state.visible ? 'fade-in' : 'fade-out'}`}>
-                <div className={"flex md:pr-20 pt-5 align-center justify-center"}>
+            <div ref={this.controlCenterRef} className={`control-center absolute h-full top-7 w-full z-50 pl-12 justify-center md:pl-20 border-black border-opacity-60 bg-black bg-opacity-70 ${this.state.visible ? 'fade-in' : 'fade-out'}`}>
+                <div className={"flex md:pr-20 pt-2 align-center justify-center"}>
                 </div>
-                <div className={"grid md:grid-cols-6 md:grid-rows-3 grid-cols-3 grid-rows-6 md:gap-4 gap-1 md:px-20 px-5 pt-10 justify-center"}>
+                <div className={"grid md:grid-cols-6 md:grid-rows-9 grid-cols-3 grid-rows-6 md:gap-x-4 gap-x-2 gap-y-0 md:px-20 px-5 pt-5 justify-center"}>
                     {this.renderApps()}
                 </div>
                 <div className={"flex align-center justify-center w-full fixed bottom-0 mb-15 pr-20  md:pr-20 "}>

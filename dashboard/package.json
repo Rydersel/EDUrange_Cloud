@@ -13,7 +13,11 @@
     "format": "prettier . --write",
     "prepare": "husky",
     "seed:challenge-types": "ts-node prisma/seeds/seed-challenge-types.ts",
-    "seed:challenges": "npm run seed:challenge-types && ts-node prisma/seeds/seed-challenges.ts"
+    "seed:challenges": "npm run seed:challenge-types && ts-node prisma/seeds/seed-challenges.ts",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "test:ci": "jest --ci --coverage --maxWorkers=2"
   },
   "lint-staged": {
     "**/*": [
@@ -78,7 +82,7 @@
     "nextjs-toploader": "^1.6.12",
     "pg": "^8.12.0",
     "postcss": "8.4.28",
-    "prisma": "^5.16.1",
+    "prisma": "^5.22.0",
     "react": "^18.2.0",
     "react-day-picker": "^8.9.1",
     "react-dom": "^18.2.0",
@@ -97,16 +101,17 @@
     "three-globe": "^2.31.1",
     "tsparticles": "^3.5.0",
     "uploadthing": "^5.7.4",
-    "uuid": "^9.0.1",
     "zod": "^3.24.1",
     "zustand": "^4.4.6"
   },
   "devDependencies": {
+    "@jest/globals": "^29.7.0",
+    "@testing-library/jest-dom": "^6.6.3",
     "@types/axios": "^0.9.36",
     "@types/jest": "^29.5.14",
     "@types/lru-cache": "^7.10.9",
     "@types/node": "^20.14.10",
-    "@types/uuid": "^9.0.7",
+    "@types/uuid": "^9.0.8",
     "@typescript-eslint/eslint-plugin": "^6.11.0",
     "axios": "^1.7.9",
     "husky": "^9.0.11",
@@ -118,6 +123,7 @@
     "ts-jest": "^29.2.5",
     "ts-node": "^10.9.2",
     "typescript": "^5.5.3",
+    "uuid": "^11.0.5",
     "vitest": "^3.0.4"
   }
 }

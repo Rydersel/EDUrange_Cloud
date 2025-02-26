@@ -2,8 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import { ActivityLogger } from '@/lib/activity-logger';
-import { ActivityEventType } from '@prisma/client';
+import { ActivityLogger, ActivityEventType } from '@/lib/activity-logger';
 import { z } from 'zod';
 
 const updateGroupSchema = z.object({
@@ -181,12 +180,13 @@ export async function PATCH(
 
     // Log the update
     await ActivityLogger.logGroupEvent(
-      'GROUP_UPDATED' as ActivityEventType,
+      ActivityEventType.GROUP_UPDATED,
       session.user.id,
       params.id,
       {
-        changes: validatedData,
-        updatedBy: session.user.id
+        updatedFields: Object.keys(validatedData),
+        updatedBy: session.user.id,
+        timestamp: new Date().toISOString()
       }
     );
 
@@ -210,63 +210,67 @@ export async function DELETE(
       return new NextResponse('Unauthorized', { status: 401 });
     }
 
-    // Check if user is an instructor for this group
-    const group = await prisma.competitionGroup.findFirst({
-      where: {
-        id: params.id,
-        instructors: {
-          some: {
-            id: session.user.id
-          }
-        }
-      },
+    // Check if user is an admin
+    const user = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: { role: true }
+    });
+
+    if (user?.role !== 'ADMIN') {
+      return new NextResponse('Forbidden', { status: 403 });
+    }
+
+    // Get the group data before deletion
+    const group = await prisma.competitionGroup.findUnique({
+      where: { id: params.id },
       include: {
-        members: {
+        challenges: {
+          include: {
+            challenge: true
+          }
+        },
+        members: true,
+        accessCodes: true,
+        _count: {
           select: {
-            id: true
+            members: true,
+            challenges: true,
+            accessCodes: true
           }
         }
       }
     });
 
     if (!group) {
-      return new NextResponse('Unauthorized or group not found', { status: 403 });
+      return new NextResponse('Competition not found', { status: 404 });
     }
 
-    // Delete the group
+    // Log the deletion before actually deleting
+    await ActivityLogger.logGroupEvent(
+      ActivityEventType.GROUP_DELETED,
+      session.user.id,
+      params.id,
+      {
+        groupName: group.name,
+        groupDescription: group.description,
+        startDate: group.startDate,
+        endDate: group.endDate,
+        deletedBy: session.user.id,
+        timestamp: new Date().toISOString()
+      }
+    );
+
+    // Delete the competition group and all related data
     await prisma.competitionGroup.delete({
       where: { id: params.id }
     });
 
-    // Log the deletion for each member
-    await Promise.all([
-      // Log for the instructor who deleted it
-      ActivityLogger.logGroupEvent(
-        'GROUP_DELETED' as ActivityEventType,
-        session.user.id,
-        params.id,
-        {
-          deletedBy: session.user.id,
-          groupName: group.name
-        }
-      ),
-      // Log for each member
-      ...group.members.map(member =>
-        ActivityLogger.logGroupEvent(
-          'GROUP_DELETED' as ActivityEventType,
-          member.id,
-          params.id,
-          {
-            deletedBy: session.user.id,
-            groupName: group.name
-          }
-        )
-      )
-    ]);
-
-    return new NextResponse(null, { status: 204 });
+    return NextResponse.json({ 
+      success: true,
+      message: 'Competition deleted successfully'
+    });
   } catch (error) {
-    console.error('Error deleting group:', error);
+    console.error('Error deleting competition group:', error);
     return new NextResponse('Internal Server Error', { status: 500 });
   }
 }

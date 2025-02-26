@@ -1,4 +1,4 @@
-# docker buildx build --platform linux/amd64,linux/arm64 -t registry.rydersel.cloud/webos . --push
+# docker buildx build --platform linux/amd64 -t registry.rydersel.cloud/webos . --push
 
 FROM node:18.18.1
 

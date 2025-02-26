@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { ActivityLogger } from '@/lib/activity-logger';
-import { ActivityEventType } from '@prisma/client';
+import { ActivityLogger, ActivityEventType } from '@/lib/activity-logger';
 
 export async function POST(req: Request) {
   try {
@@ -26,7 +25,8 @@ export async function POST(req: Request) {
         code.groupId,
         {
           code: code.code,
-          expiredAt: new Date().toISOString(),
+          expirationTime: code.expiresAt,
+          timestamp: new Date().toISOString(),
           groupName: code.group.name
         }
       )

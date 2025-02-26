@@ -1,2 +1,0 @@
-
-Redesigned how challenges are stored in the database, specifically how their appconfigs are stored.

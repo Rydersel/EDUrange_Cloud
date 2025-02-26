@@ -1,4 +1,3 @@
-
 import React, { Component } from "react";
 
 export class DockApp extends Component {
@@ -33,6 +32,8 @@ export class DockApp extends Component {
     };
 
     render() {
+        const isHoverEnabled = typeof window !== 'undefined' && localStorage.getItem('dock-hover-enabled') === 'true';
+        
         return (
             <div
                 tabIndex="0"
@@ -43,7 +44,9 @@ export class DockApp extends Component {
                 onMouseLeave={() => {
                     this.setState({ showTitle: false });
                 }}
-                className={(this.props.isClose[this.id] === false && this.props.isFocus[this.id] ? "bg-white bg-opacity-10 " : "") + " w-auto p-2 outline-none relative transition hover:bg-white hover:bg-opacity-10 rounded m-1"}
+                className={(this.props.isClose[this.id] === false && this.props.isFocus[this.id] ? "bg-white bg-opacity-10 " : "") + 
+                    " dock-app w-auto p-2 outline-none relative transition rounded m-1" + 
+                    (!isHoverEnabled ? " hover:bg-white hover:bg-opacity-10" : "")}
                 id={"dock-" + this.props.id}
             >
                 <img width="28px" height="28px" className="w-7" src={this.props.icon} alt="Webos App Icon" />

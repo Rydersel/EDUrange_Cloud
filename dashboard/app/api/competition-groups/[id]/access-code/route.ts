@@ -2,8 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import { ActivityLogger } from '@/lib/activity-logger';
-import { ActivityEventType } from '@prisma/client';
+import { ActivityLogger, ActivityEventType } from '@/lib/activity-logger';
 
 function generateAccessCode(): string {
   const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
@@ -64,10 +63,10 @@ export async function POST(
       accessCode.id,
       params.id,
       {
-        code: code,
-        expiresAt: expiresAt ? new Date(expiresAt).toISOString() : null,
-        groupName: accessCode.group.name,
-        generatedAt: new Date().toISOString()
+        code: accessCode.code,
+        expiresAt: accessCode.expiresAt,
+        maxUses: accessCode.maxUses,
+        timestamp: new Date().toISOString()
       }
     );
 

@@ -3,27 +3,159 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <link
-      rel="stylesheet"
-      href="https://cdnjs.cloudflare.com/ajax/libs/xterm/3.14.5/xterm.min.css"
-    />
+    <title>Pod Terminal</title>
+    
+    <!-- xterm.js CSS -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.min.css" />
+    
     <style>
+      :root {
+        --terminal-background: #000000;
+        --status-height: 22px;
+        --status-background: #1a1a1a;
+        --status-color: #ffffff;
+        --status-success: #28a745;
+        --status-error: #dc3545;
+        --status-warning: #ffc107;
+        --status-info: #17a2b8;
+      }
+      
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      
       body {
         margin: 0;
         padding: 0;
         overflow: hidden;
-      }
-      .fullscreen {
+        background-color: var(--terminal-background);
         height: 100vh;
         width: 100vw;
+      }
+      
+      #terminal {
+        height: calc(100vh - var(--status-height));
+        width: 100vw;
+        padding: 4px;
+        position: relative;
+      }
+      
+      .status-bar {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        height: var(--status-height);
+        background-color: var(--status-background);
+        color: var(--status-color);
+        padding: 0 8px;
+        font-family: Monaco, monospace;
+        font-size: 12px;
+        line-height: var(--status-height);
+        z-index: 1000;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+
+      .status-item {
+        margin-right: 16px;
+        display: flex;
+        align-items: center;
+      }
+
+      .status-item:last-child {
+        margin-right: 0;
+      }
+
+      .status-indicator {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        margin-right: 6px;
+      }
+
+      .status-indicator.connected {
+        background-color: var(--status-success);
+      }
+
+      .status-indicator.disconnected {
+        background-color: var(--status-error);
+      }
+
+      /* Custom scrollbar styles */
+      .xterm-viewport::-webkit-scrollbar {
+        width: 8px;
+      }
+      
+      .xterm-viewport::-webkit-scrollbar-track {
+        background: rgba(0, 0, 0, 0.1);
+      }
+      
+      .xterm-viewport::-webkit-scrollbar-thumb {
+        background: rgba(255, 255, 255, 0.2);
+        border-radius: 4px;
+      }
+      
+      .xterm-viewport::-webkit-scrollbar-thumb:hover {
+        background: rgba(255, 255, 255, 0.3);
+      }
+
+      .font-controls {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .control-btn {
+        background: rgba(255, 255, 255, 0.1);
+        border: none;
+        color: var(--status-color);
+        width: 20px;
+        height: 20px;
+        border-radius: 4px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 14px;
+        line-height: 1;
         padding: 0;
-        margin: 0;
+      }
+
+      .control-btn:hover {
+        background: rgba(255, 255, 255, 0.2);
+      }
+
+      .control-btn:active {
+        background: rgba(255, 255, 255, 0.15);
       }
     </style>
-    <title>Pod Terminal</title>
   </head>
   <body>
-    <div id="terminal" class="fullscreen"></div>
+    <div id="terminal"></div>
+    <div class="status-bar">
+      <div class="status-item">
+        <div class="status-indicator"></div>
+        <span id="connection-status">Initializing...</span>
+      </div>
+      <div class="status-item">
+        <span id="renderer-type">Loading...</span>
+      </div>
+      <div class="status-item">
+        <span id="command-count">Commands: 0</span>
+      </div>
+      <div class="status-item">
+        <span id="terminal-size">Size: --x--</span>
+      </div>
+      <div class="status-item font-controls">
+        <button class="control-btn" id="font-decrease" title="Decrease font size">-</button>
+        <span id="font-size">14px</span>
+        <button class="control-btn" id="font-increase" title="Increase font size">+</button>
+      </div>
+    </div>
     <script src="static/bundle.js"></script>
   </body>
 </html>

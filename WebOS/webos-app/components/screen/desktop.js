@@ -1,13 +1,8 @@
 import React, { Component } from 'react';
-import WallpaperImage from '@/components/util-components/wallpaper-image';
-import Dock from './dock';
 import getAppsConfig from '../../app/apps.config';
-import Window from '../base/window';
-import App from '../base/base_app';
-import ControlCenter from './control_center';
-import DesktopMenu from '../context menus/desktop-menu';
-import $ from 'jquery';
-import ReactGA from 'react-ga4';
+import DesktopLayout from '../desktop/DesktopLayout';
+import AppManager from '../app_manager/AppManager';
+import BattlefrontAnimation from '../util-components/battlefront-animation';
 
 export class Desktop extends Component {
     constructor() {
@@ -27,22 +22,22 @@ export class Desktop extends Component {
                 desktop: false,
                 default: false,
             },
-            controlCenterVisible: false, // Add state for control center visibility
+            menuPosition: { x: 0, y: 0 },
+            controlCenterVisible: false,
             app_instances: {},
+            showBattlefrontAnimation: false,
+            pendingAppOpen: null,
         };
         this.app_stack = [];
         this.initFavourite = {};
-        this.instanceCounter = {};
-        this.terminalOffsetX = 30;
-        this.terminalOffsetY = 30;
-        this.maxTerminalInstances = 5;
+        this.appManagerRef = React.createRef();
     }
 
     async componentDidMount() {
         const apps = await getAppsConfig();
         this.setState({ apps }, this.fetchAppsData);
         this.setContextListeners();
-        this.launchStartupApps(apps); // Launch apps on startup
+        this.launchStartupApps(apps);
     }
 
     componentWillUnmount() {
@@ -86,29 +81,6 @@ export class Desktop extends Component {
         });
     }
 
-    updateAppsData = () => {
-        const updatedData = {
-            focused_windows: {},
-            closed_windows: {},
-            disabled_apps: {},
-            favourite_apps: {},
-            minimized_windows: {},
-            desktop_apps: [],
-        };
-
-        this.state.apps.forEach(app => {
-            updatedData.focused_windows[app.id] = this.state.focused_windows[app.id] || false;
-            updatedData.closed_windows[app.id] = this.state.closed_windows[app.id] !== undefined ? this.state.closed_windows[app.id] : true;
-            updatedData.disabled_apps[app.id] = app.disabled;
-            updatedData.favourite_apps[app.id] = app.favourite;
-            updatedData.minimized_windows[app.id] = this.state.minimized_windows[app.id] || false;
-            if (app.desktop_shortcut) updatedData.desktop_apps.push(app.id);
-        });
-
-        this.setState(updatedData);
-        this.initFavourite = { ...updatedData.favourite_apps };
-    }
-
     setContextListeners = () => {
         document.addEventListener('contextmenu', this.checkContextMenu);
         document.addEventListener('click', this.hideAllContextMenu);
@@ -122,20 +94,11 @@ export class Desktop extends Component {
     checkContextMenu = (e) => {
         e.preventDefault();
         this.hideAllContextMenu();
-        this.showContextMenu(e, "desktop");
-    }
-
-    showContextMenu = (e, menuName) => {
-        let { posx, posy } = this.getMenuPosition(e);
-        let contextMenu = document.getElementById(`${menuName}-menu`);
-
-        if (posx + $(contextMenu).width() > window.innerWidth) posx -= $(contextMenu).width();
-        if (posy + $(contextMenu).height() > window.innerHeight) posy -= $(contextMenu).height();
-
-        contextMenu.style.left = `${posx}px`;
-        contextMenu.style.top = `${posy}px`;
-
-        this.setState({ context_menus: { ...this.state.context_menus, [menuName]: true } });
+        // Only show context menu if clicking on the desktop area
+        const desktopArea = e.target.closest('[data-context="desktop-area"]');
+        if (desktopArea || e.target === document.documentElement) {
+            this.showContextMenu(e, "desktop");
+        }
     }
 
     hideAllContextMenu = () => {
@@ -144,71 +107,13 @@ export class Desktop extends Component {
         this.setState({ context_menus: menus });
     }
 
-    getMenuPosition = (e) => {
-        const posx = e.pageX || e.clientX + document.body.scrollLeft + document.documentElement.scrollLeft;
-        const posy = e.pageY || e.clientY + document.body.scrollTop + document.documentElement.scrollTop;
-        return { posx, posy };
-    }
-
-    openApp = (objId) => {
-    ReactGA.event({ category: `Open App`, action: `Opened ${objId} window` });
-
-    if (this.state.disabled_apps[objId]) return;
-
-    if (objId === 'terminal') {
-        // For terminal, create a new instance
-        this.createNewAppInstance(objId);
-    } else {
-        // For other apps, use the existing logic
-        if (this.state.minimized_windows[objId]) {
-            this.focus(objId);
-            const r = document.querySelector(`#${objId}`);
-            r.style.transform = `translate(${r.style.getPropertyValue("--window-transform-x")},${r.style.getPropertyValue("--window-transform-y")}) scale(1)`;
-            this.setState(prevState => ({
-                minimized_windows: { ...prevState.minimized_windows, [objId]: false }
-            }));
-            return;
-        }
-
-        if (this.app_stack.includes(objId)) {
-            this.focus(objId);
-        } else {
-            const frequentApps = JSON.parse(localStorage.getItem('frequentApps')) || [];
-            const currentApp = frequentApps.find(app => app.id === objId);
-
-            if (currentApp) {
-                currentApp.frequency += 1;
-            } else {
-                frequentApps.push({ id: objId, frequency: 1 });
-            }
-
-            frequentApps.sort((a, b) => b.frequency - a.frequency);
-            localStorage.setItem("frequentApps", JSON.stringify(frequentApps));
-
-            this.setState(prevState => ({
-                favourite_apps: { ...prevState.favourite_apps, [objId]: true },
-                closed_windows: { ...prevState.closed_windows, [objId]: false },
-                allAppsView: false
-            }), () => {
-                this.focus(objId);
-                this.app_stack.push(objId);
-            });
-        }
-    }
-}
-
-    closeApp = (objId) => {
-        this.app_stack.splice(this.app_stack.indexOf(objId), 1);
-        this.giveFocusToLastApp();
-        this.hideDock(null, false);
-
-        const favourite_apps = { ...this.state.favourite_apps };
-        const closed_windows = { ...this.state.closed_windows };
-
-        if (!this.initFavourite[objId]) favourite_apps[objId] = false;
-        closed_windows[objId] = true;
-
-        this.setState({ closed_windows, favourite_apps });
+    showContextMenu = (e, menuType) => {
+        const menus = { ...this.state.context_menus };
+        menus[menuType] = true;
+        this.setState({
+            context_menus: menus,
+            menuPosition: { x: e.clientX, y: e.clientY }
+        });
     }
 
     focus = (objId) => {
@@ -231,6 +136,53 @@ export class Desktop extends Component {
         this.setState({ hideDock: hide, overlapped_windows });
     }
 
+    handleNewAppOpen = (appId) => {
+        this.setState(prevState => ({
+            favourite_apps: { ...prevState.favourite_apps, [appId]: true },
+            closed_windows: { ...prevState.closed_windows, [appId]: false },
+            allAppsView: false
+        }), () => {
+            this.focus(appId);
+            this.app_stack.push(appId);
+        });
+    }
+
+    handleAppRestore = (appId) => {
+        this.setState(prevState => ({
+            minimized_windows: { ...prevState.minimized_windows, [appId]: false }
+        }));
+    }
+
+    handleInstanceCreated = (instance) => {
+        this.setState(prevState => ({
+            app_instances: { ...prevState.app_instances, [instance.id]: instance },
+            closed_windows: { ...prevState.closed_windows, [instance.id]: false }
+        }), () => {
+            this.focus(instance.id);
+            this.app_stack.push(instance.id);
+        });
+    }
+
+    closeApp = (objId) => {
+        this.app_stack.splice(this.app_stack.indexOf(objId), 1);
+        this.giveFocusToLastApp();
+        this.hideDock(null, false);
+
+        const favourite_apps = { ...this.state.favourite_apps };
+        const closed_windows = { ...this.state.closed_windows };
+
+        if (!this.initFavourite[objId.split('-')[0]]) favourite_apps[objId] = false;
+        closed_windows[objId] = true;
+
+        this.setState({ closed_windows, favourite_apps }, () => {
+            if (objId.startsWith('terminal-')) {
+                const app_instances = { ...this.state.app_instances };
+                delete app_instances[objId];
+                this.setState({ app_instances });
+            }
+        });
+    }
+
     hasMinimised = (objId) => {
         const minimized_windows = { ...this.state.minimized_windows, [objId]: true };
         const focused_windows = { ...this.state.focused_windows, [objId]: false };
@@ -250,163 +202,87 @@ export class Desktop extends Component {
         }
     }
 
-    checkAllMinimised = () => Object.keys(this.state.minimized_windows).every(key => this.state.closed_windows[key] || this.state.minimized_windows[key]);
+    checkAllMinimised = () => {
+        return Object.keys(this.state.minimized_windows).every(
+            key => this.state.closed_windows[key] || this.state.minimized_windows[key]
+        );
+    }
 
     toggleControlCenter = () => {
         this.setState(prevState => ({
             controlCenterVisible: !prevState.controlCenterVisible,
-            hideDock: !prevState.controlCenterVisible // Toggle the dock visibility when control center is toggled
+            hideDock: !prevState.controlCenterVisible
         }));
     }
 
-    renderDesktopApps = () => {
-        if (Object.keys(this.state.closed_windows).length === 0) return;
-        let appsJsx = [];
-        this.state.apps.forEach((app, index) => {
-            if (this.state.desktop_apps.includes(app.id)) {
-
-                const props = {
-                    name: app.title,
-                    id: app.id,
-                    icon: app.icon,
-                    openApp: this.openApp
-                }
-
-                appsJsx.push(
-                    <App key={index} {...props} />
-                );
-            }
-        });
-        return appsJsx;
-    }
-     getOpenTerminalInstancesCount = () => {
-        return Object.keys(this.state.app_instances).filter(id =>
-            id.startsWith('terminal-') && !this.state.closed_windows[id]
-        ).length;
-    }
-      createNewAppInstance = (objId) => {
-        if (objId === 'terminal') {
-            const openTerminalInstances = this.getOpenTerminalInstancesCount();
-
-            if (openTerminalInstances >= this.maxTerminalInstances) {
-                console.log("Maximum number of open terminal instances reached");
-                return;
-            }
+    openApp = (appId) => {
+        if (typeof window !== 'undefined' && 
+            localStorage.getItem('battlefront-animation-enabled') === 'true' &&
+            this.state.closed_windows[appId] &&
+            appId !== 'settings') {  // Don't show animation for settings app
+            this.setState({
+                showBattlefrontAnimation: true,
+                pendingAppOpen: appId
+            });
+        } else {
+            this.openAppDirectly(appId);
         }
-
-        this.instanceCounter[objId] = (this.instanceCounter[objId] || 0) + 1;
-        const instanceId = `${objId}-${this.instanceCounter[objId]}`;
-
-        // Calculate new position
-        const openTerminalInstances = this.getOpenTerminalInstancesCount();
-        const offsetX = openTerminalInstances * this.terminalOffsetX;
-        const offsetY = openTerminalInstances * this.terminalOffsetY;
-
-        const newInstance = {
-            ...this.state.apps.find(app => app.id === objId),
-            id: instanceId,
-            defaultPosition: { x: offsetX, y: offsetY }
-        };
-
-        this.setState(prevState => ({
-            app_instances: {
-                ...prevState.app_instances,
-                [instanceId]: newInstance
-            },
-            favourite_apps: { ...prevState.favourite_apps, [instanceId]: true },
-            closed_windows: { ...prevState.closed_windows, [instanceId]: false },
-            allAppsView: false
-        }), () => {
-            this.focus(instanceId);
-            this.app_stack.push(instanceId);
-        });
     }
 
-    closeApp = (objId) => {
-        this.app_stack.splice(this.app_stack.indexOf(objId), 1);
-        this.giveFocusToLastApp();
-        this.hideDock(null, false);
+    openAppDirectly = (appId) => {
+        if (this.appManagerRef.current) {
+            this.appManagerRef.current.handleAppOpen(appId);
+        }
+    }
 
-        const favourite_apps = { ...this.state.favourite_apps };
-        const closed_windows = { ...this.state.closed_windows };
-
-        if (!this.initFavourite[objId.split('-')[0]]) favourite_apps[objId] = false;
-        closed_windows[objId] = true;
-
-        this.setState({ closed_windows, favourite_apps }, () => {
-            if (objId.startsWith('terminal-')) {
-                // Remove the closed terminal instance from app_instances
-                const app_instances = { ...this.state.app_instances };
-                delete app_instances[objId];
-                this.setState({ app_instances });
+    handleAnimationComplete = () => {
+        this.setState({ showBattlefrontAnimation: false }, () => {
+            if (this.state.pendingAppOpen) {
+                this.openAppDirectly(this.state.pendingAppOpen);
+                this.setState({ pendingAppOpen: null });
             }
         });
     }
-
-
-
-    renderWindows = () => {
-    const regularApps = this.state.apps.map((app, index) =>
-        !this.state.closed_windows[app.id] && this.renderWindow(app, index)
-    );
-
-    const terminalInstances = Object.values(this.state.app_instances).map((instance, index) =>
-        !this.state.closed_windows[instance.id] && this.renderWindow(instance, `instance-${index}`)
-    );
-
-    return [...regularApps, ...terminalInstances];
-}
-
-
-renderWindow = (app, key) => (
-    <Window
-        key={key}
-        title={app.title}
-        id={app.id}
-        screen={app.screen}
-        closed={this.closeApp}
-        openApp={this.openApp}
-        focus={this.focus}
-        isFocused={this.state.focused_windows[app.id]}
-        hideDock={this.hideDock}
-        hasMinimised={this.hasMinimised}
-        minimized={this.state.minimized_windows[app.id]}
-        changeBackgroundImage={this.props.changeBackgroundImage}
-        bg_image_name={this.props.bg_image_name}
-        apps={this.state.apps}
-    />
-)
 
     render() {
         return (
-            <div className="h-full w-full flex flex-col items-end justify-start content-start flex-wrap-reverse pt-8 bg-transparent relative overflow-hidden overscroll-none window-parent">
-                <div className="absolute h-full w-full bg-transparent" data-context="desktop-area">
-                    {this.renderWindows()}
-                </div>
-                <WallpaperImage img={this.props.bg_image_name} />
-                <Dock
+            <>
+                {this.state.showBattlefrontAnimation && (
+                    <BattlefrontAnimation onAnimationComplete={this.handleAnimationComplete} />
+                )}
+                <AppManager
+                    ref={this.appManagerRef}
                     apps={this.state.apps}
-                    hide={this.state.controlCenterVisible} // Hide dock when control center is visible
-                    hideDock={this.hideDock}
-                    favourite_apps={this.state.favourite_apps}
-                    showAllApps={this.toggleControlCenter}
-                    allAppsView={this.state.allAppsView}
+                    closed_windows={this.state.closed_windows}
+                    disabled_apps={this.state.disabled_apps}
+                    minimized_windows={this.state.minimized_windows}
+                    app_stack={this.app_stack}
+                    focus={this.focus}
+                    onNewAppOpen={this.handleNewAppOpen}
+                    onAppRestore={this.handleAppRestore}
+                    onInstanceCreated={this.handleInstanceCreated}
+                />
+                <DesktopLayout
+                    bg_image_name={this.props.bg_image_name}
+                    changeBackgroundImage={this.props.changeBackgroundImage}
+                    apps={this.state.apps}
+                    desktop_apps={this.state.desktop_apps}
+                    openApp={this.openApp}
+                    context_menus={this.state.context_menus}
+                    menuPosition={this.state.menuPosition}
+                    controlCenterVisible={this.state.controlCenterVisible}
+                    toggleControlCenter={this.toggleControlCenter}
                     closed_windows={this.state.closed_windows}
                     focused_windows={this.state.focused_windows}
-                    isMinimized={this.state.minimized_windows}
-                    openAppByAppId={this.openApp}
+                    minimized_windows={this.state.minimized_windows}
+                    app_instances={this.state.app_instances}
+                    closeApp={this.closeApp}
+                    focus={this.focus}
+                    hideDock={this.hideDock}
+                    hasMinimised={this.hasMinimised}
+                    favourite_apps={this.state.favourite_apps}
                 />
-                {this.renderDesktopApps()}
-                <DesktopMenu active={this.state.context_menus.desktop} openApp={this.openApp} />
-                {this.state.controlCenterVisible && (
-                    <ControlCenter
-                        apps={this.state.apps}
-                        recentApps={this.app_stack}
-                        openApp={this.openApp}
-                        toggleControlCenter={this.toggleControlCenter}
-                    />
-                )}
-            </div>
+            </>
         );
     }
 }

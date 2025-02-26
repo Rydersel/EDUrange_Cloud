@@ -1,6 +1,64 @@
 import React, { useState, useEffect } from 'react';
 import { Terminal, ArrowRight, Check, Trophy, Info, X } from 'lucide-react';
-import ActivityLogger from '../../utils/ActivityLogger';
+import LoadingAnimation from '../util-components/loading-animation';
+import JumbledText from '../util-components/jumbled-text';
+
+// Create ActivityLogger class
+class ActivityLogger {
+  static async logQuestionAttempt(userId, challengeId, groupId, metadata) {
+    try {
+      const response = await fetch('https://database.rydersel.cloud/activity/log', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          eventType: 'QUESTION_ATTEMPTED',
+          userId,
+          challengeId,
+          groupId,
+          metadata: JSON.stringify(metadata)
+        }),
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Failed to log question attempt: ${response.statusText}`);
+      }
+      
+      return await response.json();
+    } catch (error) {
+      console.error('Failed to log question attempt:', error);
+      throw error;
+    }
+  }
+
+  static async logQuestionCompletion(userId, challengeId, groupId, metadata) {
+    try {
+      const response = await fetch('https://database.rydersel.cloud/activity/log', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          eventType: 'QUESTION_COMPLETED',
+          userId,
+          challengeId,
+          groupId,
+          metadata: JSON.stringify(metadata)
+        }),
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Failed to log question completion: ${response.statusText}`);
+      }
+      
+      return await response.json();
+    } catch (error) {
+      console.error('Failed to log question completion:', error);
+      throw error;
+    }
+  }
+}
 
 const Sidebar = ({ questions, onSelectQuestion, completedQuestions, currentQuestionId, groupChallengeId }) => (
   <div className="w-full md:w-64 bg-black border-r border-green-700 p-4 overflow-y-auto font-mono text-green-400">
@@ -32,34 +90,6 @@ const Sidebar = ({ questions, onSelectQuestion, completedQuestions, currentQuest
     ))}
   </div>
 );
-
-const JumbledText = ({ text, isJumbling }) => {
-  const [displayText, setDisplayText] = useState(text);
-
-  useEffect(() => {
-    if (isJumbling) {
-      let iterations = 0;
-      const interval = setInterval(() => {
-        setDisplayText(prev =>
-          prev.split('').map((char, index) => {
-            if (index < iterations) {
-              return text[index];
-            }
-            return String.fromCharCode(65 + Math.floor(Math.random() * 26));
-          }).join('')
-        );
-        iterations += 1 / 3;
-        if (iterations >= text.length) {
-          clearInterval(interval);
-        }
-      }, 30);
-
-      return () => clearInterval(interval);
-    }
-  }, [isJumbling, text]);
-
-  return <span>{displayText}</span>;
-};
 
 const MAX_RETRIES = 3;
 const RETRY_DELAY = 2000; // 2 seconds
@@ -129,6 +159,9 @@ async function fetchWithRetry(url, options = {}, retries = MAX_RETRIES) {
 }
 
 export default function ChallengePrompt() {
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
   const [challengeData, setChallengeData] = useState(null);
   const [currentQuestionId, setCurrentQuestionId] = useState(null);
   const [answers, setAnswers] = useState({});
@@ -140,14 +173,19 @@ export default function ChallengePrompt() {
   const [userPoints, setUserPoints] = useState(0);
   const [userId, setUserId] = useState(null);
   const [groupChallengeId, setGroupChallengeId] = useState(null);
+  const [groupId, setGroupId] = useState(null);
 
   useEffect(() => {
     const fetchChallengeData = async () => {
+      setIsLoading(true);
+      setLoadError(false);
+      setErrorMessage("");
       console.log('🔄 Starting challenge data fetch...');
       try {
         const challengeInstanceId = getChallengeInstanceId();
         if (!challengeInstanceId) {
-          console.error("❌ No challenge instance ID found, aborting data fetch");
+          setLoadError(true);
+          setErrorMessage("Failed to determine challenge instance ID");
           return;
         }
 
@@ -160,26 +198,40 @@ export default function ChallengePrompt() {
         ];
 
         let instanceData = null;
+        let lastError = null;
         for (const url of urls) {
           const result = await fetchWithRetry(url);
           if (result.ok) {
             instanceData = result.data;
             break;
           }
+          lastError = result.error;
         }
 
         if (!instanceData) {
-          throw new Error('Failed to fetch challenge instance after all retries');
+          setLoadError(true);
+          setErrorMessage("Failed to load challenge data after multiple attempts");
+          return;
         }
 
         console.log('✅ Received challenge instance data:', instanceData);
         
         setUserId(instanceData.userId);
         setGroupChallengeId(instanceData.groupChallengeId);
+        setGroupId(instanceData.groupId);
         console.log('📝 Updated state with instance data:', {
           userId: instanceData.userId,
-          groupChallengeId: instanceData.groupChallengeId
+          groupChallengeId: instanceData.groupChallengeId,
+          groupId: instanceData.groupId
         });
+
+        // Verify userId was set correctly
+        setTimeout(() => {
+          console.log('🔍 Verifying userId in state:', {
+            userId,
+            instanceDataUserId: instanceData.userId
+          });
+        }, 0);
 
         // Only proceed if we have both user ID and group challenge ID
         if (instanceData.userId && instanceData.groupChallengeId) {
@@ -226,6 +278,10 @@ export default function ChallengePrompt() {
           error: error.message,
           stack: error.stack
         });
+        setLoadError(true);
+        setErrorMessage(error.message || "An unexpected error occurred while loading the challenge");
+      } finally {
+        setIsLoading(false);
       }
     };
 
@@ -258,15 +314,19 @@ export default function ChallengePrompt() {
     console.log('🔄 Starting answer submission...', {
       questionId: currentQuestionId,
       groupChallengeId,
-      hasAnswer: !!answers[currentQuestionId]
+      groupId,
+      hasAnswer: !!answers[currentQuestionId],
+      userId
     });
 
-    if (!answers[currentQuestionId] || !groupChallengeId || !userId) {
+    if (!answers[currentQuestionId] || !groupChallengeId || !userId || !groupId) {
       console.error("❌ Missing required data for submission:", {
         hasAnswer: !!answers[currentQuestionId],
         groupChallengeId,
+        groupId,
         userId
       });
+      setErrorMessage("Missing required data for submission. Please try refreshing the page.");
       return;
     }
 
@@ -300,19 +360,21 @@ export default function ChallengePrompt() {
       await ActivityLogger.logQuestionAttempt(
         userId,
         challengeData.id,
-        groupChallengeId,
+        groupId,
         {
           questionId: currentQuestionId,
           answer: answers[currentQuestionId].trim(),
           isCorrect: verifyData.isCorrect,
-          points: currentQuestion.points
+          attemptNumber: verifyData.attemptCount,
+          points: verifyData.isCorrect ? currentQuestion.points : 0,
+          timestamp: new Date().toISOString()
         }
       );
 
       if (verifyData.isCorrect) {
         console.log('📡 Fetching question details...');
         // Get question details for points
-        const questionResponse = await fetch(`https://database.rydersel.cloud/question/details?question_id=${currentQuestionId}`);
+        const questionResponse = await fetch(`https://database.rydersel.cloud/question/details?question_id=${currentQuestionId}`); // TODO: Set from env
         if (!questionResponse.ok) {
           console.error('❌ Failed to get question details:', {
             status: questionResponse.status,
@@ -326,7 +388,7 @@ export default function ChallengePrompt() {
         console.log('📡 Completing question...', {
           userId,
           questionId: currentQuestionId,
-          groupChallengeId,
+          groupId,
           points: questionData.points
         });
         
@@ -361,11 +423,11 @@ export default function ChallengePrompt() {
         await ActivityLogger.logQuestionCompletion(
           userId,
           challengeData.id,
-          groupChallengeId,
+          groupId,
           {
             questionId: currentQuestionId,
             pointsEarned: questionData.points,
-            totalAttempts: completionData.attempts || 1,
+            totalAttempts: verifyData.attemptCount,
             completionTime: new Date().toISOString()
           }
         );
@@ -492,8 +554,8 @@ export default function ChallengePrompt() {
     </div>
   );
 
-  if (!challengeData) {
-    return <div className="text-green-400">Loading challenge data...</div>;
+  if (isLoading || !challengeData) {
+    return <LoadingAnimation error={loadError} errorMessage={errorMessage} />;
   }
 
   const currentIndex = allQuestions.findIndex(q => q.id === currentQuestionId);

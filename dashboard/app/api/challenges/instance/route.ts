@@ -2,8 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-
-const INSTANCE_MANAGER_URL = process.env.INSTANCE_MANAGER_URL || 'https://eductf.rydersel.cloud/instance-manager/api';
+import { getInstanceManagerUrl } from '@/lib/api-config';
 
 export async function POST(request: Request) {
   try {
@@ -21,8 +20,11 @@ export async function POST(request: Request) {
       return new NextResponse('Missing required fields', { status: 400 });
     }
 
+    // Get the instance manager URL
+    const instanceManagerUrl = getInstanceManagerUrl();
+
     // Make request to instance manager
-    const response = await fetch(`${INSTANCE_MANAGER_URL}/start-challenge`, {
+    const response = await fetch(`${instanceManagerUrl}/start-challenge`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

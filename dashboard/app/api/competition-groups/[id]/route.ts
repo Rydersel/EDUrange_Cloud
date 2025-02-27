@@ -101,6 +101,7 @@ export async function GET(
         id: challenge.challenge.id,
         name: challenge.challenge.name,
         difficulty: challenge.challenge.difficulty,
+        description: challenge.challenge.description || '',
         AppsConfig: challenge.challenge.appConfigs,
         points: totalPoints,
         completed: isCompleted,

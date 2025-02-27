@@ -1,5 +1,10 @@
 import { NextResponse } from 'next/server';
 
+// Function to get the instance manager URL
+const getInstanceManagerUrl = () => {
+  return process.env.INSTANCE_MANAGER_URL || 'https://eductf.rydersel.cloud/instance-manager/api';
+};
+
 const defaultConfig = [
   {
     id: "chrome",
@@ -282,7 +287,8 @@ export async function POST(req) {
     if (question.type === 'flag') {
       try {
         // Verify flag using the instance manager API
-        const flagResponse = await fetch('https://eductf.rydersel.cloud/instance-manager/api/get-secret', {
+        const instanceManagerUrl = getInstanceManagerUrl();
+        const flagResponse = await fetch(`${instanceManagerUrl}/get-secret`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',

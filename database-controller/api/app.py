@@ -443,6 +443,26 @@ def complete_challenge():
             }
         ))
 
+        # Update group points
+        loop.run_until_complete(prisma.grouppoints.upsert(
+            where={
+                'userId_groupId': {
+                    'userId': data['userId'],
+                    'groupId': data['groupId']
+                }
+            },
+            create={
+                'userId': data['userId'],
+                'groupId': data['groupId'],
+                'points': data['pointsEarned']
+            },
+            update={
+                'points': {
+                    'increment': data['pointsEarned']
+                }
+            }
+        ))
+
         # Log the event
         loop.run_until_complete(prisma.activitylog.create(
             data={

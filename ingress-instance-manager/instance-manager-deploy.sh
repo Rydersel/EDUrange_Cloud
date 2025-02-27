@@ -57,7 +57,7 @@ execute_and_continue kubectl delete deployment instance-manager
 
 execute_and_continue kubectl delete svc instance-manager
 
-execute_and_exit_on_failure docker buildx build --platform linux/amd64,linux/arm64 -t registry.rydersel.cloud/instance-manager-ingress . --push
+execute_and_exit_on_failure docker buildx build --platform linux/amd64 -t registry.rydersel.cloud/instance-manager-ingress . --push
 
 execute_and_exit_on_failure kubectl apply -f instance-manager-deployment.yaml
 

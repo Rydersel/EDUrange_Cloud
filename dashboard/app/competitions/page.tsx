@@ -83,7 +83,18 @@ export default function CompetitionsPage() {
   }, [toast]);
 
   const CompetitionCard = ({competition}: { competition: Competition }) => {
-    const progress = competition.members[0]?.groupPoints[0]?.points || 0;
+    // Calculate the actual completion percentage based on completed challenges
+    const totalChallenges = competition._count.challenges || 0;
+    
+    // Get user's completed challenges count from the API response
+    // We'll use the number of challenges with points > 0 as a proxy for completed challenges
+    const completedChallenges = competition.members[0]?.groupPoints.length || 0;
+    
+    // Calculate percentage based on completed challenges / total challenges
+    const progress = totalChallenges > 0 
+      ? Math.round((completedChallenges / totalChallenges) * 100) / 2
+      : 0;
+    
     const canViewDetails = competitions.userRole !== 'STUDENT';
 
     return (

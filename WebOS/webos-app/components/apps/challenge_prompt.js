@@ -263,7 +263,15 @@ export default function ChallengePrompt() {
           if (challengeApp && challengeApp.challenge) {
             console.log('📝 Setting challenge data and initial question');
             setChallengeData(challengeApp.challenge);
-            setCurrentQuestionId(challengeApp.challenge.pages[0].questions[0].id);
+            
+            // Check if all questions are completed
+            const allQuestions = challengeApp.challenge.pages.flatMap(page => page.questions) || [];
+            const allQuestionsCompleted = allQuestions.length > 0 && completedQuestions.length >= allQuestions.length;
+            
+            // If all questions are completed, set the first question as current
+            // The rendering logic will show the completion page
+            setCurrentQuestionId(allQuestions[0]?.id);
+            
             // Set the groupChallengeId from the challenge config
             if (challengeApp.challenge.groupChallengeId) {
               setGroupChallengeId(challengeApp.challenge.groupChallengeId);
@@ -297,6 +305,80 @@ export default function ChallengePrompt() {
       clearInterval(timer);
     };
   }, []);
+
+  // Add a new useEffect to automatically complete the challenge when all questions are completed
+  useEffect(() => {
+    // Skip if we don't have the necessary data yet
+    if (!challengeData || !userId || !groupChallengeId || !groupId || completedQuestions.length === 0) {
+      return;
+    }
+
+    const allQuestions = challengeData.pages.flatMap(page => page.questions) || [];
+    
+    // Check if all questions are completed
+    const allQuestionsCompleted = allQuestions.every(question =>
+      completedQuestions.some(q => 
+        q.questionId === question.id && q.groupChallengeId === groupChallengeId
+      )
+    );
+
+    // If all questions are completed, automatically complete the challenge
+    if (allQuestionsCompleted) {
+      const completeChallenge = async () => {
+        try {
+          console.log('📡 Auto-completing challenge...', {
+            userId,
+            groupChallengeId,
+            challengeId: challengeData.id,
+            groupId
+          });
+          
+          // Calculate total points earned
+          const pointsEarned = allQuestions.reduce((total, q) => {
+            const completed = completedQuestions.some(cq => 
+              cq.questionId === q.id && cq.groupChallengeId === groupChallengeId
+            );
+            return completed ? total + q.points : total;
+          }, 0);
+          
+          // Call the API to complete the challenge
+          const response = await fetch('https://database.rydersel.cloud/competition/complete-challenge', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              userId: userId,
+              groupChallengeId: groupChallengeId,
+              challengeId: challengeData.id,
+              groupId: groupId,
+              pointsEarned: pointsEarned
+            })
+          });
+
+          if (!response.ok) {
+            const errorText = await response.text();
+            console.error('❌ Failed to auto-complete challenge:', {
+              status: response.status,
+              statusText: response.statusText,
+              response: errorText
+            });
+            return;
+          }
+
+          const completionData = await response.json();
+          console.log('✅ Challenge auto-completed successfully:', completionData);
+        } catch (error) {
+          console.error('❌ Error auto-completing challenge:', {
+            error: error.message,
+            stack: error.stack
+          });
+        }
+      };
+
+      completeChallenge();
+    }
+  }, [challengeData, userId, groupChallengeId, groupId, completedQuestions]);
 
   const allQuestions = challengeData?.pages.flatMap(page => page.questions) || [];
   const currentQuestion = allQuestions.find(q => q.id === currentQuestionId);
@@ -527,12 +609,10 @@ export default function ChallengePrompt() {
           })}
         </div>
         {allQuestionsCompleted && (
-          <button
-            onClick={() => console.log("Challenge completed!")}
-            className="bg-green-600 hover:bg-green-500 text-white font-bold py-2 px-4 rounded transition duration-300 ease-in-out"
-          >
-            Complete Challenge
-          </button>
+          <div className="text-green-400 mt-4">
+            <p>All objectives completed! Your progress has been saved.</p>
+            <p className="mt-2">You can now close this window or continue exploring.</p>
+          </div>
         )}
       </div>
     );

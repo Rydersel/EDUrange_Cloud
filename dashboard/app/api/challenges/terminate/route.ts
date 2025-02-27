@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { User } from "@prisma/client";
 import { ActivityLogger, ActivityEventType } from '@/lib/activity-logger';
+import { getInstanceManagerUrl } from "@/lib/api-config";
 
 export async function POST(req: Request) {
   try {
@@ -46,9 +47,12 @@ export async function POST(req: Request) {
       );
     }
 
+    // Get the instance manager URL
+    const instanceManagerUrl = getInstanceManagerUrl();
+
     // Call instance manager to terminate challenge
     const response = await fetch(
-      "https://eductf.rydersel.cloud/instance-manager/api/end-challenge",
+      `${instanceManagerUrl}/end-challenge`,
       {
         method: "POST",
         headers: {

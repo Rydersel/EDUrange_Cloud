@@ -17,32 +17,32 @@ model User {
   createdAt            DateTime              @default(now())
   updatedAt            DateTime              @updatedAt
   accounts             Account[]
+  activityLogs         ActivityLog[]
   challengeCompletions ChallengeCompletion[]
   challengeInstances   ChallengeInstance[]
   groupPoints          GroupPoints[]
-  questionCompletions  QuestionCompletion[]
   questionAttempts     QuestionAttempt[]
+  questionCompletions  QuestionCompletion[]
   sessions             Session[]
   instructorGroups     CompetitionGroup[]    @relation("GroupInstructors")
   memberOf             CompetitionGroup[]    @relation("GroupMembers")
-  activityLogs         ActivityLog[]
 }
 
 model CompetitionGroup {
-  id          String                  @id @default(cuid())
-  name        String
-  description String?
-  startDate   DateTime
-  endDate     DateTime?
-  createdAt   DateTime                @default(now())
-  updatedAt   DateTime                @updatedAt
-  accessCodes CompetitionAccessCode[]
-  challenges  GroupChallenge[]
-  userPoints  GroupPoints[]
-  instructors User[]                  @relation("GroupInstructors")
-  members     User[]                  @relation("GroupMembers")
-  instances   ChallengeInstance[]
-  activityLogs    ActivityLog[]
+  id           String                  @id @default(cuid())
+  name         String
+  description  String?
+  startDate    DateTime
+  endDate      DateTime?
+  createdAt    DateTime                @default(now())
+  updatedAt    DateTime                @updatedAt
+  activityLogs ActivityLog[]
+  instances    ChallengeInstance[]
+  accessCodes  CompetitionAccessCode[]
+  challenges   GroupChallenge[]
+  userPoints   GroupPoints[]
+  instructors  User[]                  @relation("GroupInstructors")
+  members      User[]                  @relation("GroupMembers")
 }
 
 model GroupChallenge {
@@ -55,8 +55,8 @@ model GroupChallenge {
   completions         ChallengeCompletion[]
   challenge           Challenges            @relation(fields: [challengeId], references: [id])
   group               CompetitionGroup      @relation(fields: [groupId], references: [id], onDelete: Cascade)
-  questionCompletions QuestionCompletion[]
   questionAttempts    QuestionAttempt[]
+  questionCompletions QuestionCompletion[]
 
   @@unique([challengeId, groupId])
 }
@@ -74,36 +74,34 @@ model ChallengeCompletion {
 }
 
 model CompetitionAccessCode {
-  id        String           @id @default(cuid())
-  code      String           @unique
-  expiresAt DateTime?
-  maxUses   Int?
-  usedCount Int              @default(0)
-  groupId   String
-  createdAt DateTime         @default(now())
-  createdBy String
-  group     CompetitionGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
-  activityLogs    ActivityLog[]
+  id           String           @id @default(cuid())
+  code         String           @unique
+  expiresAt    DateTime?
+  maxUses      Int?
+  usedCount    Int              @default(0)
+  groupId      String
+  createdAt    DateTime         @default(now())
+  createdBy    String
+  activityLogs ActivityLog[]
+  group        CompetitionGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
 }
 
 model ActivityLog {
-  id              String            @id @default(cuid())
-  eventType       ActivityEventType
-  severity        LogSeverity       @default(INFO)
-  userId          String
-  challengeId     String?
-  groupId         String?
+  id                  String                 @id @default(cuid())
+  eventType           ActivityEventType
+  userId              String
+  challengeId         String?
+  groupId             String?
+  metadata            Json
+  timestamp           DateTime               @default(now())
+  accessCodeId        String?
   challengeInstanceId String?
-  accessCodeId    String?
-  metadata        Json
-  timestamp       DateTime          @default(now())
-  
-  // Relations
-  user            User              @relation(fields: [userId], references: [id], onDelete: Cascade)
-  group           CompetitionGroup? @relation(fields: [groupId], references: [id], onDelete: SetNull)
-  challenge       Challenges?       @relation(fields: [challengeId], references: [id], onDelete: SetNull)
-  challengeInstance ChallengeInstance? @relation(fields: [challengeInstanceId], references: [id], onDelete: SetNull)
-  accessCode      CompetitionAccessCode? @relation(fields: [accessCodeId], references: [id], onDelete: SetNull)
+  severity            LogSeverity            @default(INFO)
+  accessCode          CompetitionAccessCode? @relation(fields: [accessCodeId], references: [id])
+  challenge           Challenges?            @relation(fields: [challengeId], references: [id])
+  challengeInstance   ChallengeInstance?     @relation(fields: [challengeInstanceId], references: [id])
+  group               CompetitionGroup?      @relation(fields: [groupId], references: [id])
+  user                User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model ChallengeType {
@@ -123,8 +121,8 @@ model ChallengeQuestion {
   createdAt   DateTime             @default(now())
   updatedAt   DateTime             @updatedAt
   challenge   Challenges           @relation(fields: [challengeId], references: [id], onDelete: Cascade)
-  completions QuestionCompletion[]
   attempts    QuestionAttempt[]
+  completions QuestionCompletion[]
 }
 
 model QuestionCompletion {
@@ -169,27 +167,27 @@ model Challenges {
   difficulty      ChallengeDifficulty  @default(MEDIUM)
   challengeTypeId String
   description     String?
+  activityLogs    ActivityLog[]
   appConfigs      ChallengeAppConfig[]
   questions       ChallengeQuestion[]
   challengeType   ChallengeType        @relation(fields: [challengeTypeId], references: [id], onDelete: Cascade)
   groupChallenges GroupChallenge[]
-  activityLogs    ActivityLog[]
 }
 
 model ChallengeInstance {
-  id                String   @id @default(uuid())
-  challengeId       String
-  userId            String
-  challengeImage    String
-  challengeUrl      String
-  creationTime      DateTime @default(now())
-  status            String
-  flagSecretName    String
-  flag              String
-  competitionId     String
-  competition       CompetitionGroup @relation(fields: [competitionId], references: [id], onDelete: Cascade)
-  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  activityLogs    ActivityLog[]
+  id             String           @id @default(uuid())
+  challengeId    String
+  userId         String
+  challengeImage String
+  challengeUrl   String
+  creationTime   DateTime         @default(now())
+  status         String
+  flagSecretName String
+  flag           String
+  competitionId  String
+  activityLogs   ActivityLog[]
+  competition    CompetitionGroup @relation(fields: [competitionId], references: [id], onDelete: Cascade)
+  user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model Account {
@@ -239,6 +237,19 @@ model GroupPoints {
   @@unique([userId, groupId])
 }
 
+model QuestionAttempt {
+  id               String            @id @default(cuid())
+  questionId       String
+  userId           String
+  groupChallengeId String
+  attemptedAt      DateTime          @default(now())
+  answer           String
+  isCorrect        Boolean
+  groupChallenge   GroupChallenge    @relation(fields: [groupChallengeId], references: [id], onDelete: Cascade)
+  question         ChallengeQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
 enum UserRole {
   ADMIN
   INSTRUCTOR
@@ -280,17 +291,4 @@ enum ChallengeDifficulty {
   MEDIUM
   HARD
   VERY_HARD
-}
-
-model QuestionAttempt {
-  id               String            @id @default(cuid())
-  questionId       String
-  userId           String
-  groupChallengeId String
-  attemptedAt      DateTime          @default(now())
-  answer           String
-  isCorrect        Boolean
-  groupChallenge   GroupChallenge    @relation(fields: [groupChallengeId], references: [id], onDelete: Cascade)
-  question         ChallengeQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
-  user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
 }

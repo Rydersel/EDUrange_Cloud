@@ -153,6 +153,26 @@ export async function POST(
           )
         `;
 
+        // Update group points
+        await prisma.groupPoints.upsert({
+          where: {
+            userId_groupId: {
+              userId: session.user.id,
+              groupId: params.groupId
+            }
+          },
+          create: {
+            userId: session.user.id,
+            groupId: params.groupId,
+            points: totalPoints[0].total
+          },
+          update: {
+            points: {
+              increment: totalPoints[0].total
+            }
+          }
+        });
+
         // Log the activity
         await prisma.activityLog.create({
           data: {

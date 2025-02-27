@@ -25,6 +25,7 @@ interface Challenge {
   id: string;
   name: string;
   difficulty: string;
+  description: string;
   AppsConfig: string;
   challengeType: {
     id: string;
@@ -69,6 +70,7 @@ export function ChallengeList({ competitionId }: ChallengeListProps) {
           id: c.id,
           name: c.name,
           difficulty: c.difficulty || 'MEDIUM',
+          description: c.description || '',
           AppsConfig: c.AppsConfig || '[]',
           challengeType: c.challengeType,
           points: c.points,
@@ -182,7 +184,7 @@ export function ChallengeList({ competitionId }: ChallengeListProps) {
 
   return (
     <div>
-      <Navigation filter={filter} setFilter={setFilter} />
+      
       <SearchAndFilters
         searchQuery={searchQuery}
         setSearchQuery={setSearchQuery}

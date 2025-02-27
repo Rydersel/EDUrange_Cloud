@@ -4,8 +4,14 @@ import { prisma } from '@/lib/prisma';
 import BreadCrumb from '@/components/breadcrumb';
 import InstanceComponent from './InstanceComponent'; // Import the client component
 import authConfig from '@/auth.config';
+import type { Metadata } from 'next';
 
-const breadcrumbItems = [{ title: 'Challenges', link: '/dashboard/challenge' }];
+export const metadata: Metadata = {
+  title: 'Challenge Instances | EDUrange Cloud',
+  description: 'Manage active challenge instances'
+};
+
+const breadcrumbItems = [{ title: 'Challenge Instances', link: '/dashboard/challenge' }];
 
 export default async function ChallengesPage() {
   const session = await getServerSession(authConfig);

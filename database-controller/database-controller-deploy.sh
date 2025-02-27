@@ -26,8 +26,8 @@ execute_and_continue kubectl delete ingress database-api-ingress
 
 
 # Build and push new Docker images
-execute_and_exit_on_failure docker buildx build --platform linux/amd64 -f dockerfile.api -t registry.rydersel.cloud/database-api . --push
-execute_and_exit_on_failure docker buildx build --platform linux/amd64 -f dockerfile.sync -t registry.rydersel.cloud/database-sync . --push
+execute_and_exit_on_failure docker buildx build --platform linux/amd64 -f dockerfile.api -t registry.rydersel.cloud/database-api --no-cache . --push
+execute_and_exit_on_failure docker buildx build --platform linux/amd64 -f dockerfile.sync -t registry.rydersel.cloud/database-sync --no-cache . --push
 
 # Apply the new deployment
 execute_and_exit_on_failure kubectl apply -f database-controller-deployment.yaml

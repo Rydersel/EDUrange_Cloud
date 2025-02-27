@@ -4,8 +4,12 @@ import logging
 from datetime import datetime
 from prisma import Prisma
 from dotenv import load_dotenv
+import os
 
 load_dotenv()  # Load enviromental variables
+
+# Get the instance manager URL from environment variable or use default
+INSTANCE_MANAGER_URL = os.environ.get('INSTANCE_MANAGER_URL', 'https://eductf.rydersel.cloud/instance-manager/api')
 
 logging.basicConfig(level=logging.DEBUG)
 
@@ -25,7 +29,7 @@ async def get_challenge_instances():
 def get_flag(secret_name):
     try:
         logging.info(f"Fetching flag for secret name: {secret_name}")
-        response = requests.post("https://eductf.rydersel.cloud/instance-manager/api/get-secret",
+        response = requests.post(f"{INSTANCE_MANAGER_URL}/get-secret",
                                  json={"secret_name": secret_name})
         logging.info(f"Response status code: {response.status_code}")
         logging.info(f"Response content: {response.content}")
@@ -249,7 +253,7 @@ async def sync_challenges():
             logging.info(f"{datetime.now()}: Starting synchronization process")
 
             # Call the Flask API to get the current list of challenge pods
-            response = requests.get("https://eductf.rydersel.cloud/instance-manager/api/list-challenge-pods")
+            response = requests.get(f"{INSTANCE_MANAGER_URL}/list-challenge-pods")
             response.raise_for_status()
             challenge_pods = response.json().get("challenge_pods", [])
             logging.info(f"Retrieved {len(challenge_pods)} challenge pods from API")
@@ -269,7 +273,7 @@ async def sync_challenges():
 
                 # Get pod status from Kubernetes
                 status_response = requests.get(
-                    f"https://eductf.rydersel.cloud/instance-manager/api/get-pod-status",
+                    f"{INSTANCE_MANAGER_URL}/get-pod-status",
                     params={"pod_name": pod_id}
                 )
                 current_status = "unknown"

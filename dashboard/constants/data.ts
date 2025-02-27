@@ -101,22 +101,23 @@ export const defaultAppsConfig: AppConfig[] = [
 
 export const navItems: NavItem[] = [
   {
-    title: 'Home',
-    href: '/home',
-    icon: 'logo',
-    label: 'home'
-  },
-  {
     title: 'Dashboard',
     href: '/dashboard',
     icon: 'dashboard',
     label: 'Dashboard'
   },
   {
-    title: 'Challenges',
+    title: 'Challenge Instances',
     href: '/dashboard/challenge',
     icon: 'laptop',
-    label: 'Challenges'
+    label: 'challenge-instances'
+  },
+  {
+    title: 'Installed Challenges',
+    href: '/dashboard/challenges',
+    icon: 'settings',
+    label: 'installed-challenges',
+    adminOnly: true
   },
   {
     title: 'Competitions',

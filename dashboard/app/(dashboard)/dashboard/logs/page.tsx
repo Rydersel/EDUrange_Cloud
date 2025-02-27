@@ -10,6 +10,9 @@ import authConfig from '@/auth.config';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Shield } from 'lucide-react';
 import { ActivityEventType, Prisma } from '@prisma/client';
+import { Button } from '@/components/ui/button';
+import Link from 'next/link';
+import { Database, Upload } from 'lucide-react';
 
 const breadcrumbItems = [{ title: 'Logs', link: '/dashboard/logs' }];
 

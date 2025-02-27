@@ -9,6 +9,7 @@ import {Plus} from 'lucide-react';
 import {useRouter} from 'next/navigation';
 import {getColumns} from './columns';
 import {ChallengeDetailsModal} from '@/components/modal/challenge-details-modal';
+import { getInstanceManagerUrl } from '@/lib/api-config';
 
 function calcTimeSince(date: Date) {
   const seconds = Math.floor((new Date().getTime() - date.getTime()) / 1000);
@@ -41,6 +42,7 @@ export const ChallengesClient: React.FC<ChallengesClientProps> = ({ data }) => {
   const [challenges, setChallenges] = useState<Challenge[]>(data);
   const [selectedChallenge, setSelectedChallenge] = useState<Challenge | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const instanceManagerUrl = getInstanceManagerUrl();
 
   const fetchUserEmail = async (userId: string) => {
     try {
@@ -56,7 +58,7 @@ export const ChallengesClient: React.FC<ChallengesClientProps> = ({ data }) => {
   };
 
   const fetchChallenges = async () => {
-    const response = await fetch('https://eductf.rydersel.cloud/instance-manager/api/list-challenge-pods');
+    const response = await fetch(`${instanceManagerUrl}/list-challenge-pods`);
     const result = await response.json();
     if (response.ok) {
       const challengePods = await Promise.all(
@@ -81,7 +83,7 @@ export const ChallengesClient: React.FC<ChallengesClientProps> = ({ data }) => {
           challengePods.map(async (challenge) => {
             try {
               // Fetch flag
-              const flagResponse = await fetch('https://eductf.rydersel.cloud/instance-manager/api/get-secret', {
+              const flagResponse = await fetch(`${instanceManagerUrl}/get-secret`, {
                 method: 'POST',
                 headers: {
                   'Content-Type': 'application/json',
@@ -100,7 +102,7 @@ export const ChallengesClient: React.FC<ChallengesClientProps> = ({ data }) => {
 
             try {
               // Fetch status
-              const statusResponse = await fetch(`https://eductf.rydersel.cloud/instance-manager/api/get-pod-status?pod_name=${challenge.id}`);
+              const statusResponse = await fetch(`${instanceManagerUrl}/get-pod-status?pod_name=${challenge.id}`);
               if (statusResponse.ok) {
                 const statusResult = await statusResponse.json();
                 challenge.status = statusResult.status;
@@ -166,7 +168,7 @@ export const ChallengesClient: React.FC<ChallengesClientProps> = ({ data }) => {
     <>
       <div className="flex items-start justify-between">
         <Heading
-          title={`Challenges (${challenges.length})`}
+          title={`Challenge Instances (${challenges.length})`}
           description="Manage challenge pods"
         />
         <Button

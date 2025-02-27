@@ -1,0 +1,176 @@
+{
+  "moduleName": "EDURange Basics",
+  "moduleDescription": "A collection of basic challenges for EDURange",
+  "author": "EDURange Team",
+  "version": "1.0.0",
+  "createdAt": "2023-06-01T00:00:00Z",
+  "challenges": [
+    {
+      "name": "Bandit-1",
+      "challengeImage": "registry.rydersel.cloud/bandit1",
+      "difficulty": "MEDIUM",
+      "description": "Learn basic Linux commands and find hidden flags",
+      "challengeType": "fullos",
+      "appConfigs": [
+        {
+          "appId": "chrome",
+          "title": "Browser",
+          "icon": "./icons/browser.svg",
+          "width": 70,
+          "height": 80,
+          "screen": "displayChrome",
+          "disabled": false,
+          "favourite": true,
+          "desktop_shortcut": true,
+          "launch_on_startup": false,
+          "additional_config": "{}"
+        },
+        {
+          "appId": "calc",
+          "title": "Calculator",
+          "icon": "./icons/calculator.svg",
+          "width": 5,
+          "height": 50,
+          "screen": "displayTerminalCalc",
+          "disabled": false,
+          "favourite": true,
+          "desktop_shortcut": false,
+          "launch_on_startup": false,
+          "additional_config": "{}"
+        },
+        {
+          "appId": "codeeditor",
+          "title": "Code Editor",
+          "icon": "./icons/code-editor.svg",
+          "width": 60,
+          "height": 75,
+          "screen": "displayCodeEditor",
+          "disabled": false,
+          "favourite": true,
+          "desktop_shortcut": false,
+          "launch_on_startup": false,
+          "additional_config": "{}"
+        },
+        {
+          "appId": "terminal",
+          "title": "Terminal",
+          "icon": "./icons/Remote-Terminal.svg",
+          "width": 60,
+          "height": 55,
+          "screen": "displayTerminal",
+          "disabled": false,
+          "favourite": true,
+          "desktop_shortcut": false,
+          "launch_on_startup": true,
+          "additional_config": "{\"disableScrolling\": true}"
+        },
+        {
+          "appId": "settings",
+          "title": "Settings",
+          "icon": "./icons/settings.svg",
+          "width": 50,
+          "height": 60,
+          "screen": "displaySettings",
+          "disabled": false,
+          "favourite": true,
+          "desktop_shortcut": false,
+          "launch_on_startup": false,
+          "additional_config": "{}"
+        },
+        {
+          "appId": "doom",
+          "title": "Doom",
+          "icon": "./icons/doom.svg",
+          "width": 80,
+          "height": 90,
+          "screen": "displayDoom",
+          "disabled": false,
+          "favourite": true,
+          "desktop_shortcut": true,
+          "launch_on_startup": false,
+          "additional_config": "{}"
+        },
+        {
+          "appId": "cyberchef",
+          "title": "Cyber Chef",
+          "icon": "./icons/cyberchef.svg",
+          "width": 75,
+          "height": 85,
+          "screen": "Cyberchef",
+          "disabled": false,
+          "favourite": true,
+          "desktop_shortcut": true,
+          "launch_on_startup": false,
+          "additional_config": "{}"
+        },
+        {
+          "appId": "web_chal",
+          "title": "Web Challenge",
+          "icon": "./icons/browser.svg",
+          "width": 70,
+          "height": 80,
+          "screen": "displayWebChal",
+          "disabled": false,
+          "favourite": true,
+          "desktop_shortcut": true,
+          "launch_on_startup": false,
+          "additional_config": "{\"url\": \"https://www.edurange.org/\"}"
+        }
+      ],
+      "questions": [
+        {
+          "content": "Find the first flag hidden in the system.",
+          "type": "flag",
+          "points": 10,
+          "answer": "placeholder_flag_1",
+          "order": 0
+        },
+        {
+          "content": "What command would you use to list all files, including hidden ones, with detailed information?",
+          "type": "text",
+          "points": 5,
+          "answer": "hello",
+          "order": 1
+        }
+      ]
+    },
+    {
+      "name": "Test Challenge",
+      "challengeImage": "ubuntu:latest",
+      "difficulty": "EASY",
+      "description": "A test challenge for development",
+      "challengeType": "web",
+      "appConfigs": [
+        {
+          "appId": "terminal",
+          "title": "Terminal",
+          "icon": "./icons/terminal.svg",
+          "width": 60,
+          "height": 75,
+          "screen": "displayTerminal",
+          "disabled": false,
+          "favourite": true,
+          "desktop_shortcut": true,
+          "launch_on_startup": false,
+          "additional_config": "{}"
+        }
+      ],
+      "questions": [
+        {
+          "content": "What is the flag?",
+          "type": "flag",
+          "points": 10,
+          "answer": "test_flag",
+          "order": 1
+        },
+        {
+          "content": "What is 2+2?",
+          "type": "text",
+          "points": 5,
+          "answer": "4",
+          "order": 2
+        }
+      ]
+    }
+  ]
+} 

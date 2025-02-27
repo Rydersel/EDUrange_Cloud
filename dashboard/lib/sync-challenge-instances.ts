@@ -1,6 +1,7 @@
 // /scripts/sync-challenge-instances.ts
 
 import { PrismaClient } from '@prisma/client';
+import { getInstanceManagerUrl } from './api-config';
 
 const prisma = new PrismaClient();
 
@@ -26,7 +27,8 @@ async function fetchWithRetry(url: string, options = {}, retries = 3) {
 
 async function syncChallengeInstances() {
   try {
-    const data = await fetchWithRetry('https://eductf.rydersel.cloud/instance-manager/api/list-challenge-pods');
+    const instanceManagerUrl = getInstanceManagerUrl();
+    const data = await fetchWithRetry(`${instanceManagerUrl}/list-challenge-pods`);
 
     if (data.ok) {
       const activePods = data.challenge_pods;

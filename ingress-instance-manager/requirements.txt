@@ -5,6 +5,7 @@ flask_cors==3.0.10
 kubernetes==29.0.0
 python-dotenv
 eventlet
+psutil==5.9.5
 
 
 

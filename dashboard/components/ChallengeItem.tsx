@@ -13,11 +13,13 @@ import { Button } from "./ui/button"
 import { motion, AnimatePresence } from "framer-motion"
 import { extractChallengeDescription } from "@/lib/utils"
 import { useToast } from "./ui/use-toast"
+import { useRouter } from "next/navigation"
 
 interface Challenge {
   id: string;
   name: string;
   difficulty: string;
+  description: string;
   AppsConfig: string;
   challengeType: {
     id: string;
@@ -75,8 +77,9 @@ export function ChallengeItem({
 }: ChallengeItemProps) {
   const [showCompletionAnimation, setShowCompletionAnimation] = React.useState(false);
   const [isStarting, setIsStarting] = React.useState(false);
-  const description = extractChallengeDescription(challenge.AppsConfig);
+  const description = challenge.description || extractChallengeDescription(challenge.AppsConfig);
   const { toast } = useToast();
+  const router = useRouter();
 
   const handleStartChallenge = async () => {
     try {
@@ -111,6 +114,9 @@ export function ChallengeItem({
         newMap.set(competitionId, competitionChallenges);
         return newMap;
       });
+      
+      // Refresh the page to update the instances list
+      router.refresh();
       
       if (data.challengeUrl) {
         // Update toast to show waiting status
@@ -243,7 +249,11 @@ export function ChallengeItem({
           <div className="px-4 pb-4 bg-[#010301]">
             <div className="rounded-lg bg-[#0A120A] p-4 space-y-4">
               <div className="flex justify-between items-start">
-                <p className="text-gray-200">{description}</p>
+                <p className="text-gray-200">
+                  {description && description !== 'No description available' 
+                    ? description 
+                    : 'This challenge does not have a description.'}
+                </p>
                 <div className="flex items-center gap-2 ml-4">
                   <span className="text-sm text-gray-400">Questions completed:</span>
                   <Badge variant="secondary" className="bg-[#22C55E]/10 text-[#22C55E]">

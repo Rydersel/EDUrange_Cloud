@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { User } from "@prisma/client";
 import { transformToWebOSFormat, transformQuestionsToPromptApp } from "@/lib/webos/transform";
 import { ActivityLogger, ActivityEventType } from '@/lib/activity-logger';
+import { getInstanceManagerUrl } from "@/lib/api-config";
 
 export async function POST(req: Request) {
   try {
@@ -90,6 +91,9 @@ export async function POST(req: Request) {
     );
     transformedAppConfigs.push(promptApp);
 
+    // Get the instance manager URL
+    const instanceManagerUrl = getInstanceManagerUrl();
+    
     // Call instance manager to create challenge
     const instanceManagerPayload = {
       user_id: session.user.id,
@@ -103,7 +107,7 @@ export async function POST(req: Request) {
     console.log("Calling instance manager with payload:", instanceManagerPayload);
 
     const response = await fetch(
-      "https://eductf.rydersel.cloud/instance-manager/api/start-challenge",
+      `${instanceManagerUrl}/start-challenge`,
       {
         method: "POST",
         headers: {
@@ -138,7 +142,7 @@ export async function POST(req: Request) {
     };
 
     await fetch(
-      "https://eductf.rydersel.cloud/instance-manager/api/update-challenge",
+      `${instanceManagerUrl}/update-challenge`,
       {
         method: "POST",
         headers: {

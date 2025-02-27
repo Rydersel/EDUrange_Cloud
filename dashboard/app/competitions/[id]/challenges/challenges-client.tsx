@@ -24,7 +24,7 @@ export function ChallengesClient({
   return (
     <>
       <CompetitionNav competitionId={competitionId} />
-      <div className="container py-8">
+      <div className="container py-8 h-[calc(100vh-64px)] overflow-y-auto">
         <div className="mb-8">
           <ChallengeInstanceManager
             instances={activeInstances}

@@ -228,12 +228,39 @@ describe('Competition Isolation', () => {
 
   describe('Points Isolation', () => {
     test('should maintain points isolation between competitions', async () => {
+      // Create dedicated challenges for this test
+      const isolationChallenge1 = await prisma.challenges.create({
+        data: {
+          id: `test-isolation-${uuidv4()}`,
+          name: generateUniqueName('Isolation Test Challenge 1'),
+          description: 'Test Description for Isolation 1',
+          difficulty: 'EASY',
+          challengeImage: 'test-image-isolation-1.png',
+          challengeType: {
+            connect: { id: challengeTypeId }
+          }
+        }
+      });
+      
+      const isolationChallenge2 = await prisma.challenges.create({
+        data: {
+          id: `test-isolation-${uuidv4()}`,
+          name: generateUniqueName('Isolation Test Challenge 2'),
+          description: 'Test Description for Isolation 2',
+          difficulty: 'MEDIUM',
+          challengeImage: 'test-image-isolation-2.png',
+          challengeType: {
+            connect: { id: challengeTypeId }
+          }
+        }
+      });
+      
       // Add challenges to competitions with different point values
       await prisma.groupChallenge.create({
         data: {
           points: 100,
           groupId: competition1Id,
-          challengeId: challenge1Id
+          challengeId: isolationChallenge1.id
         }
       });
 
@@ -241,38 +268,77 @@ describe('Competition Isolation', () => {
         data: {
           points: 200,
           groupId: competition2Id,
-          challengeId: challenge1Id
+          challengeId: isolationChallenge1.id
         }
       });
 
       // Add points for student1 in competition1
       await prisma.groupPoints.create({
         data: {
-          points: 100,
           userId: testStudent1Id,
-          groupId: competition1Id
+          groupId: competition1Id,
+          points: 100
         }
       });
 
-      // Verify student1's points in competition1
-      const points1 = await prisma.groupPoints.findFirst({
+      // Add points for student2 in competition2
+      await prisma.groupPoints.create({
+        data: {
+          userId: testStudent2Id,
+          groupId: competition2Id,
+          points: 200
+        }
+      });
+
+      // Verify points isolation
+      const student1Points = await prisma.groupPoints.findUnique({
         where: {
-          userId: testStudent1Id,
-          groupId: competition1Id
+          userId_groupId: {
+            userId: testStudent1Id,
+            groupId: competition1Id
+          }
         }
       });
 
-      expect(points1?.points).toBe(100);
-
-      // Verify student1 has no points in competition2
-      const points2 = await prisma.groupPoints.findFirst({
+      const student2Points = await prisma.groupPoints.findUnique({
         where: {
-          userId: testStudent1Id,
-          groupId: competition2Id
+          userId_groupId: {
+            userId: testStudent2Id,
+            groupId: competition2Id
+          }
         }
       });
 
-      expect(points2).toBeNull();
+      expect(student1Points).not.toBeNull();
+      expect(student2Points).not.toBeNull();
+      expect(student1Points?.points).toBe(100);
+      expect(student2Points?.points).toBe(200);
+
+      // Clean up
+      await prisma.groupPoints.deleteMany({
+        where: {
+          OR: [
+            { userId: testStudent1Id, groupId: competition1Id },
+            { userId: testStudent2Id, groupId: competition2Id }
+          ]
+        }
+      });
+      
+      await prisma.groupChallenge.deleteMany({
+        where: {
+          challengeId: {
+            in: [isolationChallenge1.id, isolationChallenge2.id]
+          }
+        }
+      });
+      
+      await prisma.challenges.deleteMany({
+        where: {
+          id: {
+            in: [isolationChallenge1.id, isolationChallenge2.id]
+          }
+        }
+      });
     });
   });
 

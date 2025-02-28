@@ -219,16 +219,45 @@ describe('Challenge Management', () => {
   });
 
   test('should retrieve a challenge by ID', async () => {
+    // Create a dedicated challenge for this test
+    const retrieveChallenge = await prisma.challenges.create({
+      data: {
+        id: `test-retrieve-${uuidv4()}`,
+        name: 'Retrieve Test Challenge',
+        description: 'Test Description for Retrieval',
+        difficulty: ChallengeDifficulty.EASY,
+        challengeImage: 'test-image',
+        challengeTypeId: testChallengeTypeId
+      }
+    });
+    
     const challenge = await prisma.challenges.findUnique({
-      where: { id: testChallengeId }
+      where: { id: retrieveChallenge.id }
     });
     expect(challenge).toBeDefined();
-    expect(challenge?.name).toBe('Test Challenge');
+    expect(challenge?.name).toBe('Retrieve Test Challenge');
+    
+    // Clean up
+    await prisma.challenges.delete({
+      where: { id: retrieveChallenge.id }
+    });
   });
 
   test('should update a challenge', async () => {
+    // Create a dedicated challenge for this test
+    const updateChallenge = await prisma.challenges.create({
+      data: {
+        id: `test-update-${uuidv4()}`,
+        name: 'Update Test Challenge',
+        description: 'Test Description for Update',
+        difficulty: ChallengeDifficulty.EASY,
+        challengeImage: 'test-image',
+        challengeTypeId: testChallengeTypeId
+      }
+    });
+    
     const updatedChallenge = await prisma.challenges.update({
-      where: { id: testChallengeId },
+      where: { id: updateChallenge.id },
       data: {
         name: 'Updated Challenge Name',
         difficulty: ChallengeDifficulty.HARD
@@ -236,5 +265,10 @@ describe('Challenge Management', () => {
     });
     expect(updatedChallenge.name).toBe('Updated Challenge Name');
     expect(updatedChallenge.difficulty).toBe(ChallengeDifficulty.HARD);
+    
+    // Clean up
+    await prisma.challenges.delete({
+      where: { id: updateChallenge.id }
+    });
   });
 }); 

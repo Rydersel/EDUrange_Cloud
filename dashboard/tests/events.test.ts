@@ -227,8 +227,8 @@ describe('Activity Logging', () => {
   });
 
   test('should log challenge events', async () => {
-    // Create challenge instance
-    const instance = await prisma.challengeInstance.create({
+    // Create a dedicated challenge instance for this test
+    const dedicatedChallengeInstance = await prisma.challengeInstance.create({
       data: {
         id: `test-${uuidv4()}`,
         challengeId: testChallengeId,
@@ -250,7 +250,7 @@ describe('Activity Logging', () => {
         severity: 'INFO',
         metadata: JSON.stringify({
           challengeId: testChallengeId,
-          instanceId: instance.id,
+          instanceId: dedicatedChallengeInstance.id,
           timestamp: new Date().toISOString()
         })
       }
@@ -258,23 +258,80 @@ describe('Activity Logging', () => {
 
     await verifyEvent(PrismaActivityEventType.CHALLENGE_STARTED, testUserId, {
       challengeId: testChallengeId,
-      instanceId: instance.id
+      instanceId: dedicatedChallengeInstance.id
     });
 
-    // Clean up instance
-    try {
+    // Test challenge completion event
+    await prisma.activityLog.create({
+      data: {
+        eventType: PrismaActivityEventType.CHALLENGE_COMPLETED,
+        userId: testUserId,
+        severity: 'INFO',
+        metadata: JSON.stringify({
+          challengeId: testChallengeId,
+          instanceId: dedicatedChallengeInstance.id,
+          timestamp: new Date().toISOString()
+        })
+      }
+    });
+
+    await verifyEvent(PrismaActivityEventType.CHALLENGE_COMPLETED, testUserId, {
+      challengeId: testChallengeId,
+      instanceId: dedicatedChallengeInstance.id
+    });
+    
+    // Clean up
     await prisma.challengeInstance.delete({
-      where: { id: instance.id }
+      where: { id: dedicatedChallengeInstance.id }
     });
-    }
-    catch (e) {
-    }
+  });
 
+  test('should log flag submission events', async () => {
+    // Create a dedicated challenge instance for this test
+    const dedicatedChallengeInstance = await prisma.challengeInstance.create({
+      data: {
+        id: `test-${uuidv4()}`,
+        challengeId: testChallengeId,
+        userId: testUserId,
+        competitionId: testGroupId,
+        challengeImage: 'test-image',
+        challengeUrl: 'test-url',
+        status: 'RUNNING',
+        flagSecretName: 'test-secret',
+        flag: 'test-flag'
+      }
+    });
+    
+    // Test flag submission event
+    await prisma.activityLog.create({
+      data: {
+        eventType: PrismaActivityEventType.QUESTION_ATTEMPTED,
+        userId: testUserId,
+        severity: 'INFO',
+        metadata: JSON.stringify({
+          challengeId: testChallengeId,
+          instanceId: dedicatedChallengeInstance.id,
+          correct: true,
+          timestamp: new Date().toISOString()
+        })
+      }
+    });
+
+    await verifyEvent(PrismaActivityEventType.QUESTION_ATTEMPTED, testUserId, {
+      challengeId: testChallengeId,
+      instanceId: dedicatedChallengeInstance.id,
+      correct: true
+    });
+    
+    // Clean up
+    await prisma.challengeInstance.delete({
+      where: { id: dedicatedChallengeInstance.id }
+    });
   });
 
   test('should log access code events', async () => {
-    // Create access code
-    const accessCode = await prisma.competitionAccessCode.create({
+    // Create a dedicated access code for this test
+    const dedicatedAccessCode = await prisma.competitionAccessCode.create({
       data: {
         code: 'TEST' + Date.now().toString().slice(-4),
         groupId: testGroupId,
@@ -282,25 +339,48 @@ describe('Activity Logging', () => {
         expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000)
       }
     });
-    testAccessCodeId = accessCode.id;
-
-    // Test access code generation event
+    
+    // Test access code creation event
     await prisma.activityLog.create({
       data: {
         eventType: PrismaActivityEventType.ACCESS_CODE_GENERATED,
         userId: testUserId,
         severity: 'INFO',
         metadata: JSON.stringify({
-          accessCodeId: accessCode.id,
           groupId: testGroupId,
+          code: dedicatedAccessCode.code,
           timestamp: new Date().toISOString()
         })
       }
     });
 
     await verifyEvent(PrismaActivityEventType.ACCESS_CODE_GENERATED, testUserId, {
-      accessCodeId: accessCode.id,
-      groupId: testGroupId
+      groupId: testGroupId,
+      code: dedicatedAccessCode.code
+    });
+
+    // Test access code used event
+    await prisma.activityLog.create({
+      data: {
+        eventType: PrismaActivityEventType.GROUP_JOINED,
+        userId: testUserId,
+        severity: 'INFO',
+        metadata: JSON.stringify({
+          groupId: testGroupId,
+          code: dedicatedAccessCode.code,
+          timestamp: new Date().toISOString()
+        })
+      }
+    });
+
+    await verifyEvent(PrismaActivityEventType.GROUP_JOINED, testUserId, {
+      groupId: testGroupId,
+      code: dedicatedAccessCode.code
+    });
+    
+    // Clean up
+    await prisma.competitionAccessCode.delete({
+      where: { id: dedicatedAccessCode.id }
     });
   });
 });

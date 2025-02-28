@@ -28,7 +28,6 @@ describe('Competition Group Management', () => {
   let testGroupId: string;
   let testInstructorId: string;
   let testStudentId: string;
-  let testAccessCodeId: string;
 
   beforeAll(async () => {
     // Create test users with unique emails
@@ -159,9 +158,23 @@ describe('Competition Group Management', () => {
   });
 
   test('should add and remove a student from a competition group', async () => {
+    // Create a dedicated group for this test
+    const dedicatedGroupId = `test-${uuidv4()}`;
+    const dedicatedGroup = await prisma.competitionGroup.create({
+      data: {
+        id: dedicatedGroupId,
+        name: generateUniqueName('Student Test Competition'),
+        description: 'Test Description for Student Management',
+        startDate: new Date(),
+        instructors: {
+          connect: [{ id: testInstructorId }]
+        }
+      }
+    });
+    
     // First add the student
     const updatedGroup = await prisma.competitionGroup.update({
-      where: { id: testGroupId },
+      where: { id: dedicatedGroupId },
       data: {
         members: {
           connect: [{ id: testStudentId }]
@@ -177,7 +190,7 @@ describe('Competition Group Management', () => {
 
     // Then remove the student
     const groupAfterRemoval = await prisma.competitionGroup.update({
-      where: { id: testGroupId },
+      where: { id: dedicatedGroupId },
       data: {
         members: {
           disconnect: [{ id: testStudentId }]
@@ -189,14 +202,33 @@ describe('Competition Group Management', () => {
     });
 
     expect(groupAfterRemoval.members).toHaveLength(0);
+    
+    // Clean up
+    await prisma.competitionGroup.delete({
+      where: { id: dedicatedGroupId }
+    });
   });
 
   test('should update competition group details', async () => {
+    // Create a dedicated group for this test
+    const dedicatedGroupId = `test-${uuidv4()}`;
+    const dedicatedGroup = await prisma.competitionGroup.create({
+      data: {
+        id: dedicatedGroupId,
+        name: generateUniqueName('Update Test Competition'),
+        description: 'Test Description for Update',
+        startDate: new Date(),
+        instructors: {
+          connect: [{ id: testInstructorId }]
+        }
+      }
+    });
+    
     const newEndDate = new Date();
     newEndDate.setDate(newEndDate.getDate() + 7);
 
     const updatedGroup = await prisma.competitionGroup.update({
-      where: { id: testGroupId },
+      where: { id: dedicatedGroupId },
       data: {
         name: generateUniqueName('Updated Competition'),
         description: 'Updated Description',
@@ -207,25 +239,43 @@ describe('Competition Group Management', () => {
     expect(updatedGroup.name).toContain('Updated Competition');
     expect(updatedGroup.description).toBe('Updated Description');
     expect(updatedGroup.endDate).toBeDefined();
+    
+    // Clean up
+    await prisma.competitionGroup.delete({
+      where: { id: dedicatedGroupId }
+    });
   });
 
   test('should generate and use access codes', async () => {
+    // Create a dedicated group for this test
+    const dedicatedGroupId = `test-${uuidv4()}`;
+    const dedicatedGroup = await prisma.competitionGroup.create({
+      data: {
+        id: dedicatedGroupId,
+        name: generateUniqueName('Access Code Test Competition'),
+        description: 'Test Description for Access Codes',
+        startDate: new Date(),
+        instructors: {
+          connect: [{ id: testInstructorId }]
+        }
+      }
+    });
+    
     const accessCode = await prisma.competitionAccessCode.create({
       data: {
         code: 'TEST' + Date.now().toString().slice(-4),
-        groupId: testGroupId,
+        groupId: dedicatedGroupId,
         createdBy: testInstructorId,
         expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000)
       }
     });
-    testAccessCodeId = accessCode.id;
-
+    
     expect(accessCode).toBeDefined();
-    expect(accessCode.groupId).toBe(testGroupId);
+    expect(accessCode.groupId).toBe(dedicatedGroupId);
 
     // Use access code to add student
     await prisma.competitionGroup.update({
-      where: { id: testGroupId },
+      where: { id: dedicatedGroupId },
       data: {
         members: {
           connect: [{ id: testStudentId }]
@@ -236,7 +286,7 @@ describe('Competition Group Management', () => {
     // Verify membership
     const membership = await prisma.competitionGroup.findFirst({
       where: {
-        id: testGroupId,
+        id: dedicatedGroupId,
         members: {
           some: {
             id: testStudentId
@@ -246,5 +296,81 @@ describe('Competition Group Management', () => {
     });
 
     expect(membership).toBeDefined();
+    
+    // Clean up
+    await prisma.competitionAccessCode.delete({
+      where: { id: accessCode.id }
+    });
+    
+    await prisma.competitionGroup.update({
+      where: { id: dedicatedGroupId },
+      data: {
+        members: {
+          disconnect: [{ id: testStudentId }]
+        }
+      }
+    });
+    
+    await prisma.competitionGroup.delete({
+      where: { id: dedicatedGroupId }
+    });
+  });
+
+  test('should handle expired access codes', async () => {
+    // Create a dedicated group for this test
+    const dedicatedGroupId = `test-${uuidv4()}`;
+    const dedicatedGroup = await prisma.competitionGroup.create({
+      data: {
+        id: dedicatedGroupId,
+        name: generateUniqueName('Expired Access Code Test'),
+        description: 'Test Description for Expired Access Codes',
+        startDate: new Date(),
+        instructors: {
+          connect: [{ id: testInstructorId }]
+        }
+      }
+    });
+    
+    // Create an access code that is already expired (1 day in the past)
+    const pastDate = new Date();
+    pastDate.setDate(pastDate.getDate() - 1);
+    
+    const expiredAccessCode = await prisma.competitionAccessCode.create({
+      data: {
+        code: 'EXPIRED' + Date.now().toString().slice(-4),
+        groupId: dedicatedGroupId,
+        createdBy: testInstructorId,
+        expiresAt: pastDate
+      }
+    });
+    
+    expect(expiredAccessCode).toBeDefined();
+    expect(expiredAccessCode.expiresAt).not.toBeNull();
+    expect(expiredAccessCode.expiresAt!.getTime()).toBeLessThan(Date.now());
+    
+    // Check if the access code is expired
+    const isExpired = expiredAccessCode.expiresAt!.getTime() < Date.now();
+    expect(isExpired).toBe(true);
+    
+    // In a real application, attempting to use this code would be rejected
+    // Here we simulate the validation logic that would check for expiration
+    
+    // Verify that the code is found but identified as expired
+    const foundCode = await prisma.competitionAccessCode.findUnique({
+      where: { id: expiredAccessCode.id }
+    });
+    
+    expect(foundCode).not.toBeNull();
+    expect(foundCode?.expiresAt).not.toBeNull();
+    expect(foundCode!.expiresAt!.getTime() < Date.now()).toBe(true);
+    
+    // Clean up
+    await prisma.competitionAccessCode.delete({
+      where: { id: expiredAccessCode.id }
+    });
+    
+    await prisma.competitionGroup.delete({
+      where: { id: dedicatedGroupId }
+    });
   });
 }); 

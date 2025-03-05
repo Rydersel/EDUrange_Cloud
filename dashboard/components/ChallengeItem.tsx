@@ -105,7 +105,7 @@ export function ChallengeItem({
       }
 
       const data = await response.json();
-      
+
       // Update startedChallenges Map
       setStartedChallenges(prev => {
         const newMap = new Map(prev);
@@ -114,10 +114,10 @@ export function ChallengeItem({
         newMap.set(competitionId, competitionChallenges);
         return newMap;
       });
-      
+
       // Refresh the page to update the instances list
       router.refresh();
-      
+
       if (data.challengeUrl) {
         // Update toast to show waiting status
         toast({
@@ -127,7 +127,7 @@ export function ChallengeItem({
 
         // Wait for the URL to be available
         const isAvailable = await checkUrlAvailability(data.challengeUrl);
-        
+
         if (isAvailable) {
           toast({
             title: "Challenge Ready",
@@ -154,42 +154,12 @@ export function ChallengeItem({
     }
   };
 
-  const handleCompleteChallenge = (challengeName: string) => {
-    if (!completedChallenges.get(competitionId)?.has(challengeName)) {
-      setCompletedChallenges(prev => {
-        const newMap = new Map(prev);
-        const competitionChallenges = newMap.get(competitionId) || new Set();
-        competitionChallenges.add(challengeName);
-        newMap.set(competitionId, competitionChallenges);
-        return newMap;
-      });
-      
-      // Update startedChallenges Map
-      setStartedChallenges(prev => {
-        const newMap = new Map(prev);
-        const competitionChallenges = newMap.get(competitionId);
-        if (competitionChallenges) {
-          competitionChallenges.delete(challengeName);
-          if (competitionChallenges.size === 0) {
-            newMap.delete(competitionId);
-          } else {
-            newMap.set(competitionId, competitionChallenges);
-          }
-        }
-        return newMap;
-      });
-      
-      setShowCompletionAnimation(true);
-      setTimeout(() => setShowCompletionAnimation(false), 1500);
-      onComplete(challengeName);
-    }
-  };
 
   return (
-    <Accordion 
-      type="single" 
+    <Accordion
+      type="single"
       collapsible
-      value={expandedChallenge === challenge.name ? challenge.name : ""} 
+      value={expandedChallenge === challenge.name ? challenge.name : ""}
       onValueChange={(value) => setExpandedChallenge(value === "" ? null : value)}
     >
       <AccordionItem value={challenge.name}>
@@ -209,8 +179,8 @@ export function ChallengeItem({
             </div>
             <div className="flex items-center text-gray-400">{challenge.challengeType.name}</div>
             <div>
-              <Badge 
-                variant="secondary" 
+              <Badge
+                variant="secondary"
                 className={`${difficultyColors[challenge.difficulty]} cursor-pointer flex items-center gap-1 w-fit`}
                 onClick={(e) => {
                   e.stopPropagation();
@@ -250,8 +220,8 @@ export function ChallengeItem({
             <div className="rounded-lg bg-[#0A120A] p-4 space-y-4">
               <div className="flex justify-between items-start">
                 <p className="text-gray-200">
-                  {description && description !== 'No description available' 
-                    ? description 
+                  {description && description !== 'No description available'
+                    ? description
                     : 'This challenge does not have a description.'}
                 </p>
                 <div className="flex items-center gap-2 ml-4">
@@ -262,13 +232,12 @@ export function ChallengeItem({
                 </div>
               </div>
 
-              <Button 
+              <Button
                 className="w-full mt-4"
                 onClick={() => {
                   if (challenge.completed || completedChallenges.get(competitionId)?.has(challenge.name)) {
                     // Do nothing if already completed
-                  } else if (startedChallenges.get(competitionId)?.has(challenge.name)) {
-                    handleCompleteChallenge(challenge.name);
+
                   } else {
                     handleStartChallenge();
                   }
@@ -277,9 +246,9 @@ export function ChallengeItem({
               >
                 {isStarting ? 'Starting Challenge...' :
                   challenge.completed || completedChallenges.get(competitionId)?.has(challenge.name)
-                    ? 'Challenge Completed' 
+                    ? 'Challenge Completed'
                     : startedChallenges.get(competitionId)?.has(challenge.name)
-                      ? 'Complete Challenge' 
+                      ? 'Complete Challenge'
                       : 'Start Challenge'}
               </Button>
             </div>

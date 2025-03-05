@@ -8,7 +8,8 @@ import {
   Tooltip,
   XAxis,
   YAxis,
-  Legend
+  Legend,
+  ReferenceLine
 } from 'recharts';
 
 interface ResourceUsageChartProps {
@@ -44,6 +45,7 @@ const CustomTooltip = ({ active, payload, label, formatter }: any) => {
 
 export function ResourceUsageChart({ resourceType, showLegend = true }: ResourceUsageChartProps) {
   const [data, setData] = useState<ResourceData[]>([]);
+  const [currentTime, setCurrentTime] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -52,64 +54,65 @@ export function ResourceUsageChart({ resourceType, showLegend = true }: Resource
       try {
         setLoading(true);
         const response = await fetch(`/api/system-health/history?type=${resourceType}&period=24h`);
-        
+
         if (!response.ok) {
           throw new Error(`Failed to fetch ${resourceType} usage data`);
         }
-        
+
         const result = await response.json();
-        setData(result);
+
+        // Handle the new response format with current_time and data fields
+        if (result && result.data && Array.isArray(result.data)) {
+          // Sort data by time to ensure correct display
+          const sortedData = [...result.data].sort((a, b) => {
+            // Convert time strings to comparable values (assuming HH:MM format)
+            const timeA = a.time.split(':').map(Number);
+            const timeB = b.time.split(':').map(Number);
+
+            // Compare hours first, then minutes
+            if (timeA[0] !== timeB[0]) {
+              return timeA[0] - timeB[0];
+            }
+            return timeA[1] - timeB[1];
+          });
+
+          setData(sortedData);
+          setCurrentTime(result.current_time);
+        } else if (Array.isArray(result)) {
+          // For backward compatibility
+          const sortedData = [...result].sort((a, b) => {
+            const timeA = a.time.split(':').map(Number);
+            const timeB = b.time.split(':').map(Number);
+
+            if (timeA[0] !== timeB[0]) {
+              return timeA[0] - timeB[0];
+            }
+            return timeA[1] - timeB[1];
+          });
+
+          setData(sortedData);
+          setCurrentTime(null);
+        } else {
+          throw new Error(`Invalid response format for ${resourceType} usage data`);
+        }
       } catch (err) {
         console.error(`Error fetching ${resourceType} usage data:`, err);
-        setError(`Failed to load ${resourceType} usage data`);
-        // Generate fallback data
-        setData(generateMockData());
+
       } finally {
         setLoading(false);
       }
     }
 
     fetchData();
-    
+
     // Set up polling every 30 seconds (reduced from 5 minutes)
     const intervalId = setInterval(fetchData, 30 * 1000);
-    
+
     return () => clearInterval(intervalId);
   }, [resourceType]);
 
-  // Mock data - used as fallback if API call fails
-  const generateMockData = (): ResourceData[] => {
-    const now = new Date();
-    const data: ResourceData[] = [];
-    
-    for (let i = 12; i >= 0; i--) {
-      const time = new Date(now.getTime() - i * 3600000);
-      const timeStr = `${time.getHours()}:00`;
-      
-      if (resourceType === 'cpu') {
-        data.push({
-          time: timeStr,
-          system: Math.floor(Math.random() * 30) + 10,
-          challenges: Math.floor(Math.random() * 40) + 20,
-        });
-      } else if (resourceType === 'memory') {
-        data.push({
-          time: timeStr,
-          used: Math.floor(Math.random() * 40) + 30,
-          available: 100 - (Math.floor(Math.random() * 40) + 30),
-        });
-      } else if (resourceType === 'network') {
-        data.push({
-          time: timeStr,
-          inbound: Math.floor(Math.random() * 100) + 50,
-          outbound: Math.floor(Math.random() * 80) + 20,
-        });
-      }
-    }
-    
-    return data;
-  };
-  
+
+
   const getChartConfig = () => {
     switch (resourceType) {
       case 'cpu':
@@ -137,7 +140,7 @@ export function ResourceUsageChart({ resourceType, showLegend = true }: Resource
             { dataKey: 'outbound', stroke: '#82ca9d', fill: '#82ca9d', fillOpacity: 0.3, name: 'Outbound' }
           ],
           yAxisLabel: 'Traffic (MB/s)',
-          tooltipFormatter: (value: number) => [`${value} MB/s`, 'Traffic']
+          tooltipFormatter: (value: number) => [`${value.toFixed(2)} MB/s`, 'Traffic']
         };
       default:
         return {
@@ -170,12 +173,12 @@ export function ResourceUsageChart({ resourceType, showLegend = true }: Resource
             bottom: 0,
           }}
         >
-          <XAxis 
-            dataKey="time" 
-            stroke="#888888" 
-            fontSize={12} 
-            tickLine={false} 
-            axisLine={false} 
+          <XAxis
+            dataKey="time"
+            stroke="#888888"
+            fontSize={12}
+            tickLine={false}
+            axisLine={false}
           />
           <YAxis
             stroke="#888888"
@@ -185,7 +188,7 @@ export function ResourceUsageChart({ resourceType, showLegend = true }: Resource
             tickFormatter={(value) => `${value}`}
             label={{ value: config.yAxisLabel, angle: -90, position: 'insideLeft', style: { textAnchor: 'middle' } }}
           />
-          <Tooltip 
+          <Tooltip
             content={<CustomTooltip formatter={config.tooltipFormatter} />}
           />
           {showLegend && <Legend />}
@@ -200,8 +203,23 @@ export function ResourceUsageChart({ resourceType, showLegend = true }: Resource
               name={area.name}
             />
           ))}
+
+          {/* Add a reference line for the current time */}
+          {currentTime && (
+            <ReferenceLine
+              x={currentTime}
+              stroke="#ff0000"
+              strokeDasharray="3 3"
+              label={{
+                value: 'Now',
+                position: 'top',
+                fill: '#ff0000',
+                fontSize: 10
+              }}
+            />
+          )}
         </AreaChart>
       </ResponsiveContainer>
     </div>
   );
-} 
+}

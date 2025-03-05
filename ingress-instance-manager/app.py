@@ -62,10 +62,13 @@ def start_challenge():
             apps_config=apps_config,
             competition_id=competition_id
         )
-        deployment_name, challenge_url, secret_name = web_challenge.create_pod_service_and_ingress()
+        deployment_name, web_challenge_url, secret_name = web_challenge.create_pod_service_and_ingress()
+        # The WebOS URL is different from the web challenge URL
+        webos_url = f"https://{deployment_name}.{url}"
         return jsonify({
             "success": True,
-            "challenge_url": challenge_url,
+            "challenge_url": webos_url,  # This is the WebOS URL
+            "web_challenge_url": web_challenge_url,  # This is the actual web challenge URL
             "deployment_name": deployment_name,
             "flag_secret_name": secret_name
         }), 200
@@ -208,39 +211,39 @@ def health_check():
         import time
         import os
         from datetime import timezone
-        
+
         # Get process start time for uptime calculation
         try:
             # Get the process start time
             import psutil
             process = psutil.Process(os.getpid())
             process_start_time = datetime.datetime.fromtimestamp(process.create_time(), tz=timezone.utc)
-            
+
             # Calculate uptime
             now = datetime.datetime.now(timezone.utc)
             uptime_delta = now - process_start_time
-            
+
             # Format uptime string
             days = uptime_delta.days
             hours, remainder = divmod(uptime_delta.seconds, 3600)
             minutes, seconds = divmod(remainder, 60)
-            
+
             if days > 0:
                 uptime_str = f"{days} days, {hours} hours, {minutes} minutes"
             elif hours > 0:
                 uptime_str = f"{hours} hours, {minutes} minutes"
             else:
                 uptime_str = f"{minutes} minutes"
-            
+
             # Format last restart time
             last_restart = process_start_time.strftime("%Y-%m-%d %H:%M:%S")
-            
+
             logging.info(f"Calculated uptime: {uptime_str}, last restart: {last_restart}")
         except Exception as e:
             logging.error(f"Error getting uptime: {e}")
             uptime_str = "unknown"
             last_restart = "unknown"
-        
+
         # Check instance manager health
         instance_manager_status = {
             "status": "ok",
@@ -248,20 +251,20 @@ def health_check():
             "version": "1.0.0",   # In a real implementation, this would be fetched from a version file
             "last_restart": last_restart
         }
-        
+
         # Check if detailed check is requested
         check_components = request.args.get('check_components', 'false').lower() == 'true'
-        
+
         if check_components:
             # Check database pod health
             database_status = check_pod_health('postgres')
-            
+
             # Check database controller health (contains both database-api and database-sync)
             db_controller_status = check_pod_health('database-controller')
-            
+
             # Check cert-manager health
             cert_manager_status = check_pod_health('cert-manager')
-            
+
             # Format the database status correctly
             database_info = {
                 "status": database_status["status"] if isinstance(database_status, dict) and "status" in database_status else "error",
@@ -269,16 +272,16 @@ def health_check():
                 "last_restart": database_status["last_restart"] if isinstance(database_status, dict) and "last_restart" in database_status else "unknown",
                 "controller": db_controller_status
             }
-            
+
             # Format the cert-manager status correctly
             cert_manager_info = cert_manager_status if isinstance(cert_manager_status, dict) else {"status": "error", "uptime": "unknown", "last_restart": "unknown"}
-            
+
             return jsonify({
                 "instance_manager": instance_manager_status,
                 "database": database_info,
                 "cert_manager": cert_manager_info
             }), 200
-        
+
         return jsonify(instance_manager_status), 200
     except Exception as e:
         logging.error(f"Health check failed: {e}")
@@ -291,72 +294,72 @@ def check_pod_health(pod_name_prefix):
     """
     try:
         v1 = client.CoreV1Api()
-        
+
         # Use the appropriate namespace based on the pod type
         namespace = 'cert-manager' if pod_name_prefix == 'cert-manager' else 'default'
-        
+
         pods = v1.list_namespaced_pod(namespace=namespace)
-        
+
         for pod in pods.items:
             if pod.metadata.name.startswith(pod_name_prefix):
                 if pod.status.phase == 'Running':
                     container_statuses = pod.status.container_statuses
-                    
+
                     # Get pod start time for uptime calculation
                     start_time = pod.status.start_time
                     if start_time:
                         import datetime
                         from datetime import timezone
-                        
+
                         # Calculate uptime
                         now = datetime.datetime.now(timezone.utc)
                         uptime_delta = now - start_time
-                        
+
                         # Format uptime string
                         days = uptime_delta.days
                         hours, remainder = divmod(uptime_delta.seconds, 3600)
                         minutes, seconds = divmod(remainder, 60)
-                        
+
                         if days > 0:
                             uptime_str = f"{days} days, {hours} hours, {minutes} minutes"
                         elif hours > 0:
                             uptime_str = f"{hours} hours, {minutes} minutes"
                         else:
                             uptime_str = f"{minutes} minutes"
-                        
+
                         # Format last restart time
                         last_restart = start_time.strftime("%Y-%m-%d %H:%M:%S")
                     else:
                         uptime_str = "unknown"
                         last_restart = "unknown"
-                    
+
                     if container_statuses:
                         # For database-controller, check both containers
                         if pod_name_prefix == 'database-controller':
                             # We need to check both database-api and database-sync containers
                             api_container_ready = False
                             sync_container_ready = False
-                            
+
                             for container in container_statuses:
                                 if container.name == 'database-api' and container.ready:
                                     api_container_ready = True
                                 if container.name == 'database-sync' and container.ready:
                                     sync_container_ready = True
-                            
+
                             # Get database connection count
                             try:
                                 # Try to get connection count from postgres pod
                                 postgres_pods = v1.list_namespaced_pod(namespace='default', label_selector='app=postgres')
                                 connection_count = 0
-                                
+
                                 if postgres_pods.items:
                                     # Execute a command to get connection count
                                     exec_command = [
-                                        "/bin/sh", 
-                                        "-c", 
+                                        "/bin/sh",
+                                        "-c",
                                         "PGPASSWORD=$POSTGRES_PASSWORD psql -U $POSTGRES_USER -d $POSTGRES_DB -c 'SELECT count(*) FROM pg_stat_activity;' | grep -v count | grep -v -- -- | tr -d ' '"
                                     ]
-                                    
+
                                     try:
                                         result = stream(
                                             v1.connect_get_namespaced_pod_exec,
@@ -367,7 +370,7 @@ def check_pod_health(pod_name_prefix):
                                             stdout=True, tty=False,
                                             _preload_content=False
                                         )
-                                        
+
                                         # Read the output
                                         while result.is_open():
                                             result.update(timeout=1)
@@ -382,7 +385,7 @@ def check_pod_health(pod_name_prefix):
                                                     connection_count = -1
                                             if result.peek_stderr():
                                                 logging.error(f"Error getting connection count: {result.read_stderr()}")
-                                        
+
                                         result.close()
                                     except Exception as e:
                                         logging.error(f"Error executing command in postgres pod: {e}")
@@ -392,7 +395,7 @@ def check_pod_health(pod_name_prefix):
                             except Exception as e:
                                 logging.error(f"Error getting database connection count: {e}")
                                 connection_count = -1
-                            
+
                             # Return status for each container separately
                             return {
                                 "api": "ok" if api_container_ready else "error",
@@ -406,7 +409,7 @@ def check_pod_health(pod_name_prefix):
                             try:
                                 # Get certificate counts using the cert-manager API
                                 api_instance = client.CustomObjectsApi()
-                                
+
                                 # Get all certificates
                                 try:
                                     certificates = api_instance.list_cluster_custom_object(
@@ -414,24 +417,24 @@ def check_pod_health(pod_name_prefix):
                                         version="v1",
                                         plural="certificates"
                                     )
-                                    
+
                                     total_certs = len(certificates.get('items', []))
                                     valid_certs = 0
                                     expiring_soon_certs = 0
                                     expired_certs = 0
-                                    
+
                                     # Check each certificate's status
                                     for cert in certificates.get('items', []):
                                         status = cert.get('status', {})
                                         conditions = status.get('conditions', [])
-                                        
+
                                         # Check if certificate is ready
                                         is_ready = False
                                         for condition in conditions:
                                             if condition.get('type') == 'Ready' and condition.get('status') == 'True':
                                                 is_ready = True
                                                 break
-                                        
+
                                         if is_ready:
                                             # Check expiration
                                             not_after = status.get('notAfter')
@@ -441,7 +444,7 @@ def check_pod_health(pod_name_prefix):
                                                     from datetime import datetime, timezone, timedelta
                                                     expiry_date = datetime.strptime(not_after, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
                                                     now = datetime.now(timezone.utc)
-                                                    
+
                                                     # Check if expired or expiring soon (within 30 days)
                                                     if expiry_date < now:
                                                         expired_certs += 1
@@ -464,7 +467,7 @@ def check_pod_health(pod_name_prefix):
                                     expiring_soon_certs = 0
                                     expired_certs = 0
                                     total_certs = 0
-                                
+
                             except Exception as e:
                                 logging.error(f"Error getting certificate counts: {e}")
                                 # Default values if we can't get real data
@@ -472,7 +475,7 @@ def check_pod_health(pod_name_prefix):
                                 expiring_soon_certs = 0
                                 expired_certs = 0
                                 total_certs = 0
-                            
+
                             # For other pods, check if all containers are ready
                             all_ready = all(status.ready for status in container_statuses)
                             if all_ready:
@@ -496,7 +499,7 @@ def check_pod_health(pod_name_prefix):
                                     "uptime": uptime_str,
                                     "last_restart": last_restart
                                 }
-        
+
         # If we get here, no matching running pods were found or containers weren't ready
         if pod_name_prefix == 'database-controller':
             return {
@@ -559,49 +562,49 @@ def restart_deployment():
     """
     try:
         deployment_name = request.json.get('deployment')
-        
+
         if not deployment_name:
             return jsonify({"error": "deployment name is required"}), 400
-            
+
         # For security, only allow restarting the instance-manager
         if deployment_name != 'instance-manager':
             return jsonify({"error": "unauthorized deployment restart attempt"}), 403
-            
+
         # Get the apps API client
         apps_v1 = client.AppsV1Api()
-        
+
         # Get the current deployment
         deployment = apps_v1.read_namespaced_deployment(
             name=deployment_name,
             namespace='default'
         )
-        
+
         # Patch the deployment to force a restart
         # This is done by adding a restart annotation with the current timestamp
         if deployment.spec.template.metadata is None:
             deployment.spec.template.metadata = client.V1ObjectMeta()
-            
+
         if deployment.spec.template.metadata.annotations is None:
             deployment.spec.template.metadata.annotations = {}
-            
+
         # Add or update the restart annotation with the current timestamp
         import datetime
         restart_time = datetime.datetime.now().isoformat()
         deployment.spec.template.metadata.annotations['kubectl.kubernetes.io/restartedAt'] = restart_time
-        
+
         # Apply the update
         apps_v1.patch_namespaced_deployment(
             name=deployment_name,
             namespace='default',
             body=deployment
         )
-        
+
         return jsonify({
             "success": True,
             "message": f"Deployment {deployment_name} restart initiated at {restart_time}",
             "deployment": deployment_name
         })
-        
+
     except client.exceptions.ApiException as e:
         logging.error(f"Kubernetes API error: {e}")
         return jsonify({"error": f"Kubernetes API error: {e}"}), 500

@@ -26,7 +26,7 @@ async function getSystemHealth() {
     console.error('Error fetching system health:', error);
     // Return default data with N/A for uptime values if API call fails
     return {
-      ingressInstanceManager: {
+      ingress: {
         status: "error",
         uptime: "N/A",
         lastRestart: "N/A",

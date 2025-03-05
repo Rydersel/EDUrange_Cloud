@@ -9,10 +9,10 @@ import {
   CardTitle
 } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { 
-  Activity, 
-  Server, 
-  Database, 
+import {
+  Activity,
+  Server,
+  Database,
   Trophy,
   RefreshCw
 } from "lucide-react";
@@ -22,11 +22,14 @@ import { DeployedChallengesChart } from "@/components/dashboard/deployed-challen
 import { SystemStatusOverview } from "@/components/dashboard/system-status-overview";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { CPUUsagePieChart } from "@/components/dashboard/cpu-usage-pie-chart";
+import { MemoryUsagePieChart } from "@/components/dashboard/memory-usage-pie-chart";
+import { NodeSpecifications } from "@/components/dashboard/node-specifications";
 
 type HealthStatus = "healthy" | "warning" | "error";
 
 interface SystemStatus {
-  ingressInstanceManager: {
+  ingress: {
     status: string;
     uptime: string;
     lastRestart: string;
@@ -57,6 +60,24 @@ interface SystemStatus {
     pending: number;
     failed: number;
   };
+  resources?: {
+    cpu: {
+      system: number;
+      challenges: number;
+      total: number;
+    };
+    memory: {
+      used: number;
+      available: number;
+      total: number;
+      usedBytes: number;
+    };
+    network: {
+      inbound: number;
+      outbound: number;
+      total: number;
+    };
+  };
 }
 
 interface DashboardClientProps {
@@ -69,19 +90,19 @@ export function DashboardClient({ systemStatus: initialSystemStatus }: Dashboard
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null);
   const [formattedTime, setFormattedTime] = useState<string>('');
-  
+
   // Initialize lastRefreshed only on client-side to avoid hydration mismatch
   useEffect(() => {
     setLastRefreshed(new Date());
   }, []);
-  
+
   // Update formatted time whenever lastRefreshed changes
   useEffect(() => {
     if (lastRefreshed) {
       setFormattedTime(lastRefreshed.toLocaleTimeString());
     }
   }, [lastRefreshed]);
-  
+
   // Function to fetch updated system health data
   const fetchSystemHealth = async () => {
     try {
@@ -91,11 +112,11 @@ export function DashboardClient({ systemStatus: initialSystemStatus }: Dashboard
         cache: 'no-store',
         credentials: 'include',
       });
-      
+
       if (!response.ok) {
         throw new Error('Failed to fetch system health data');
       }
-      
+
       const data = await response.json();
       setSystemStatus(data);
       setLastRefreshed(new Date());
@@ -105,22 +126,22 @@ export function DashboardClient({ systemStatus: initialSystemStatus }: Dashboard
       setIsRefreshing(false);
     }
   };
-  
+
   // Set up automatic refresh every 30 seconds
   useEffect(() => {
     const refreshInterval = setInterval(() => {
       fetchSystemHealth();
     }, 30000); // 30 seconds
-    
+
     // Clean up interval on component unmount
     return () => clearInterval(refreshInterval);
   }, []);
-  
+
   // Manual refresh handler
   const handleManualRefresh = () => {
     fetchSystemHealth();
   };
-  
+
   // Convert string status to the required HealthStatus type
   const getHealthStatus = (status: string): HealthStatus => {
     if (status === "healthy" || status === "warning" || status === "error") {
@@ -136,16 +157,16 @@ export function DashboardClient({ systemStatus: initialSystemStatus }: Dashboard
   };
 
   return (
-    <div className="flex-1 space-y-4 p-4 pt-6">
+    <div className="flex-1 space-y-4 p-4 pt-6 overflow-auto max-h-[calc(100vh-4rem)]">
       <div className="flex items-center justify-between">
         <h2 className="text-3xl font-bold tracking-tight">Admin Dashboard</h2>
         <div className="flex items-center gap-2">
           <span className="text-sm text-muted-foreground">
             {formattedTime ? `Last updated: ${formattedTime}` : 'Loading...'}
           </span>
-          <Button 
-            variant="outline" 
-            size="sm" 
+          <Button
+            variant="outline"
+            size="sm"
             onClick={handleManualRefresh}
             disabled={isRefreshing}
           >
@@ -154,36 +175,36 @@ export function DashboardClient({ systemStatus: initialSystemStatus }: Dashboard
           </Button>
         </div>
       </div>
-      
+
       <Tabs defaultValue="overview" className="space-y-4">
         <TabsList>
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="resources">Resources</TabsTrigger>
           <TabsTrigger value="challenges">Challenges</TabsTrigger>
         </TabsList>
-        
+
         <TabsContent value="overview" className="space-y-4">
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-            <div 
+            <div
               onClick={() => handleCardClick('instance-manager')}
               className="cursor-pointer transition-transform hover:scale-[1.02]"
             >
-              <SystemHealthCard 
+              <SystemHealthCard
                 title="Instance Manager"
-                status={getHealthStatus(systemStatus.ingressInstanceManager.status)}
+                status={getHealthStatus(systemStatus.ingress.status)}
                 icon={Server}
                 details={[
-                  { label: "Uptime", value: systemStatus.ingressInstanceManager.uptime },
-                  { label: "Version", value: systemStatus.ingressInstanceManager.version }
+                  { label: "Uptime", value: systemStatus.ingress.uptime },
+                  { label: "Version", value: systemStatus.ingress.version }
                 ]}
               />
             </div>
-            
-            <div 
+
+            <div
               onClick={() => handleCardClick('database')}
               className="cursor-pointer transition-transform hover:scale-[1.02]"
             >
-              <SystemHealthCard 
+              <SystemHealthCard
                 title="Database"
                 status={getHealthStatus(systemStatus.database.status)}
                 icon={Database}
@@ -193,12 +214,12 @@ export function DashboardClient({ systemStatus: initialSystemStatus }: Dashboard
                 ]}
               />
             </div>
-            
-            <div 
+
+            <div
               onClick={() => handleCardClick('cert-manager')}
               className="cursor-pointer transition-transform hover:scale-[1.02]"
             >
-              <SystemHealthCard 
+              <SystemHealthCard
                 title="Cert Manager"
                 status={getHealthStatus(systemStatus.certManager.status)}
                 icon={Activity}
@@ -208,7 +229,7 @@ export function DashboardClient({ systemStatus: initialSystemStatus }: Dashboard
                 ]}
               />
             </div>
-            
+
             <div
               onClick={() => router.push('/dashboard/challenge')}
               className="cursor-pointer transition-transform hover:scale-[1.02]"
@@ -229,7 +250,7 @@ export function DashboardClient({ systemStatus: initialSystemStatus }: Dashboard
               </Card>
             </div>
           </div>
-          
+
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
             <Card className="col-span-4">
               <CardHeader>
@@ -239,7 +260,7 @@ export function DashboardClient({ systemStatus: initialSystemStatus }: Dashboard
                 <SystemStatusOverview />
               </CardContent>
             </Card>
-            
+
             <Card className="col-span-3">
               <CardHeader>
                 <CardTitle>Deployed Challenges</CardTitle>
@@ -250,8 +271,46 @@ export function DashboardClient({ systemStatus: initialSystemStatus }: Dashboard
             </Card>
           </div>
         </TabsContent>
-        
+
         <TabsContent value="resources" className="space-y-4">
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            <Card>
+              <CardHeader>
+                <CardTitle>CPU Usage Percentage</CardTitle>
+                <CardDescription>
+                  Current CPU utilization
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <CPUUsagePieChart />
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Memory Usage Percentage</CardTitle>
+                <CardDescription>
+                  Current memory utilization
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <MemoryUsagePieChart />
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Node Specifications</CardTitle>
+                <CardDescription>
+                  System hardware details
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <NodeSpecifications />
+              </CardContent>
+            </Card>
+          </div>
+
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             <Card className="col-span-2">
               <CardHeader>
@@ -261,12 +320,12 @@ export function DashboardClient({ systemStatus: initialSystemStatus }: Dashboard
                 </CardDescription>
               </CardHeader>
               <CardContent className="pl-2">
-                <ResourceUsageChart 
+                <ResourceUsageChart
                   resourceType="cpu"
                 />
               </CardContent>
             </Card>
-            
+
             <Card>
               <CardHeader>
                 <CardTitle>Memory Usage</CardTitle>
@@ -275,14 +334,14 @@ export function DashboardClient({ systemStatus: initialSystemStatus }: Dashboard
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <ResourceUsageChart 
+                <ResourceUsageChart
                   resourceType="memory"
                   showLegend={false}
                 />
               </CardContent>
             </Card>
           </div>
-          
+
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             <Card className="col-span-3">
               <CardHeader>
@@ -292,14 +351,14 @@ export function DashboardClient({ systemStatus: initialSystemStatus }: Dashboard
                 </CardDescription>
               </CardHeader>
               <CardContent className="pl-2">
-                <ResourceUsageChart 
+                <ResourceUsageChart
                   resourceType="network"
                 />
               </CardContent>
             </Card>
           </div>
         </TabsContent>
-        
+
         <TabsContent value="challenges" className="space-y-4">
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             <Card className="col-span-2">
@@ -313,7 +372,7 @@ export function DashboardClient({ systemStatus: initialSystemStatus }: Dashboard
                 <DeployedChallengesChart showDetails={true} />
               </CardContent>
             </Card>
-            
+
             <Card>
               <CardHeader>
                 <CardTitle>Challenge Types</CardTitle>
@@ -330,4 +389,4 @@ export function DashboardClient({ systemStatus: initialSystemStatus }: Dashboard
       </Tabs>
     </div>
   );
-} 
+}

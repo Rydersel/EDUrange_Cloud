@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ConnectSphere - Social Dashboard</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+    <script src="script.js" defer></script>
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar Navigation -->
+        <nav class="sidebar">
+            <div class="sidebar-header">
+                <div class="logo">
+                    <i class="fas fa-globe"></i>
+                    <span>ConnectSphere</span>
+                </div>
+                <button class="mobile-toggle" id="sidebarToggle">
+                    <i class="fas fa-bars"></i>
+                </button>
+            </div>
+            
+            <ul class="sidebar-menu">
+                <li class="active">
+                    <a href="#">
+                        <i class="fas fa-home"></i>
+                        <span>Dashboard</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="#">
+                        <i class="fas fa-user-friends"></i>
+                        <span>Friends</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="#">
+                        <i class="fas fa-comment-alt"></i>
+                        <span>Messages</span>
+                        <span class="badge">5</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="#">
+                        <i class="fas fa-bell"></i>
+                        <span>Notifications</span>
+                        <span class="badge">12</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="#">
+                        <i class="fas fa-calendar-alt"></i>
+                        <span>Events</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="#">
+                        <i class="fas fa-cog"></i>
+                        <span>Settings</span>
+                    </a>
+                </li>
+            </ul>
+            
+            <div class="sidebar-footer">
+                <div class="user-info">
+                    <img src="https://via.placeholder.com/40" alt="User Avatar" class="avatar">
+                    <div class="user-details">
+                        <h4>John Doe</h4>
+                        <p>Online</p>
+                    </div>
+                </div>
+                <a href="#" class="logout-btn">
+                    <i class="fas fa-sign-out-alt"></i>
+                </a>
+            </div>
+        </nav>
+        
+        <!-- Main Content Area -->
+        <main class="main-content">
+            <header class="content-header">
+                <div class="search-bar">
+                    <i class="fas fa-search"></i>
+                    <input type="text" placeholder="Search...">
+                </div>
+                
+                <div class="header-actions">
+                    <button class="action-btn">
+                        <i class="fas fa-bell"></i>
+                        <span class="notification-dot"></span>
+                    </button>
+                    <button class="action-btn">
+                        <i class="fas fa-envelope"></i>
+                        <span class="notification-dot"></span>
+                    </button>
+                    <div class="user-dropdown">
+                        <img src="https://via.placeholder.com/40" alt="User Avatar" class="avatar">
+                        <span>John Doe</span>
+                        <i class="fas fa-chevron-down"></i>
+                    </div>
+                </div>
+            </header>
+            
+            <div class="dashboard-content">
+                <div class="welcome-card">
+                    <div class="welcome-text">
+                        <h1>Welcome back, John!</h1>
+                        <p>Here's what's happening with your network today.</p>
+                    </div>
+                    <div class="welcome-actions">
+                        <button class="btn btn-primary">
+                            <i class="fas fa-plus"></i> Create Post
+                        </button>
+                        <button class="btn btn-secondary">
+                            <i class="fas fa-user-plus"></i> Add Friends
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="stats-cards">
+                    <div class="stat-card">
+                        <div class="stat-icon" style="background-color: rgba(66, 133, 244, 0.1);">
+                            <i class="fas fa-eye" style="color: #4285F4;"></i>
+                        </div>
+                        <div class="stat-details">
+                            <h3>Profile Views</h3>
+                            <p class="stat-value">1,259</p>
+                            <p class="stat-change positive">
+                                <i class="fas fa-arrow-up"></i> 12% since last week
+                            </p>
+                        </div>
+                    </div>
+                    
+                    <div class="stat-card">
+                        <div class="stat-icon" style="background-color: rgba(234, 67, 53, 0.1);">
+                            <i class="fas fa-heart" style="color: #EA4335;"></i>
+                        </div>
+                        <div class="stat-details">
+                            <h3>Post Likes</h3>
+                            <p class="stat-value">4,732</p>
+                            <p class="stat-change positive">
+                                <i class="fas fa-arrow-up"></i> 8% since last week
+                            </p>
+                        </div>
+                    </div>
+                    
+                    <div class="stat-card">
+                        <div class="stat-icon" style="background-color: rgba(251, 188, 5, 0.1);">
+                            <i class="fas fa-comment" style="color: #FBBC05;"></i>
+                        </div>
+                        <div class="stat-details">
+                            <h3>Comments</h3>
+                            <p class="stat-value">928</p>
+                            <p class="stat-change negative">
+                                <i class="fas fa-arrow-down"></i> 3% since last week
+                            </p>
+                        </div>
+                    </div>
+                    
+                    <div class="stat-card">
+                        <div class="stat-icon" style="background-color: rgba(52, 168, 83, 0.1);">
+                            <i class="fas fa-share-alt" style="color: #34A853;"></i>
+                        </div>
+                        <div class="stat-details">
+                            <h3>Shares</h3>
+                            <p class="stat-value">346</p>
+                            <p class="stat-change positive">
+                                <i class="fas fa-arrow-up"></i> 15% since last week
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="content-grid">
+                    <div class="content-card recent-activity">
+                        <div class="card-header">
+                            <h2>Recent Activity</h2>
+                            <button class="btn-icon">
+                                <i class="fas fa-ellipsis-h"></i>
+                            </button>
+                        </div>
+                        <div class="activity-list">
+                            <div class="activity-item">
+                                <img src="https://via.placeholder.com/40" alt="User Avatar" class="avatar">
+                                <div class="activity-details">
+                                    <p><strong>Sarah Johnson</strong> commented on your photo</p>
+                                    <span class="activity-time">2 hours ago</span>
+                                </div>
+                            </div>
+                            <div class="activity-item">
+                                <img src="https://via.placeholder.com/40" alt="User Avatar" class="avatar">
+                                <div class="activity-details">
+                                    <p><strong>Mike Smith</strong> liked your post</p>
+                                    <span class="activity-time">4 hours ago</span>
+                                </div>
+                            </div>
+                            <div class="activity-item">
+                                <img src="https://via.placeholder.com/40" alt="User Avatar" class="avatar">
+                                <div class="activity-details">
+                                    <p><strong>Emily Davis</strong> sent you a friend request</p>
+                                    <span class="activity-time">Yesterday</span>
+                                </div>
+                            </div>
+                            <div class="activity-item">
+                                <img src="https://via.placeholder.com/40" alt="User Avatar" class="avatar">
+                                <div class="activity-details">
+                                    <p><strong>David Wilson</strong> shared your post</p>
+                                    <span class="activity-time">Yesterday</span>
+                                </div>
+                            </div>
+                        </div>
+                        <button class="btn btn-text">View All Activity</button>
+                    </div>
+                    
+                    <div class="content-card challenge-card">
+                        <div class="card-header">
+                            <h2>JavaScript Challenge</h2>
+                            <button class="btn-icon" id="refreshChallenge">
+                                <i class="fas fa-sync-alt"></i>
+                            </button>
+                        </div>
+                        <div class="challenge-content">
+                            <div class="challenge-icon">
+                                <i class="fab fa-js"></i>
+                            </div>
+                            <h3>Find the Hidden Flag</h3>
+                            <p>This page contains a hidden flag in the JavaScript code. Your mission is to find it!</p>
+                            <div class="challenge-hints">
+                                <h4>Hints:</h4>
+                                <ul>
+                                    <li>JavaScript files are loaded separately from HTML files</li>
+                                    <li>Check the browser's developer tools to examine JavaScript files</li>
+                                    <li>Look for suspicious variable names or objects in the code</li>
+                                </ul>
+                            </div>
+                            <div class="challenge-resources">
+                                <h4>Resources:</h4>
+                                <ul>
+                                    <li><a href="https://developer.mozilla.org/en-US/docs/Web/JavaScript" target="_blank"><i class="fas fa-external-link-alt"></i> JavaScript Documentation</a></li>
+                                    <li><a href="https://developer.mozilla.org/en-US/docs/Tools/Debugger" target="_blank"><i class="fas fa-external-link-alt"></i> JavaScript Debugger Tools</a></li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="content-card upcoming-events">
+                        <div class="card-header">
+                            <h2>Upcoming Events</h2>
+                            <button class="btn-icon">
+                                <i class="fas fa-ellipsis-h"></i>
+                            </button>
+                        </div>
+                        <div class="events-list">
+                            <div class="event-item">
+                                <div class="event-date">
+                                    <span class="event-day">15</span>
+                                    <span class="event-month">MAR</span>
+                                </div>
+                                <div class="event-details">
+                                    <h4>Web Security Conference</h4>
+                                    <p><i class="fas fa-map-marker-alt"></i> Tech Center, Room 305</p>
+                                    <p><i class="fas fa-clock"></i> 10:00 AM - 4:00 PM</p>
+                                </div>
+                            </div>
+                            <div class="event-item">
+                                <div class="event-date">
+                                    <span class="event-day">22</span>
+                                    <span class="event-month">MAR</span>
+                                </div>
+                                <div class="event-details">
+                                    <h4>JavaScript Workshop</h4>
+                                    <p><i class="fas fa-map-marker-alt"></i> Online Webinar</p>
+                                    <p><i class="fas fa-clock"></i> 2:00 PM - 5:00 PM</p>
+                                </div>
+                            </div>
+                        </div>
+                        <button class="btn btn-text">View All Events</button>
+                    </div>
+                    
+                    <div class="content-card message-preview">
+                        <div class="card-header">
+                            <h2>Recent Messages</h2>
+                            <button class="btn-icon">
+                                <i class="fas fa-ellipsis-h"></i>
+                            </button>
+                        </div>
+                        <div class="messages-list">
+                            <div class="message-item unread">
+                                <img src="https://via.placeholder.com/40" alt="User Avatar" class="avatar">
+                                <div class="message-details">
+                                    <div class="message-header">
+                                        <h4>Alex Thompson</h4>
+                                        <span class="message-time">10:42 AM</span>
+                                    </div>
+                                    <p class="message-preview">Hey, I was wondering if you could help me with the project we discussed yesterday...</p>
+                                </div>
+                            </div>
+                            <div class="message-item">
+                                <img src="https://via.placeholder.com/40" alt="User Avatar" class="avatar">
+                                <div class="message-details">
+                                    <div class="message-header">
+                                        <h4>Jessica Parker</h4>
+                                        <span class="message-time">Yesterday</span>
+                                    </div>
+                                    <p class="message-preview">Thanks for the information! I'll take a look at it and get back to you soon.</p>
+                                </div>
+                            </div>
+                            <div class="message-item">
+                                <img src="https://via.placeholder.com/40" alt="User Avatar" class="avatar">
+                                <div class="message-details">
+                                    <div class="message-header">
+                                        <h4>Robert Chen</h4>
+                                        <span class="message-time">Yesterday</span>
+                                    </div>
+                                    <p class="message-preview">Are we still meeting for coffee tomorrow? Let me know if the time works for you.</p>
+                                </div>
+                            </div>
+                        </div>
+                        <button class="btn btn-text">View All Messages</button>
+                    </div>
+                </div>
+                
+                <div class="interactive-section">
+                    <h2>Interactive Demo</h2>
+                    <p>This section uses JavaScript to display dynamic content. Try clicking the button below:</p>
+                    <div class="message-box">
+                        <p>Click the button to reveal a message:</p>
+                        <button id="reveal-btn" class="btn btn-primary">Reveal Message</button>
+                        <p id="message" class="hidden">This message was revealed using JavaScript!</p>
+                    </div>
+                </div>
+            </div>
+            
+            <footer class="content-footer">
+                <p>&copy; 2023 ConnectSphere - All Rights Reserved</p>
+                <div class="footer-links">
+                    <a href="#">Privacy Policy</a>
+                    <a href="#">Terms of Service</a>
+                    <a href="#">Contact Us</a>
+                </div>
+            </footer>
+        </main>
+    </div>
+</body>
+</html> 

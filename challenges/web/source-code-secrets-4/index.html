@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CyberNexus - Secure Access Portal</title>
+    <link rel="stylesheet" href="style.css">
+    <!-- Security Note: Remember to remove test credentials before production -->
+    <!-- Test account: admin_test / cybersec2023! -->
+    <script src="script.js" defer></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="logo">
+                <div class="logo-icon">
+                    <div class="circle"></div>
+                    <div class="lines">
+                        <span></span>
+                        <span></span>
+                        <span></span>
+                    </div>
+                </div>
+                <h1>CyberNexus</h1>
+            </div>
+            <nav>
+                <ul>
+                    <li><a href="#" class="active">Login</a></li>
+                    <li><a href="#">About</a></li>
+                    <li><a href="#">Services</a></li>
+                    <li><a href="#">Contact</a></li>
+                </ul>
+            </nav>
+        </header>
+
+        <main>
+            <div class="terminal-container">
+                <div class="terminal-header">
+                    <div class="terminal-buttons">
+                        <span class="terminal-button close"></span>
+                        <span class="terminal-button minimize"></span>
+                        <span class="terminal-button maximize"></span>
+                    </div>
+                    <div class="terminal-title">CyberNexus Terminal</div>
+                </div>
+                <div class="terminal-body">
+                    <div class="terminal-output" id="terminal-output">
+                        <p class="line">CyberNexus Security System v3.4.2</p>
+                        <p class="line">Initializing secure connection...</p>
+                        <p class="line">Connection established.</p>
+                        <p class="line">Welcome to CyberNexus. Authentication required.</p>
+                        <p class="line">Please login to continue.</p>
+                    </div>
+                    <div class="login-form">
+                        <div class="form-group">
+                            <label for="username">Username:</label>
+                            <input type="text" id="username" placeholder="Enter username">
+                        </div>
+                        <div class="form-group">
+                            <label for="password">Password:</label>
+                            <input type="password" id="password" placeholder="Enter password">
+                        </div>
+                        <button id="login-btn" onclick="attemptLogin()">LOGIN</button>
+                        <p class="error-message" id="error-message"></p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="info-panel">
+                <div class="panel-section">
+                    <h2>System Status</h2>
+                    <div class="status-indicators">
+                        <div class="status-item">
+                            <span class="status-label">Firewall:</span>
+                            <span class="status-value active">Active</span>
+                        </div>
+                        <div class="status-item">
+                            <span class="status-label">Intrusion Detection:</span>
+                            <span class="status-value active">Active</span>
+                        </div>
+                        <div class="status-item">
+                            <span class="status-label">Encryption:</span>
+                            <span class="status-value active">Active</span>
+                        </div>
+                        <div class="status-item">
+                            <span class="status-label">Last Breach Attempt:</span>
+                            <span class="status-value">2 hours ago</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="panel-section">
+                    <h2>Recent Activity</h2>
+                    <ul class="activity-list">
+                        <li>
+                            <span class="activity-time">09:45</span>
+                            <span class="activity-desc">System update completed</span>
+                        </li>
+                        <li>
+                            <span class="activity-time">08:30</span>
+                            <span class="activity-desc">User jsmith logged in</span>
+                        </li>
+                        <li>
+                            <span class="activity-time">08:12</span>
+                            <span class="activity-desc">Firewall rules updated</span>
+                        </li>
+                        <li>
+                            <span class="activity-time">07:55</span>
+                            <span class="activity-desc">Failed login attempt - IP blocked</span>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </main>
+
+        <footer>
+            <div class="footer-content">
+                <p>&copy; 2023 CyberNexus Security Systems. All rights reserved.</p>
+                <p class="small-text">Version 3.4.2 | Build 20230615-1</p>
+                <!-- Note: Remove backdoor access before deployment -->
+                <!-- data-backdoor-hash="c3VwZXJzZWNyZXRhZG1pbg==" -->
+            </div>
+        </footer>
+    </div>
+</body>
+</html> 

@@ -1,0 +1,13 @@
+#!/bin/bash
+
+# Build and push the Docker image for the source-code-secrets-1 challenge
+
+echo "Building and pushing source-code-secrets-1 Docker image..."
+docker buildx build --platform linux/amd64 -t registry.rydersel.cloud/source-code-secrets-1 . --push
+
+if [ $? -eq 0 ]; then
+    echo "Build and push successful!"
+    echo "Challenge image: registry.rydersel.cloud/source-code-secrets-1"
+else
+    echo "Build or push failed. Please check the error messages above."
+fi 

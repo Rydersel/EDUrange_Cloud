@@ -100,7 +100,7 @@ export async function POST(req: Request) {
       challenge_id: challengeId, // Add challenge ID for database-sync
       challenge_image: challenge.challengeImage,
       apps_config: JSON.stringify(transformedAppConfigs),
-      chal_type: "fullos", // TODO: Make this dynamic based on challenge type
+      chal_type: challenge.challengeType?.name?.toLowerCase() || "fullos", // Make this dynamic based on challenge type
       competition_id: competitionId,
     };
 

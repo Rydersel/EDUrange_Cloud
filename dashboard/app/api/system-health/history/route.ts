@@ -2,12 +2,14 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import authConfig from '@/auth.config';
 import { getInstanceManagerUrl } from '@/lib/api-config';
+import { fetchMetricsHistory, generateMockMetricsHistory } from '@/lib/monitoring-service';
 
 export async function GET(request: Request) {
   try {
     // Get the URL from the request
     const url = new URL(request.url);
-    const type = url.searchParams.get('type');
+    const type = url.searchParams.get('type') || 'cpu';
+    const period = url.searchParams.get('period') || '24h';
     const sessionToken = url.searchParams.get('sessionToken');
     
     // Get the session either from the session token or from the request cookies
@@ -28,6 +30,9 @@ export async function GET(request: Request) {
     if (type === 'challenges') {
       const challengeData = await getChallengeData();
       return NextResponse.json(challengeData);
+    } else if (['cpu', 'memory', 'network'].includes(type)) {
+      const metricsData = await getResourceMetricsHistory(type, period);
+      return NextResponse.json(metricsData);
     }
     
     // Default response if no type is specified
@@ -116,6 +121,26 @@ async function getChallengeData() {
     console.error('Error fetching challenge data:', error);
     // Return empty array if there's an error
     return [];
+  }
+}
+
+async function getResourceMetricsHistory(type: string, period: string) {
+  try {
+    // Try to fetch real metrics history from the monitoring service
+    const metricsHistory = await fetchMetricsHistory(type, period);
+    
+    if (metricsHistory) {
+      // Return real metrics history from the monitoring service
+      return metricsHistory;
+    }
+    
+    // If monitoring service is unavailable, fall back to mock data
+    return generateMockMetricsHistory(type, period);
+  } catch (error) {
+    console.error(`Error fetching ${type} metrics history:`, error);
+    
+    // Return mock data if there's an error
+    return generateMockMetricsHistory(type, period);
   }
 }
 

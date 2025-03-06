@@ -5,23 +5,47 @@ import { prisma } from '@/lib/prisma';
 import { ActivityLogger, ActivityEventType } from '@/lib/activity-logger';
 import { UserRole } from '@prisma/client';
 import { z } from 'zod';
+import { validateAndSanitize } from '@/lib/validation';
+import rateLimit from '@/lib/rate-limit';
+import { NextRequest } from 'next/server';
+
+// Create a rate limiter for user role operations
+const userRoleRateLimiter = rateLimit({
+  interval: 60 * 1000, // 1 minute
+  limit: 15, // 15 requests per minute
+});
 
 const roleUpdateSchema = z.object({
   role: z.enum(['ADMIN', 'INSTRUCTOR', 'STUDENT'])
 });
 
 export async function PATCH(
-  req: Request,
+  req: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
+    // Apply rate limiting
+    const rateLimitResult = await userRoleRateLimiter.check(req);
+    if (rateLimitResult) return rateLimitResult;
+    
     const session = await getServerSession(authOptions);
     if (!session?.user || session.user.role !== 'ADMIN') {
       return new NextResponse('Unauthorized', { status: 401 });
     }
 
     const body = await req.json();
-    const { role } = roleUpdateSchema.parse(body);
+    
+    // Validate and sanitize input
+    const validationResult = validateAndSanitize(roleUpdateSchema, body);
+    
+    if (!validationResult.success) {
+      return NextResponse.json({ 
+        success: false, 
+        error: validationResult.error 
+      }, { status: 400 });
+    }
+    
+    const { role } = validationResult.data;
 
     // Get the user's current role before updating
     const currentUser = await prisma.user.findUnique({
@@ -60,7 +84,10 @@ export async function PATCH(
     return NextResponse.json(updatedUser);
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return new NextResponse(JSON.stringify(error.errors), { status: 400 });
+      return NextResponse.json({ 
+        success: false, 
+        errors: error.errors 
+      }, { status: 400 });
     }
     console.error('Error updating user role:', error);
     return new NextResponse('Internal Server Error', { status: 500 });

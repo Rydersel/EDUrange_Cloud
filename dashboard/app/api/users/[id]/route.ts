@@ -1,11 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { ActivityLogger, ActivityEventType } from '@/lib/activity-logger';
 import { z } from 'zod';
-
-const prisma = new PrismaClient();
+import { prisma } from '@/lib/prisma';
 
 const userUpdateSchema = z.object({
   name: z.string().optional(),
@@ -52,12 +50,12 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
 
 export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
   const { id } = params;
-  const { name, email, admin, points } = await req.json();
+  const { name, email } = await req.json();
 
   try {
     const user = await prisma.user.update({
       where: { id },
-      data: { name, email, admin, points },
+      data: { name, email },
     });
     return NextResponse.json(user);
   } catch (error) {
@@ -111,11 +109,8 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
   }
 }
 
-export const config = {
-  api: {
-    bodyParser: false,
-  },
-};
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 
 export async function PATCH(
   req: Request,

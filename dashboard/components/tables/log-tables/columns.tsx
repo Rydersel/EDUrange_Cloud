@@ -1,7 +1,8 @@
 'use client';
 
 import { ColumnDef } from '@tanstack/react-table';
-import { ActivityEventType, ActivityLog } from '@prisma/client';
+import { ActivityLog } from '@prisma/client';
+import { ActivityEventType } from '@/lib/activity-logger';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {

@@ -1,0 +1,106 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dashboard
+  labels:
+    app: dashboard
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: dashboard
+  template:
+    metadata:
+      labels:
+        app: dashboard
+    spec:
+      containers:
+      - name: dashboard
+        image: registry.rydersel.cloud/dashboard:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 3000
+        env:
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: dashboard-secrets
+              key: database-url
+        - name: NEXTAUTH_URL
+          value: "https://dashboard.rydersel.cloud"
+        - name: NEXTAUTH_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: dashboard-secrets
+              key: nextauth-secret
+        - name: AUTH_GITHUB_ID
+          valueFrom:
+            secretKeyRef:
+              name: dashboard-secrets
+              key: github-client-id
+        - name: AUTH_GITHUB_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: dashboard-secrets
+              key: github-client-secret
+        - name: INSTANCE_MANAGER_URL
+          value: "https://eductf.rydersel.cloud/instance-manager/api"
+        - name: DATABASE_API_URL
+          value: "https://database.rydersel.cloud"
+        - name: MONITORING_SERVICE_URL
+          value: "https://eductf.rydersel.cloud/metrics"
+        resources:
+          limits:
+            cpu: "1"
+            memory: "1Gi"
+          requests:
+            cpu: "500m"
+            memory: "512Mi"
+        readinessProbe:
+          httpGet:
+            path: /api/health
+            port: 3000
+          initialDelaySeconds: 10
+          periodSeconds: 5
+        livenessProbe:
+          httpGet:
+            path: /api/health
+            port: 3000
+          initialDelaySeconds: 15
+          periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: dashboard
+spec:
+  selector:
+    app: dashboard
+  ports:
+  - port: 80
+    targetPort: 3000
+  type: ClusterIP
+
+---
+  apiVersion: networking.k8s.io/v1
+  kind: Ingress
+  metadata:
+    name: dashboard-ingress
+    annotations:
+      kubernetes.io/ingress.class: "nginx"
+  spec:
+    tls:
+      - hosts:
+          - dashboard.rydersel.cloud
+        secretName: wildcard-domain-certificate-prod
+    rules:
+      - host: dashboard.rydersel.cloud
+        http:
+          paths:
+            - path: /
+              pathType: Prefix
+              backend:
+                service:
+                  name: dashboard
+                  port:
+                    number: 80

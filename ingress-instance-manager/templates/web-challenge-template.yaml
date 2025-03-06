@@ -1,0 +1,80 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: challenge-pod
+  labels:
+    app: challenge
+spec:
+  containers:
+  - name: web-challenge-container
+    image: registry.rydersel.cloud/web-challenge  # Will be overwritten with the actual challenge image
+    ports:
+    - containerPort: 80
+      name: http
+    env:
+    - name: FLAG
+      value: "flag"  # Will be overwritten with the actual flag
+  - name: bridge
+    image: registry.rydersel.cloud/bridge
+    ports:
+      - containerPort: 5000
+        name: http
+    env:
+      - name: CHALLENGE_CONTAINER_NAME
+        value: "web-challenge-container"
+      - name: WEB_CHAL_LINK
+        value: "none"  # Will be overwritten with the actual URL
+  - name: webos
+    image: registry.rydersel.cloud/webos
+    ports:
+    - containerPort: 3000
+      name: webos-http
+    env:
+    - name: NEXT_PUBLIC_POD_NAME
+      value: "$(POD_NAME)"
+    - name: NEXT_PUBLIC_APPS_CONFIG
+      value: "$(NEXT_PUBLIC_APPS_CONFIG)"
+    - name: NEXT_PUBLIC_CHALLENGE_POD_NAME
+      value: "$(POD_NAME)"
+    - name: NEXT_PUBLIC_WEB_CHALLENGE_URL
+      value: "https://web-$(POD_NAME).$(INGRESS_URL)"
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: challenge-service
+spec:
+  selector:
+    app: challenge
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 3000  # Expose the WebOS container
+    name: webos-http
+  - protocol: TCP
+    port: 8080
+    targetPort: 80  # Expose the web challenge container
+    name: web-challenge-http
+  type: ClusterIP
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: challenge-ingress
+  annotations:
+    nginx.ingress.kubernetes.io/use-regex: "true"
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: challenge.rydersel.cloud  # This will be replaced dynamically
+    http:
+      paths:
+      - path: /
+        pathType: ImplementationSpecific
+        backend:
+          service:
+            name: challenge-service
+            port:
+              number: 80
+  # The web challenge host will be added dynamically

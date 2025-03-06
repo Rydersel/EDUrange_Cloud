@@ -3,11 +3,11 @@ import { columns } from '@/components/tables/user-tables/columns';
 import { UserTable } from '@/components/tables/user-tables/user-table';
 import { Heading } from '@/components/ui/heading';
 import { Separator } from '@/components/ui/separator';
-import { PrismaClient } from '@prisma/client';
 import { redirect } from 'next/navigation';
-// @ts-ignore
-import {session} from "next-auth/core/routes";
-const prisma = new PrismaClient();
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
+import { prisma } from '@/lib/prisma';
+import { UserRole } from '@prisma/client';
 
 const breadcrumbItems = [{ title: 'Users', link: '/dashboard/users' }];
 
@@ -30,11 +30,14 @@ export default async function Page({ searchParams }: paramsProps) {
     },
   });
 
-  const user = await prisma.user.findUnique({ where: { email: session.user.email } });
+  const session = await getServerSession(authOptions);
+  const user = session?.user?.email 
+    ? await prisma.user.findUnique({ where: { email: session.user.email } }) 
+    : null;
 
-  if (!session || !user || !user.admin) {
-  redirect('/invalid-permission');
-}
+  if (!session || !user || user.role !== UserRole.ADMIN) {
+    redirect('/invalid-permission');
+  }
 
   const totalUsers = await prisma.user.count();
   const pageCount = Math.ceil(totalUsers / pageLimit);
@@ -55,7 +58,7 @@ export default async function Page({ searchParams }: paramsProps) {
         <UserTable
           searchKey="email"
           pageNo={page}
-          columns={columns}
+          columns={columns as any}
           totalUsers={totalUsers}
           data={users}
           pageCount={pageCount}

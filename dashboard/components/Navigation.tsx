@@ -18,7 +18,7 @@ export function Navigation() {
         .map((route) => (
           <Link
             key={route.href}
-            href={route.href}
+            href={route.href || '#'}
             className={cn(
               buttonVariants({ variant: 'ghost' }),
               pathname === route.href || pathname.startsWith(route.href + '/')

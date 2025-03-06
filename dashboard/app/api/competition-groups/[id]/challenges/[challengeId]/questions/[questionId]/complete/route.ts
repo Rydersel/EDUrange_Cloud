@@ -1,9 +1,17 @@
-import { NextResponse } from 'next/server';
+import { NextResponse, NextRequest } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
 import { Prisma } from '@prisma/client';
+import rateLimit from '@/lib/rate-limit';
+import { validateAndSanitize } from '@/lib/validation';
+
+// Create a rate limiter for challenge submissions
+const challengeSubmissionLimiter = rateLimit({
+  interval: 60 * 1000, // 1 minute
+  limit: 15, // 15 submissions per minute
+});
 
 // Validation schema for the request body
 const completionSchema = z.object({
@@ -11,24 +19,39 @@ const completionSchema = z.object({
 });
 
 export async function POST(
-  request: Request,
-  { params }: { params: { groupId: string; challengeId: string; questionId: string } }
+  request: NextRequest,
+  { params }: { params: { id: string; challengeId: string; questionId: string } }
 ) {
   try {
+    // Apply rate limiting
+    const rateLimitResult = await challengeSubmissionLimiter.check(request);
+    if (rateLimitResult) return rateLimitResult;
+    
     const session = await getServerSession(authOptions);
     if (!session?.user) {
       return new NextResponse('Unauthorized', { status: 401 });
     }
 
     const body = await request.json();
-    const { answer } = body;
+    
+    // Validate and sanitize input
+    const validationResult = validateAndSanitize(completionSchema, body);
+    
+    if (!validationResult.success) {
+      return NextResponse.json({ 
+        success: false, 
+        error: validationResult.error 
+      }, { status: 400 });
+    }
+    
+    const { answer } = validationResult.data;
 
     // Get the group challenge
     const groupChallenge = await prisma.groupChallenge.findUnique({
       where: {
         challengeId_groupId: {
           challengeId: params.challengeId,
-          groupId: params.groupId,
+          groupId: params.id,
         },
       },
       include: {
@@ -86,7 +109,7 @@ export async function POST(
         eventType: 'QUESTION_ATTEMPTED',
         userId: session.user.id,
         challengeId: params.challengeId,
-        groupId: params.groupId,
+        groupId: params.id,
         metadata: {
           questionId: params.questionId,
           isCorrect: isCorrect,
@@ -112,7 +135,7 @@ export async function POST(
           eventType: 'QUESTION_COMPLETED',
           userId: session.user.id,
           challengeId: params.challengeId,
-          groupId: params.groupId,
+          groupId: params.id,
           metadata: {
             questionId: params.questionId,
             pointsEarned: question.points
@@ -158,12 +181,12 @@ export async function POST(
           where: {
             userId_groupId: {
               userId: session.user.id,
-              groupId: params.groupId
+              groupId: params.id
             }
           },
           create: {
             userId: session.user.id,
-            groupId: params.groupId,
+            groupId: params.id,
             points: totalPoints[0].total
           },
           update: {
@@ -179,7 +202,7 @@ export async function POST(
             eventType: 'CHALLENGE_COMPLETED',
             userId: session.user.id,
             challengeId: params.challengeId,
-            groupId: params.groupId,
+            groupId: params.id,
             metadata: {
               totalPoints: totalPoints[0].total,
               totalAttempts: await prisma.questionAttempt.count({
@@ -206,7 +229,10 @@ export async function POST(
     }
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return new NextResponse(JSON.stringify(error.errors), { status: 400 });
+      return NextResponse.json({ 
+        success: false, 
+        errors: error.errors 
+      }, { status: 400 });
     }
     console.error('[QUESTION_COMPLETION]', error);
     return new NextResponse('Internal Error', { status: 500 });

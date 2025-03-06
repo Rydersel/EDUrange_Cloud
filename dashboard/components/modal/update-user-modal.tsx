@@ -4,11 +4,17 @@ import { Button } from '@/components/ui/button';
 import { Modal } from '@/components/ui/modal';
 import { User } from '@prisma/client';
 
+// Extended User interface with additional properties
+interface ExtendedUser extends User {
+  points?: number;
+  admin?: boolean;
+}
+
 interface UpdateUserModalProps {
-  user: User | null;
+  user: ExtendedUser | null;
   isOpen: boolean;
   onClose: () => void;
-  onUpdate: (user: Partial<User>) => void;
+  onUpdate: (user: Partial<ExtendedUser>) => void;
 }
 
 export const UpdateUserModal: React.FC<UpdateUserModalProps> = ({
@@ -28,7 +34,7 @@ export const UpdateUserModal: React.FC<UpdateUserModalProps> = ({
     if (user) {
       setName(user.name || '');
       setEmail(user.email);
-      setAdmin(user.admin);
+      setAdmin(user.admin || false);
       setPoints(user.points || 0);
     }
   }, [user]);

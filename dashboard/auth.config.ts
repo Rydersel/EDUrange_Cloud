@@ -5,9 +5,10 @@ import type { Adapter } from 'next-auth/adapters';
 import CredentialsProvider from 'next-auth/providers/credentials';
 import GithubProvider from 'next-auth/providers/github';
 import { PrismaAdapter } from '@auth/prisma-adapter';
-import { PrismaClient, UserRole } from '@prisma/client';
+import { UserRole } from '@prisma/client';
 import { ActivityLogger, ActivityEventType } from './lib/activity-logger';
 import { User } from 'next-auth';
+import { prisma } from './lib/prisma';
 
 declare module 'next-auth' {
   interface Session {
@@ -27,8 +28,6 @@ declare module 'next-auth' {
     role: UserRole;
   }
 }
-
-const prisma = new PrismaClient();
 
 interface OAuthUser extends User {
   email: string;
@@ -50,6 +49,35 @@ const authConfig: AuthOptions = {
   ],
   pages: {
     signIn: '/' // Sign-in page
+  },
+  cookies: {
+    sessionToken: {
+      name: `next-auth.session-token`,
+      options: {
+        httpOnly: true,
+        sameSite: 'lax',
+        path: '/',
+        secure: process.env.NODE_ENV === 'production',
+      },
+    },
+    callbackUrl: {
+      name: `next-auth.callback-url`,
+      options: {
+        httpOnly: true,
+        sameSite: 'lax',
+        path: '/',
+        secure: process.env.NODE_ENV === 'production',
+      },
+    },
+    csrfToken: {
+      name: `next-auth.csrf-token`,
+      options: {
+        httpOnly: true,
+        sameSite: 'lax',
+        path: '/',
+        secure: process.env.NODE_ENV === 'production',
+      },
+    },
   },
   callbacks: {
     async redirect({ url, baseUrl }: { url: string; baseUrl: string }) {

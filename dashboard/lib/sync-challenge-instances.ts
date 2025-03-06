@@ -1,9 +1,7 @@
 // /scripts/sync-challenge-instances.ts
 
-import { PrismaClient } from '@prisma/client';
 import { getInstanceManagerUrl } from './api-config';
-
-const prisma = new PrismaClient();
+import { prisma } from './prisma';
 
 // Add retry logic for API calls
 async function fetchWithRetry(url: string, options = {}, retries = 3) {
@@ -38,6 +36,21 @@ async function syncChallengeInstances() {
 
       // Insert new challenge instances
       for (const pod of activePods) {
+        // Find the user's competition group
+        const user = await prisma.user.findUnique({
+          where: { id: pod.user_id },
+          include: { memberOf: true }
+        });
+
+        // Skip if user or competition group not found
+        if (!user || !user.memberOf || user.memberOf.length === 0) {
+          console.warn(`Skipping pod ${pod.pod_name}: User or competition group not found`);
+          continue;
+        }
+
+        // Use the first competition group the user is a member of
+        const competitionId = user.memberOf[0].id;
+
         await prisma.challengeInstance.create({
           data: {
             id: pod.pod_name,
@@ -49,6 +62,7 @@ async function syncChallengeInstances() {
             status: pod.status,
             flagSecretName: pod.flag_secret_name,
             flag: pod.flag,
+            competitionId: competitionId,
           },
         });
       }

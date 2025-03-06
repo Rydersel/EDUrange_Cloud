@@ -1,32 +1,16 @@
 import * as dotenv from 'dotenv';
 import path from 'path';
-import { PrismaClient, UserRole, ActivityEventType } from '@prisma/client';
+import { UserRole, ActivityEventType } from '@prisma/client';
 import { v4 as uuidv4 } from 'uuid';
+import prisma from './prisma-test-client';
+import { generateTestId, generateTestEmail, generateTestName, withTestTransaction } from './test-helpers';
 
 // Load environment variables from .env file
 dotenv.config({ path: path.resolve(__dirname, '../.env') });
 
-const prisma = new PrismaClient({
-  datasources: {
-    db: {
-      url: process.env.DATABASE_URL
-    }
-  }
-});
-
-// Helper function to generate unique email
-function generateUniqueEmail(prefix: string): string {
-  return `${prefix}-${Date.now()}@test.edurange.org`;
-}
-
-// Helper function to generate unique name
-function generateUniqueName(prefix: string): string {
-  return `${prefix}-${Date.now()}`;
-}
-
 // Helper function to verify activity log entries
-async function verifyActivityLog(eventType: ActivityEventType, userId: string, metadata: Record<string, any> = {}) {
-  const log = await prisma.activityLog.findFirst({
+async function verifyActivityLog(tx: any, eventType: ActivityEventType, userId: string, metadata: Record<string, any> = {}) {
+  const log = await tx.activityLog.findFirst({
     where: {
       eventType,
       userId
@@ -56,443 +40,340 @@ async function verifyActivityLog(eventType: ActivityEventType, userId: string, m
 }
 
 describe('Authentication System', () => {
-  // Test users for different roles
-  let testAdminId: string;
-  let testInstructorId: string;
-  let testStudentId: string;
-  
-  beforeAll(async () => {
-    // Create test users with different roles
-    const admin = await prisma.user.create({
-      data: {
-        id: `test-admin-${uuidv4()}`,
-        email: generateUniqueEmail('test-admin'),
-        name: generateUniqueName('Test Admin'),
-        role: UserRole.ADMIN
-      }
-    });
-    testAdminId = admin.id;
-    
-    const instructor = await prisma.user.create({
-      data: {
-        id: `test-instructor-${uuidv4()}`,
-        email: generateUniqueEmail('test-instructor'),
-        name: generateUniqueName('Test Instructor'),
-        role: UserRole.INSTRUCTOR
-      }
-    });
-    testInstructorId = instructor.id;
-    
-    const student = await prisma.user.create({
-      data: {
-        id: `test-student-${uuidv4()}`,
-        email: generateUniqueEmail('test-student'),
-        name: generateUniqueName('Test Student'),
-        role: UserRole.STUDENT
-      }
-    });
-    testStudentId = student.id;
-  });
-  
-  afterAll(async () => {
-    // Clean up test data in correct order
-    await prisma.activityLog.deleteMany({
-      where: {
-        userId: {
-          in: [testAdminId, testInstructorId, testStudentId]
-        }
-      }
-    });
-    
-    await prisma.session.deleteMany({
-      where: {
-        userId: {
-          in: [testAdminId, testInstructorId, testStudentId]
-        }
-      }
-    });
-    
-    await prisma.account.deleteMany({
-      where: {
-        userId: {
-          in: [testAdminId, testInstructorId, testStudentId]
-        }
-      }
-    });
-    
-    await prisma.user.deleteMany({
-      where: {
-        id: {
-          in: [testAdminId, testInstructorId, testStudentId]
-        }
-      }
-    });
-    
-    await prisma.$disconnect();
-  });
-  
   describe('User Management', () => {
-    test('should create users with correct roles', async () => {
-      // Create a dedicated user for this test
-      const dedicatedUserId = `test-user-${uuidv4()}`;
-      const dedicatedUser = await prisma.user.create({
-        data: {
-          id: dedicatedUserId,
-          email: generateUniqueEmail('test-dedicated-user'),
-          name: generateUniqueName('Test Dedicated User'),
-          role: UserRole.STUDENT
-        }
-      });
-      
-      // Verify user was created with correct role
-      const user = await prisma.user.findUnique({
-        where: { id: dedicatedUserId }
-      });
-      
-      expect(user).toBeDefined();
-      expect(user?.role).toBe(UserRole.STUDENT);
-      
-      // Clean up
-      await prisma.user.delete({
-        where: { id: dedicatedUserId }
+    it('should create users with different roles', async () => {
+      await withTestTransaction(async (tx) => {
+        // Create test users with different roles
+        const admin = await tx.user.create({
+          data: {
+            id: generateTestId('admin'),
+            email: generateTestEmail('admin'),
+            name: generateTestName('Admin'),
+            role: UserRole.ADMIN
+          }
+        });
+        
+        const instructor = await tx.user.create({
+          data: {
+            id: generateTestId('instructor'),
+            email: generateTestEmail('instructor'),
+            name: generateTestName('Instructor'),
+            role: UserRole.INSTRUCTOR
+          }
+        });
+        
+        const student = await tx.user.create({
+          data: {
+            id: generateTestId('student'),
+            email: generateTestEmail('student'),
+            name: generateTestName('Student'),
+            role: UserRole.STUDENT
+          }
+        });
+        
+        // Verify users were created with correct roles
+        const foundAdmin = await tx.user.findUnique({ where: { id: admin.id } });
+        const foundInstructor = await tx.user.findUnique({ where: { id: instructor.id } });
+        const foundStudent = await tx.user.findUnique({ where: { id: student.id } });
+        
+        expect(foundAdmin).toBeDefined();
+        expect(foundAdmin?.role).toBe(UserRole.ADMIN);
+        
+        expect(foundInstructor).toBeDefined();
+        expect(foundInstructor?.role).toBe(UserRole.INSTRUCTOR);
+        
+        expect(foundStudent).toBeDefined();
+        expect(foundStudent?.role).toBe(UserRole.STUDENT);
       });
     });
     
-    test('should update user roles', async () => {
-      // Create a dedicated user for this test
-      const dedicatedUserId = `test-role-update-${uuidv4()}`;
-      const dedicatedUser = await prisma.user.create({
-        data: {
-          id: dedicatedUserId,
-          email: generateUniqueEmail('test-role-update'),
-          name: generateUniqueName('Test Role Update'),
-          role: UserRole.STUDENT
-        }
-      });
-      
-      // Update user role
-      const updatedUser = await prisma.user.update({
-        where: { id: dedicatedUserId },
-        data: { role: UserRole.INSTRUCTOR }
-      });
-      
-      expect(updatedUser.role).toBe(UserRole.INSTRUCTOR);
-      
-      // Log role change event
-      await prisma.activityLog.create({
-        data: {
-          eventType: ActivityEventType.USER_ROLE_CHANGED,
-          userId: dedicatedUserId,
-          severity: 'WARNING',
-          metadata: JSON.stringify({
-            changedBy: testAdminId,
-            oldRole: UserRole.STUDENT,
-            newRole: UserRole.INSTRUCTOR,
-            timestamp: new Date().toISOString()
-          })
-        }
-      });
-      
-      // Verify activity log
-      await verifyActivityLog(ActivityEventType.USER_ROLE_CHANGED, dedicatedUserId, {
-        changedBy: testAdminId,
-        oldRole: UserRole.STUDENT,
-        newRole: UserRole.INSTRUCTOR
-      });
-      
-      // Clean up
-      await prisma.activityLog.deleteMany({
-        where: { userId: dedicatedUserId }
-      });
-      
-      await prisma.user.delete({
-        where: { id: dedicatedUserId }
+    it('should update user roles and log changes', async () => {
+      await withTestTransaction(async (tx) => {
+        // Create test users
+        const admin = await tx.user.create({
+          data: {
+            id: generateTestId('admin-role-change'),
+            email: generateTestEmail('admin-role-change'),
+            name: generateTestName('Admin Role Change'),
+            role: UserRole.ADMIN
+          }
+        });
+        
+        const user = await tx.user.create({
+          data: {
+            id: generateTestId('user-role-change'),
+            email: generateTestEmail('user-role-change'),
+            name: generateTestName('User Role Change'),
+            role: UserRole.STUDENT
+          }
+        });
+        
+        // Update user role
+        const updatedUser = await tx.user.update({
+          where: { id: user.id },
+          data: { role: UserRole.INSTRUCTOR }
+        });
+        
+        expect(updatedUser.role).toBe(UserRole.INSTRUCTOR);
+        
+        // Log role change event
+        await tx.activityLog.create({
+          data: {
+            eventType: ActivityEventType.USER_ROLE_CHANGED,
+            userId: user.id,
+            severity: 'WARNING',
+            metadata: JSON.stringify({
+              changedBy: admin.id,
+              oldRole: UserRole.STUDENT,
+              newRole: UserRole.INSTRUCTOR,
+              timestamp: new Date().toISOString()
+            })
+          }
+        });
+        
+        // Verify activity log
+        await verifyActivityLog(tx, ActivityEventType.USER_ROLE_CHANGED, user.id, {
+          changedBy: admin.id,
+          oldRole: UserRole.STUDENT,
+          newRole: UserRole.INSTRUCTOR
+        });
       });
     });
   });
   
   describe('Session Management', () => {
-    test('should create and manage user sessions', async () => {
-      // Create a dedicated user for this test
-      const dedicatedUserId = `test-session-${uuidv4()}`;
-      const dedicatedUser = await prisma.user.create({
-        data: {
-          id: dedicatedUserId,
-          email: generateUniqueEmail('test-session'),
-          name: generateUniqueName('Test Session'),
-          role: UserRole.STUDENT
-        }
-      });
-      
-      // Create a session for the user
-      const expiryDate = new Date();
-      expiryDate.setDate(expiryDate.getDate() + 30); // 30 days from now
-      
-      const session = await prisma.session.create({
-        data: {
-          id: `test-session-${uuidv4()}`,
-          sessionToken: `test-token-${uuidv4()}`,
-          userId: dedicatedUserId,
-          expires: expiryDate
-        }
-      });
-      
-      expect(session).toBeDefined();
-      expect(session.userId).toBe(dedicatedUserId);
-      
-      // Verify session exists
-      const foundSession = await prisma.session.findUnique({
-        where: { id: session.id }
-      });
-      
-      expect(foundSession).toBeDefined();
-      expect(foundSession?.expires.getTime()).toBe(expiryDate.getTime());
-      
-      // Clean up
-      await prisma.session.delete({
-        where: { id: session.id }
-      });
-      
-      await prisma.user.delete({
-        where: { id: dedicatedUserId }
+    it('should create and manage user sessions', async () => {
+      await withTestTransaction(async (tx) => {
+        // Create a dedicated user for this test
+        const user = await tx.user.create({
+          data: {
+            id: generateTestId('session'),
+            email: generateTestEmail('session'),
+            name: generateTestName('Session Test'),
+            role: UserRole.STUDENT
+          }
+        });
+        
+        // Create a session for the user
+        const expiryDate = new Date();
+        expiryDate.setDate(expiryDate.getDate() + 30); // 30 days from now
+        
+        const session = await tx.session.create({
+          data: {
+            id: `test-session-${uuidv4()}`,
+            sessionToken: `test-token-${uuidv4()}`,
+            userId: user.id,
+            expires: expiryDate
+          }
+        });
+        
+        expect(session).toBeDefined();
+        expect(session.userId).toBe(user.id);
+        
+        // Verify session exists
+        const foundSession = await tx.session.findUnique({
+          where: { id: session.id }
+        });
+        
+        expect(foundSession).toBeDefined();
+        expect(foundSession?.expires.getTime()).toBe(expiryDate.getTime());
       });
     });
     
-    test('should handle expired sessions', async () => {
-      // Create a dedicated user for this test
-      const dedicatedUserId = `test-expired-session-${uuidv4()}`;
-      const dedicatedUser = await prisma.user.create({
-        data: {
-          id: dedicatedUserId,
-          email: generateUniqueEmail('test-expired-session'),
-          name: generateUniqueName('Test Expired Session'),
-          role: UserRole.STUDENT
-        }
-      });
-      
-      // Create an expired session (1 day in the past)
-      const expiredDate = new Date();
-      expiredDate.setDate(expiredDate.getDate() - 1);
-      
-      const expiredSession = await prisma.session.create({
-        data: {
-          id: `test-expired-session-${uuidv4()}`,
-          sessionToken: `test-expired-token-${uuidv4()}`,
-          userId: dedicatedUserId,
-          expires: expiredDate
-        }
-      });
-      
-      // Verify session is expired
-      const now = new Date();
-      expect(expiredSession.expires.getTime()).toBeLessThan(now.getTime());
-      
-      // Simulate session validation logic
-      const isSessionValid = expiredSession.expires.getTime() > now.getTime();
-      expect(isSessionValid).toBe(false);
-      
-      // Clean up
-      await prisma.session.delete({
-        where: { id: expiredSession.id }
-      });
-      
-      await prisma.user.delete({
-        where: { id: dedicatedUserId }
+    it('should handle expired sessions', async () => {
+      await withTestTransaction(async (tx) => {
+        // Create a dedicated user for this test
+        const user = await tx.user.create({
+          data: {
+            id: generateTestId('expired-session'),
+            email: generateTestEmail('expired-session'),
+            name: generateTestName('Expired Session Test'),
+            role: UserRole.STUDENT
+          }
+        });
+        
+        // Create an expired session (1 day in the past)
+        const expiredDate = new Date();
+        expiredDate.setDate(expiredDate.getDate() - 1);
+        
+        const expiredSession = await tx.session.create({
+          data: {
+            id: `test-expired-session-${uuidv4()}`,
+            sessionToken: `test-expired-token-${uuidv4()}`,
+            userId: user.id,
+            expires: expiredDate
+          }
+        });
+        
+        // Verify session is expired
+        const now = new Date();
+        expect(expiredSession.expires.getTime()).toBeLessThan(now.getTime());
+        
+        // Simulate session validation logic
+        const isSessionValid = expiredSession.expires.getTime() > now.getTime();
+        expect(isSessionValid).toBe(false);
       });
     });
   });
   
   describe('OAuth Account Management', () => {
-    test('should link OAuth accounts to users', async () => {
-      // Create a dedicated user for this test
-      const dedicatedUserId = `test-oauth-${uuidv4()}`;
-      const dedicatedUser = await prisma.user.create({
-        data: {
-          id: dedicatedUserId,
-          email: generateUniqueEmail('test-oauth'),
-          name: generateUniqueName('Test OAuth'),
-          role: UserRole.STUDENT
-        }
-      });
-      
-      // Create an OAuth account for the user
-      const account = await prisma.account.create({
-        data: {
-          id: `test-account-${uuidv4()}`,
-          userId: dedicatedUserId,
-          type: 'oauth',
-          provider: 'github',
-          providerAccountId: `github-${uuidv4()}`,
-          access_token: `access-${uuidv4()}`,
-          token_type: 'bearer',
-          scope: 'user:email'
-        }
-      });
-      
-      expect(account).toBeDefined();
-      expect(account.provider).toBe('github');
-      expect(account.userId).toBe(dedicatedUserId);
-      
-      // Verify account exists and is linked to user
-      const foundAccount = await prisma.account.findFirst({
-        where: {
-          userId: dedicatedUserId,
-          provider: 'github'
-        }
-      });
-      
-      expect(foundAccount).toBeDefined();
-      expect(foundAccount?.providerAccountId).toBe(account.providerAccountId);
-      
-      // Clean up
-      await prisma.account.delete({
-        where: { id: account.id }
-      });
-      
-      await prisma.user.delete({
-        where: { id: dedicatedUserId }
+    it('should link OAuth accounts to users', async () => {
+      await withTestTransaction(async (tx) => {
+        // Create a dedicated user for this test
+        const user = await tx.user.create({
+          data: {
+            id: generateTestId('oauth'),
+            email: generateTestEmail('oauth'),
+            name: generateTestName('OAuth Test'),
+            role: UserRole.STUDENT
+          }
+        });
+        
+        // Link an OAuth account
+        const oauthAccount = await tx.account.create({
+          data: {
+            id: `test-oauth-${uuidv4()}`,
+            userId: user.id,
+            type: 'oauth',
+            provider: 'github',
+            providerAccountId: `github-${uuidv4()}`,
+            refresh_token: `refresh-${uuidv4()}`,
+            access_token: `access-${uuidv4()}`,
+            expires_at: Math.floor(Date.now() / 1000) + 3600,
+            token_type: 'bearer',
+            scope: 'user',
+            id_token: `id-${uuidv4()}`
+          }
+        });
+        
+        expect(oauthAccount).toBeDefined();
+        expect(oauthAccount.userId).toBe(user.id);
+        expect(oauthAccount.provider).toBe('github');
+        
+        // Verify account is linked
+        const foundAccount = await tx.account.findUnique({
+          where: { id: oauthAccount.id }
+        });
+        
+        expect(foundAccount).toBeDefined();
+        expect(foundAccount?.provider).toBe('github');
       });
     });
   });
   
-  describe('Authentication Activity Logging', () => {
-    test('should log user registration events', async () => {
-      // Create a dedicated user for this test
-      const dedicatedUserId = `test-registration-${uuidv4()}`;
-      const userEmail = generateUniqueEmail('test-registration');
-      const userName = generateUniqueName('Test Registration');
-      
-      const dedicatedUser = await prisma.user.create({
-        data: {
-          id: dedicatedUserId,
-          email: userEmail,
-          name: userName,
-          role: UserRole.STUDENT
-        }
-      });
-      
-      // Log registration event
-      await prisma.activityLog.create({
-        data: {
-          eventType: ActivityEventType.USER_REGISTERED,
-          userId: dedicatedUserId,
-          severity: 'INFO',
-          metadata: JSON.stringify({
+  describe('User Activity Logging', () => {
+    it('should log user registration events', async () => {
+      await withTestTransaction(async (tx) => {
+        // Create a user and log registration
+        const userEmail = generateTestEmail('registration');
+        const userName = generateTestName('Registration');
+        
+        const user = await tx.user.create({
+          data: {
+            id: generateTestId('registration'),
             email: userEmail,
             name: userName,
-            timestamp: new Date().toISOString()
-          })
-        }
-      });
-      
-      // Verify activity log
-      await verifyActivityLog(ActivityEventType.USER_REGISTERED, dedicatedUserId, {
-        email: userEmail,
-        name: userName
-      });
-      
-      // Clean up
-      await prisma.activityLog.deleteMany({
-        where: { userId: dedicatedUserId }
-      });
-      
-      await prisma.user.delete({
-        where: { id: dedicatedUserId }
+            role: UserRole.STUDENT
+          }
+        });
+        
+        // Log registration event
+        await tx.activityLog.create({
+          data: {
+            eventType: ActivityEventType.USER_REGISTERED,
+            userId: user.id,
+            severity: 'INFO',
+            metadata: JSON.stringify({
+              email: userEmail,
+              name: userName,
+              timestamp: new Date().toISOString()
+            })
+          }
+        });
+        
+        // Verify activity log
+        await verifyActivityLog(tx, ActivityEventType.USER_REGISTERED, user.id, {
+          email: userEmail,
+          name: userName
+        });
       });
     });
     
-    test('should log user login events', async () => {
-      // Create a dedicated user for this test
-      const dedicatedUserId = `test-login-${uuidv4()}`;
-      const userEmail = generateUniqueEmail('test-login');
-      const userName = generateUniqueName('Test Login');
-      
-      const dedicatedUser = await prisma.user.create({
-        data: {
-          id: dedicatedUserId,
-          email: userEmail,
-          name: userName,
-          role: UserRole.STUDENT
-        }
-      });
-      
-      // Log login event
-      await prisma.activityLog.create({
-        data: {
-          eventType: ActivityEventType.USER_LOGGED_IN,
-          userId: dedicatedUserId,
-          severity: 'INFO',
-          metadata: JSON.stringify({
+    it('should log user login events', async () => {
+      await withTestTransaction(async (tx) => {
+        // Create a user and log login
+        const userEmail = generateTestEmail('login');
+        const userName = generateTestName('Login');
+        
+        const user = await tx.user.create({
+          data: {
+            id: generateTestId('login'),
             email: userEmail,
             name: userName,
-            timestamp: new Date().toISOString()
-          })
-        }
-      });
-      
-      // Verify activity log
-      await verifyActivityLog(ActivityEventType.USER_LOGGED_IN, dedicatedUserId, {
-        email: userEmail,
-        name: userName
-      });
-      
-      // Clean up
-      await prisma.activityLog.deleteMany({
-        where: { userId: dedicatedUserId }
-      });
-      
-      await prisma.user.delete({
-        where: { id: dedicatedUserId }
+            role: UserRole.STUDENT
+          }
+        });
+        
+        // Log login event
+        await tx.activityLog.create({
+          data: {
+            eventType: ActivityEventType.USER_LOGGED_IN,
+            userId: user.id,
+            severity: 'INFO',
+            metadata: JSON.stringify({
+              email: userEmail,
+              name: userName,
+              timestamp: new Date().toISOString()
+            })
+          }
+        });
+        
+        // Verify activity log
+        await verifyActivityLog(tx, ActivityEventType.USER_LOGGED_IN, user.id, {
+          email: userEmail,
+          name: userName
+        });
       });
     });
   });
   
   describe('Role-Based Access Control', () => {
-    test('should enforce role-based permissions', async () => {
-      // Create dedicated users for this test
-      const studentId = `test-rbac-student-${uuidv4()}`;
-      const student = await prisma.user.create({
-        data: {
-          id: studentId,
-          email: generateUniqueEmail('test-rbac-student'),
-          name: generateUniqueName('Test RBAC Student'),
-          role: UserRole.STUDENT
-        }
-      });
-      
-      const adminId = `test-rbac-admin-${uuidv4()}`;
-      const admin = await prisma.user.create({
-        data: {
-          id: adminId,
-          email: generateUniqueEmail('test-rbac-admin'),
-          name: generateUniqueName('Test RBAC Admin'),
-          role: UserRole.ADMIN
-        }
-      });
-      
-      // Simulate access control check for admin-only resource
-      const canStudentAccess = student.role === UserRole.ADMIN;
-      const canAdminAccess = admin.role === UserRole.ADMIN;
-      
-      expect(canStudentAccess).toBe(false);
-      expect(canAdminAccess).toBe(true);
-      
-      // Simulate access control check for instructor/admin resource
-      const canStudentAccessInstructorResource = 
-        student.role === UserRole.INSTRUCTOR || student.role === UserRole.ADMIN;
-      const canAdminAccessInstructorResource = 
-        admin.role === UserRole.INSTRUCTOR || admin.role === UserRole.ADMIN;
-      
-      expect(canStudentAccessInstructorResource).toBe(false);
-      expect(canAdminAccessInstructorResource).toBe(true);
-      
-      // Clean up
-      await prisma.user.deleteMany({
-        where: {
-          id: {
-            in: [studentId, adminId]
+    it('should enforce role-based permissions', async () => {
+      await withTestTransaction(async (tx) => {
+        // Create dedicated users for this test
+        const student = await tx.user.create({
+          data: {
+            id: generateTestId('rbac-student'),
+            email: generateTestEmail('rbac-student'),
+            name: generateTestName('RBAC Student'),
+            role: UserRole.STUDENT
           }
-        }
+        });
+        
+        const admin = await tx.user.create({
+          data: {
+            id: generateTestId('rbac-admin'),
+            email: generateTestEmail('rbac-admin'),
+            name: generateTestName('RBAC Admin'),
+            role: UserRole.ADMIN
+          }
+        });
+        
+        // Simulate access control check for admin-only resource
+        const canStudentAccess = student.role === UserRole.ADMIN;
+        const canAdminAccess = admin.role === UserRole.ADMIN;
+        
+        expect(canStudentAccess).toBe(false);
+        expect(canAdminAccess).toBe(true);
+        
+        // Simulate access control check for instructor/admin resource
+        const canStudentAccessInstructorResource = 
+          student.role === UserRole.INSTRUCTOR || student.role === UserRole.ADMIN;
+        const canAdminAccessInstructorResource = 
+          admin.role === UserRole.INSTRUCTOR || admin.role === UserRole.ADMIN;
+        
+        expect(canStudentAccessInstructorResource).toBe(false);
+        expect(canAdminAccessInstructorResource).toBe(true);
       });
     });
   });

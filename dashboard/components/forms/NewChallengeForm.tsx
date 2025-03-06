@@ -20,12 +20,39 @@ const generateUserId = (email: string) => {
   return email.slice(0, 5) + randomNumbers;
 };
 
-export default function NewChallengeForm({ userId }) {
+interface NewChallengeFormProps {
+  userId: string;
+}
+
+interface AppConfig {
+  id: string;
+  appId: string;
+  title: string;
+  icon: string;
+  width: number;
+  height: number;
+  screen: string;
+  disabled: boolean;
+  favourite: boolean;
+  desktop_shortcut: boolean;
+  launch_on_startup: boolean;
+  pages: {
+    instructions: string;
+    questions: {
+      type: string;
+      content: string;
+      id: string;
+      points: number;
+    }[];
+  }[];
+}
+
+export default function NewChallengeForm({ userId }: NewChallengeFormProps) {
   const [challengeImage, setChallengeImage] = useState<string>('');
   const [challengeType, setChallengeType] = useState<string>('');
   const [challenges, setChallenges] = useState<any[]>([]);
-  const [appsConfig, setAppsConfig] = useState<any[]>([]);
-  const [overriddenConfig, setOverriddenConfig] = useState<any[]>([]);
+  const [appsConfig, setAppsConfig] = useState<AppConfig[]>([]);
+  const [overriddenConfig, setOverriddenConfig] = useState<AppConfig[]>([]);
   const [selectedChallengeId, setSelectedChallengeId] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(false);
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
@@ -74,46 +101,61 @@ export default function NewChallengeForm({ userId }) {
   };
 
   const handleAddQuestion = (index: number, pageIndex: number) => {
-    setOverriddenConfig((prevConfig) =>
-      prevConfig.map((appConfig, i) =>
-        i === index
-          ? {
-              ...appConfig,
-              pages: appConfig.pages.map((page, j) =>
-                j === pageIndex
-                  ? {
-                      ...page,
-                      questions: [
-                        ...page.questions,
-                        { id: `q${Date.now()}`, content: '', points: 0 }
-                      ]
-                    }
-                  : page
-              )
-            }
-          : appConfig
-      )
-    );
+    setAppsConfig(prevConfig => {
+      const newConfig = [...prevConfig];
+      const app = newConfig[index];
+      
+      if (app && app.pages && app.pages[pageIndex]) {
+        const newPages = [...app.pages];
+        const page = newPages[pageIndex];
+        
+        if (page && page.questions) {
+          newPages[pageIndex] = {
+            ...page,
+            questions: [
+              ...page.questions,
+              {
+                id: uuidv4(),
+                type: 'text',
+                content: '',
+                points: 10
+              }
+            ]
+          };
+        }
+        
+        return newConfig.map((appConfig, i) => 
+          i === index ? { ...appConfig, pages: newPages } : appConfig
+        );
+      }
+      
+      return newConfig;
+    });
   };
 
   const handleRemoveQuestion = (index: number, pageIndex: number, questionIndex: number) => {
-    setOverriddenConfig((prevConfig) =>
-      prevConfig.map((appConfig, i) =>
-        i === index
-          ? {
-              ...appConfig,
-              pages: appConfig.pages.map((page, j) =>
-                j === pageIndex
-                  ? {
-                      ...page,
-                      questions: page.questions.filter((_, k) => k !== questionIndex)
-                    }
-                  : page
-              )
-            }
-          : appConfig
-      )
-    );
+    setAppsConfig(prevConfig => {
+      const newConfig = [...prevConfig];
+      const app = newConfig[index];
+      
+      if (app && app.pages && app.pages[pageIndex]) {
+        const newPages = [...app.pages];
+        const page = newPages[pageIndex];
+        
+        if (page && page.questions) {
+          newPages[pageIndex] = {
+            ...page,
+            questions: page.questions.filter((_, k: number) => k !== questionIndex)
+          };
+        }
+        
+        return newConfig.map((appConfig, i) => 
+          i === index ? { ...appConfig, pages: newPages } : appConfig
+        );
+      }
+      
+      return newConfig;
+    });
   };
 
   const handleCreateChallenge = async () => {
@@ -122,33 +164,29 @@ export default function NewChallengeForm({ userId }) {
       const appsConfigToUse = overriddenConfig.length > 0 ? overriddenConfig : appsConfig;
       const appsConfigString = JSON.stringify(appsConfigToUse);
 
-      const response = await fetch('/api/challenges/instance', {
+      const response = await fetch('/api/challenges', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
+          'Content-Type': 'application/json'
         },
         body: JSON.stringify({
+          name: '',
+          description: '',
           challengeImage,
-          appsConfig: appsConfigString,
-          challengeType
-        }),
+          challengeTypeId: '',
+          difficulty: '',
+          appsConfig: appsConfigString
+        })
       });
 
       if (!response.ok) {
-        const error = await response.text();
-        throw new Error(error);
+        throw new Error('Failed to create challenge');
       }
 
-      const result = await response.json();
-
-      if (result.success) {
-        router.push('/dashboard/challenge');
-      } else {
-        throw new Error(result.error || 'Failed to create challenge');
-      }
+      router.push('/dashboard/challenge');
     } catch (error) {
       console.error('Error creating challenge:', error);
-      alert(error.message || 'Error creating challenge');
+      alert(error instanceof Error ? error.message : 'Error creating challenge');
     } finally {
       setLoading(false);
     }

@@ -3,6 +3,15 @@ import { prisma } from '@/lib/prisma';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { Prisma } from '@prisma/client';
+import { z } from 'zod';
+import { validateAndSanitize, validationSchemas } from '@/lib/validation';
+import rateLimit from '@/lib/rate-limit';
+
+// Create a rate limiter for challenge-related operations
+const challengesRateLimiter = rateLimit({
+  interval: 60 * 1000, // 1 minute
+  limit: 30, // 30 requests per minute
+});
 
 type ChallengeWithDetails = Prisma.ChallengesGetPayload<{
   include: {
@@ -74,7 +83,7 @@ function transformToWebOSFormat(challenge: ChallengeWithDetails) {
       favourite: app.favourite,
       desktop_shortcut: app.desktop_shortcut,
       launch_on_startup: app.launch_on_startup,
-      ...(app.additional_config || {})
+      ...Object.fromEntries(Object.entries(app.additional_config || {}))
     }))
   ];
 
@@ -88,8 +97,12 @@ function transformToWebOSFormat(challenge: ChallengeWithDetails) {
   };
 }
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
+    // Apply rate limiting
+    const rateLimitResult = await challengesRateLimiter.check(req);
+    if (rateLimitResult) return rateLimitResult;
+    
     const session = await getServerSession(authOptions);
 
     if (!session) {
@@ -108,5 +121,84 @@ export async function GET() {
   } catch (error) {
     console.error('Error fetching challenges:', error);
     return NextResponse.json({ error: 'Failed to fetch challenges' }, { status: 500 });
+  }
+}
+
+// Define validation schema for creating a challenge
+const createChallengeSchema = z.object({
+  name: validationSchemas.challengeName,
+  description: validationSchemas.challengeDescription,
+  difficulty: z.enum(['easy', 'medium', 'hard']),
+  challengeTypeId: validationSchemas.id,
+  challengeImage: z.string().optional(),
+  questions: z.array(z.object({
+    content: z.string().min(5, 'Question content must be at least 5 characters'),
+    type: z.enum(['text', 'multiple_choice', 'code']),
+    points: z.number().min(1, 'Points must be at least 1'),
+    answer: z.string().optional(),
+    options: z.array(z.string()).optional()
+  })).min(1, 'At least one question is required')
+});
+
+export async function POST(req: Request) {
+  try {
+    // Apply rate limiting
+    const rateLimitResult = await challengesRateLimiter.check(req);
+    if (rateLimitResult) return rateLimitResult;
+    
+    const session = await getServerSession(authOptions);
+
+    if (!session) {
+      return new NextResponse('Unauthorized', { status: 401 });
+    }
+
+    // Check if user is admin
+    const user = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: { role: true }
+    });
+
+    if (!user || user.role !== 'ADMIN') {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
+    // Parse and validate request body
+    const body = await req.json();
+    const validationResult = validateAndSanitize(createChallengeSchema, body);
+
+    if (!validationResult.success) {
+      return NextResponse.json({ error: validationResult.error }, { status: 400 });
+    }
+
+    const { name, description, difficulty, challengeTypeId, challengeImage, questions } = validationResult.data;
+
+    // Create the challenge
+    const challenge = await prisma.challenges.create({
+      data: {
+        name,
+        description,
+        difficulty,
+        challengeTypeId,
+        challengeImage,
+        createdBy: session.user.id,
+        questions: {
+          create: questions.map(q => ({
+            content: q.content,
+            type: q.type,
+            points: q.points,
+            answer: q.answer,
+            options: q.options
+          }))
+        }
+      },
+      include: {
+        questions: true
+      }
+    });
+
+    return NextResponse.json(challenge, { status: 201 });
+  } catch (error) {
+    console.error('Error creating challenge:', error);
+    return NextResponse.json({ error: 'Failed to create challenge' }, { status: 500 });
   }
 }

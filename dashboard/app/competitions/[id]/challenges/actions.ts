@@ -3,7 +3,7 @@
 import { headers } from 'next/headers';
 import { cookies } from 'next/headers';
 
-export async function terminateChallenge(instanceId: string) {
+export async function terminateChallenge(instanceId: string): Promise<void> {
   try {
     const headersList = headers();
     const protocol = process.env.NODE_ENV === 'development' ? 'http' : 'https';
@@ -28,8 +28,6 @@ export async function terminateChallenge(instanceId: string) {
       const error = await response.text();
       throw new Error(`Failed to terminate challenge: ${error}`);
     }
-
-    return { success: true };
   } catch (error) {
     console.error("Error terminating challenge:", error);
     throw error;

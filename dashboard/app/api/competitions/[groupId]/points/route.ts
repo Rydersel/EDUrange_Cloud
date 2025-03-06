@@ -50,10 +50,8 @@ interface DbUser {
   image: string | null;
 }
 
-export async function POST(
-  req: NextRequest,
-  { params }: { params: { groupId: string } }
-) {
+export async function POST(req: NextRequest, props: { params: Promise<{ groupId: string }> }) {
+  const params = await props.params;
   try {
     // Apply rate limiting
     const rateLimitResult = await pointsRateLimiter.check(req);
@@ -131,10 +129,8 @@ export async function POST(
   }
 }
 
-export async function GET(
-  req: NextRequest,
-  { params }: { params: { groupId: string } }
-) {
+export async function GET(req: NextRequest, props: { params: Promise<{ groupId: string }> }) {
+  const params = await props.params;
   try {
     // Validate the groupId parameter
     const paramsValidation = validateAndSanitize(paramsSchema, params);

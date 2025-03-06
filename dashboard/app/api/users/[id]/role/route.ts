@@ -19,10 +19,8 @@ const roleUpdateSchema = z.object({
   role: z.enum(['ADMIN', 'INSTRUCTOR', 'STUDENT'])
 });
 
-export async function PATCH(
-  req: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function PATCH(req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   try {
     // Apply rate limiting
     const rateLimitResult = await userRoleRateLimiter.check(req);

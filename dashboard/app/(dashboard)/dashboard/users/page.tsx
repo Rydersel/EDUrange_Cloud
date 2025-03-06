@@ -14,9 +14,9 @@ import { Prisma, User } from '@prisma/client';
 const breadcrumbItems = [{ title: 'Users', link: '/dashboard/users' }];
 
 type ParamsProps = {
-  searchParams: {
+  searchParams: Promise<{
     [key: string]: string | string[] | undefined;
-  };
+  }>;
 };
 
 type UserWithRelations = User & {
@@ -26,7 +26,8 @@ type UserWithRelations = User & {
   challengeCompletions: { id: string; pointsEarned: number }[];
 };
 
-export default async function Page({ searchParams }: ParamsProps) {
+export default async function Page(props: ParamsProps) {
+  const searchParams = await props.searchParams;
   const session = await getServerSession(authConfig);
 
   if (!session) {

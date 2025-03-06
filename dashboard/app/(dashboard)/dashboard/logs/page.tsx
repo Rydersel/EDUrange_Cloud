@@ -17,12 +17,13 @@ import { Database, Upload } from 'lucide-react';
 const breadcrumbItems = [{ title: 'Logs', link: '/dashboard/logs' }];
 
 type ParamsProps = {
-  searchParams: {
+  searchParams: Promise<{
     [key: string]: string | string[] | undefined;
-  };
+  }>;
 };
 
-export default async function Page({ searchParams }: ParamsProps) {
+export default async function Page(props: ParamsProps) {
+  const searchParams = await props.searchParams;
   const session = await getServerSession(authConfig);
 
   if (!session) {
@@ -61,12 +62,12 @@ export default async function Page({ searchParams }: ParamsProps) {
   const where: Prisma.ActivityLogWhereInput = {
     ...(eventType && { eventType }),
     ...(userId && { userId }),
-    ...(startDate || endDate) && {
+    ...((startDate || endDate) && {
       timestamp: {
         ...(startDate && { gte: startDate }),
         ...(endDate && { lte: endDate })
       }
-    }
+    })
   };
 
   const logs = await prisma.activityLog.findMany({

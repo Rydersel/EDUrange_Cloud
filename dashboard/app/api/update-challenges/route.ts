@@ -1,6 +1,6 @@
 // /pages/api/update-challenges.ts
 
-import { NextResponse } from 'next/server';
+import { NextResponse, NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
 async function updateChallengeInstances(challengePods: ChallengePod[]) {
@@ -123,7 +123,7 @@ interface ChallengePod {
   flag?: string;
 }
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   const body = await fetchWithRetry(req.url, { method: 'POST', body: req.body });
   try {
     await updateChallengeInstances(body.challengePods as ChallengePod[]);

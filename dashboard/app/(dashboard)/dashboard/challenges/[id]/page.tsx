@@ -16,12 +16,13 @@ import authConfig from '@/auth.config';
 import { ChallengeActions } from '@/components/challenge-actions';
 
 interface ChallengeDetailPageProps {
-  params: {
+  params: Promise<{
     id: string;
-  };
+  }>;
 }
 
-export default async function ChallengeDetailPage({ params }: ChallengeDetailPageProps) {
+export default async function ChallengeDetailPage(props: ChallengeDetailPageProps) {
+  const params = await props.params;
   const session = await getServerSession(authConfig);
 
   if (!session) {

@@ -33,6 +33,10 @@ export async function GET(request: Request) {
     } else if (['cpu', 'memory', 'network'].includes(type)) {
       const metricsData = await getResourceMetricsHistory(type, period);
       return NextResponse.json(metricsData);
+    } else if (type === 'status') {
+      // Handle status type
+      const statusData = generateStatusHistory(period);
+      return NextResponse.json(statusData);
     }
     
     // Default response if no type is specified

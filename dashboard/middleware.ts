@@ -11,7 +11,7 @@ export default function middleware(request: NextRequest) {
   // Content Security Policy
   headers.set(
     'Content-Security-Policy',
-    "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://utfs.io; font-src 'self' data:; connect-src 'self' https://*.rydersel.cloud;"
+    "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://utfs.io https://avatars.githubusercontent.com; font-src 'self' data:; connect-src 'self' https://*.rydersel.cloud;"
   );
 
   // Prevent MIME type sniffing

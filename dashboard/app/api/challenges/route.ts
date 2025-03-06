@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { NextResponse, NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
@@ -97,7 +97,7 @@ function transformToWebOSFormat(challenge: ChallengeWithDetails) {
   };
 }
 
-export async function GET(req: Request) {
+export async function GET(req: NextRequest) {
   try {
     // Apply rate limiting
     const rateLimitResult = await challengesRateLimiter.check(req);
@@ -128,19 +128,20 @@ export async function GET(req: Request) {
 const createChallengeSchema = z.object({
   name: validationSchemas.challengeName,
   description: validationSchemas.challengeDescription,
-  difficulty: z.enum(['easy', 'medium', 'hard']),
+  difficulty: z.enum(['EASY', 'MEDIUM', 'HARD', 'VERY_HARD']),
   challengeTypeId: validationSchemas.id,
-  challengeImage: z.string().optional(),
+  challengeImage: z.string(),
   questions: z.array(z.object({
     content: z.string().min(5, 'Question content must be at least 5 characters'),
     type: z.enum(['text', 'multiple_choice', 'code']),
     points: z.number().min(1, 'Points must be at least 1'),
-    answer: z.string().optional(),
-    options: z.array(z.string()).optional()
+    answer: z.string(),
+    options: z.array(z.string()).optional(),
+    order: z.number().optional()
   })).min(1, 'At least one question is required')
 });
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   try {
     // Apply rate limiting
     const rateLimitResult = await challengesRateLimiter.check(req);
@@ -180,14 +181,14 @@ export async function POST(req: Request) {
         difficulty,
         challengeTypeId,
         challengeImage,
-        createdBy: session.user.id,
         questions: {
-          create: questions.map(q => ({
+          create: questions.map((q, index) => ({
             content: q.content,
             type: q.type,
             points: q.points,
             answer: q.answer,
-            options: q.options
+            options: q.options,
+            order: q.order ?? index + 1 // Use provided order or generate based on index
           }))
         }
       },

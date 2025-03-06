@@ -20,8 +20,9 @@ const completionSchema = z.object({
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string; challengeId: string; questionId: string } }
+  props: { params: Promise<{ id: string; challengeId: string; questionId: string }> }
 ) {
+  const params = await props.params;
   try {
     // Apply rate limiting
     const rateLimitResult = await challengeSubmissionLimiter.check(request);

@@ -1,0 +1,151 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: monitoring-service
+  namespace: default
+  labels:
+    app: monitoring-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: monitoring-service
+  template:
+    metadata:
+      labels:
+        app: monitoring-service
+    spec:
+      serviceAccountName: monitoring-service-sa
+      containers:
+      - name: monitoring-service
+        image: registry.rydersel.cloud/monitoring-service
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 5000
+          name: http
+        - containerPort: 9100
+          name: metrics
+        env:
+        - name: PROMETHEUS_URL
+          value: "http://prometheus-kube-prometheus-prometheus.monitoring:9090"
+        - name: METRICS_CACHE_TTL
+          value: "15"
+        - name: METRICS_PORT
+          value: "9100"
+        resources:
+          limits:
+            cpu: "500m"
+            memory: "512Mi"
+          requests:
+            cpu: "100m"
+            memory: "128Mi"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 5000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 5000
+          initialDelaySeconds: 5
+          periodSeconds: 5
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: monitoring-service
+  namespace: default
+  labels:
+    app: monitoring-service
+spec:
+  selector:
+    app: monitoring-service
+  ports:
+  - name: http
+    port: 5000
+    targetPort: 5000
+  - name: metrics
+    port: 9100
+    targetPort: 9100
+  type: ClusterIP
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: monitoring-service
+  namespace: monitoring
+  labels:
+    release: prometheus
+spec:
+  selector:
+    matchLabels:
+      app: monitoring-service
+  namespaceSelector:
+    matchNames:
+      - default
+  endpoints:
+  - port: metrics
+    interval: 15s
+---
+# RBAC resources for monitoring-service
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: monitoring-service-sa
+  namespace: default
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: monitoring-service-role
+rules:
+- apiGroups: [""]
+  resources: ["pods", "nodes"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["metrics.k8s.io"]
+  resources: ["pods", "nodes"]
+  verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: monitoring-service-role-binding
+subjects:
+- kind: ServiceAccount
+  name: monitoring-service-sa
+  namespace: default
+roleRef:
+  kind: ClusterRole
+  name: monitoring-service-role
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: monitoring-service-ingress
+  namespace: default
+  annotations:
+    nginx.ingress.kubernetes.io/use-regex: "true"
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
+
+
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: eductf.rydersel.cloud
+    http:
+      paths:
+      - path: /metrics(/|$)(.*)
+        pathType: ImplementationSpecific
+        backend:
+          service:
+            name: monitoring-service
+            port:
+              number: 5000
+  tls:
+    - hosts:
+        - eductf.rydersel.cloud
+      secretName: wildcard-domain-certificate-prod
+

@@ -9,7 +9,8 @@ interface AppConfigModalProps {
     isOpen: boolean,
     onClose: () => void,
     onInputChange: (index: number, field: string, value: any) => void,
-    onAddQuestion?: (index: number, pageIndex: number) => void
+    onAddQuestion?: (index: number, pageIndex: number) => void,
+    onRemoveQuestion?: (index: number, pageIndex: number, questionIndex: number) => void
 }
 
 export const AppConfigModal: React.FC<AppConfigModalProps> = ({
@@ -17,7 +18,8 @@ export const AppConfigModal: React.FC<AppConfigModalProps> = ({
                                                                   isOpen,
                                                                   onClose,
                                                                   onInputChange,
-                                                                  onAddQuestion
+                                                                  onAddQuestion,
+                                                                  onRemoveQuestion
                                                               }) => {
     const [isMounted, setIsMounted] = useState(false);
     const [expandedIndex, setExpandedIndex] = useState<number | null>(null);
@@ -144,7 +146,7 @@ export const AppConfigModal: React.FC<AppConfigModalProps> = ({
                                                 className="bg-gray-700 text-white"
                                             />
                                         </div>
-                                        {app.pages.map((page, pageIndex) => (
+                                        {app.pages && app.pages.map((page, pageIndex) => (
                                             <div key={pageIndex} className="col-span-2 border p-2 rounded-md mt-2">
                                                 <div className="flex flex-col mb-2">
                                                     <label htmlFor={`instructions-${index}-${pageIndex}`}>Instructions
@@ -153,14 +155,18 @@ export const AppConfigModal: React.FC<AppConfigModalProps> = ({
                                                         id={`instructions-${index}-${pageIndex}`}
                                                         value={page.instructions}
                                                         onChange={(e) => {
-                                                            const newPages = [...app.pages];
-                                                            newPages[pageIndex].instructions = e.target.value;
-                                                            onInputChange(index, 'pages', newPages);
+                                                            if (app.pages) {
+                                                                const newPages = [...app.pages];
+                                                                if (newPages[pageIndex]) {
+                                                                    newPages[pageIndex].instructions = e.target.value;
+                                                                    onInputChange(index, 'pages', newPages);
+                                                                }
+                                                            }
                                                         }}
                                                         className="bg-gray-700 text-white"
                                                     />
                                                 </div>
-                                                {page.questions.map((question, questionIndex) => (
+                                                {page.questions && page.questions.map((question, questionIndex) => (
                                                     <div key={questionIndex} className="border p-2 rounded-md mt-2">
                                                         <div className="flex flex-col mb-2">
                                                             <label
@@ -171,9 +177,13 @@ export const AppConfigModal: React.FC<AppConfigModalProps> = ({
                                                                 id={`question-content-${index}-${pageIndex}-${questionIndex}`}
                                                                 value={question.content}
                                                                 onChange={(e) => {
-                                                                    const newPages = [...app.pages];
-                                                                    newPages[pageIndex].questions[questionIndex].content = e.target.value;
-                                                                    onInputChange(index, 'pages', newPages);
+                                                                    if (app.pages) {
+                                                                        const newPages = [...app.pages];
+                                                                        if (newPages[pageIndex] && newPages[pageIndex].questions && newPages[pageIndex].questions[questionIndex]) {
+                                                                            newPages[pageIndex].questions[questionIndex].content = e.target.value;
+                                                                            onInputChange(index, 'pages', newPages);
+                                                                        }
+                                                                    }
                                                                 }}
                                                                 className="bg-gray-700 text-white"
                                                             />
@@ -186,9 +196,13 @@ export const AppConfigModal: React.FC<AppConfigModalProps> = ({
                                                                 type="number"
                                                                 value={question.points}
                                                                 onChange={(e) => {
-                                                                    const newPages = [...app.pages];
-                                                                    newPages[pageIndex].questions[questionIndex].points = parseInt(e.target.value, 10);
-                                                                    onInputChange(index, 'pages', newPages);
+                                                                    if (app.pages) {
+                                                                        const newPages = [...app.pages];
+                                                                        if (newPages[pageIndex] && newPages[pageIndex].questions && newPages[pageIndex].questions[questionIndex]) {
+                                                                            newPages[pageIndex].questions[questionIndex].points = parseInt(e.target.value, 10);
+                                                                            onInputChange(index, 'pages', newPages);
+                                                                        }
+                                                                    }
                                                                 }}
                                                                 className="bg-gray-700 text-white"
                                                             />

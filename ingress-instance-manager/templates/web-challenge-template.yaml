@@ -6,19 +6,38 @@ metadata:
     app: challenge
 spec:
   containers:
-  - name: webos
-    image: registry.rydersel.cloud/webos
+  - name: web-challenge-container
+    image: registry.rydersel.cloud/web-challenge  # Will be overwritten with the actual challenge image
     ports:
-    - containerPort: 3000
+    - containerPort: 80
       name: http
+    env:
+    - name: FLAG
+      value: "flag"  # Will be overwritten with the actual flag
   - name: bridge
     image: registry.rydersel.cloud/bridge
     ports:
       - containerPort: 5000
         name: http
     env:
+      - name: CHALLENGE_CONTAINER_NAME
+        value: "web-challenge-container"
       - name: WEB_CHAL_LINK
-        value: "none"
+        value: "none"  # Will be overwritten with the actual URL
+  - name: webos
+    image: registry.rydersel.cloud/webos
+    ports:
+    - containerPort: 3000
+      name: webos-http
+    env:
+    - name: NEXT_PUBLIC_POD_NAME
+      value: "$(POD_NAME)"
+    - name: NEXT_PUBLIC_APPS_CONFIG
+      value: "$(NEXT_PUBLIC_APPS_CONFIG)"
+    - name: NEXT_PUBLIC_CHALLENGE_POD_NAME
+      value: "$(POD_NAME)"
+    - name: NEXT_PUBLIC_WEB_CHALLENGE_URL
+      value: "https://web-$(POD_NAME).$(INGRESS_URL)"
 
 ---
 apiVersion: v1
@@ -32,7 +51,12 @@ spec:
   - protocol: TCP
     port: 80
     targetPort: 3000  # Expose the WebOS container
-  type: ClusterIP  # Changed to ClusterIP for internal routing
+    name: webos-http
+  - protocol: TCP
+    port: 8080
+    targetPort: 80  # Expose the web challenge container
+    name: web-challenge-http
+  type: ClusterIP
 ---
 apiVersion: networking.k8s.io/v1
 kind: Ingress
@@ -53,3 +77,4 @@ spec:
             name: challenge-service
             port:
               number: 80
+  # The web challenge host will be added dynamically

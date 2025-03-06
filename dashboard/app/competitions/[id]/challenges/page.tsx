@@ -4,11 +4,12 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { ChallengesClient } from "./challenges-client";
 
-export default async function CompetitionChallengesPage({
-  params,
-}: {
-  params: { id: string };
-}) {
+export default async function CompetitionChallengesPage(
+  props: {
+    params: Promise<{ id: string }>;
+  }
+) {
+  const params = await props.params;
   const session = await getServerSession(authOptions);
   if (!session?.user) {
     redirect("/auth/signin");

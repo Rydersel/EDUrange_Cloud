@@ -6,7 +6,8 @@ import { CompetitionDetails } from './competition-details';
 import { Prisma } from '@prisma/client';
 import { Competition } from '../types';
 
-export default async function CompetitionDetailsPage({ params }: { params: { id: string } }) {
+export default async function CompetitionDetailsPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const session = await getServerSession(authOptions);
   if (!session?.user) {
     redirect('/auth/signin');

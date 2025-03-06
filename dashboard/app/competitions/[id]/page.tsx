@@ -2,7 +2,7 @@
 
 import { Loader2, Clock, Trophy, Target, Users, CheckCircle2 } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, use } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
@@ -24,9 +24,9 @@ interface Competition {
 }
 
 interface CompetitionOverviewPageProps {
-  params: {
+  params: Promise<{
     id: string;
-  };
+  }>;
 }
 
 function CountdownTimer({ endDate }: { endDate: string }) {
@@ -81,7 +81,8 @@ function CountdownTimer({ endDate }: { endDate: string }) {
   );
 }
 
-export default function CompetitionOverviewPage({ params }: CompetitionOverviewPageProps) {
+export default function CompetitionOverviewPage(props: CompetitionOverviewPageProps) {
+  const params = use(props.params);
   const { toast } = useToast();
   const [competition, setCompetition] = useState<Competition | null>(null);
   const [loading, setLoading] = useState(true);

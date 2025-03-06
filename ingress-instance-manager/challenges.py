@@ -253,10 +253,14 @@ class WebChallenge:
 
         logging.info(f"Creating challenge {pod.metadata.name} for user {self.user_id}")
 
-        challenge_url = f"http://terminal-{pod.metadata.name}.{url}"
-        logging.info(f"Assigned challenge URL: {challenge_url}")
+        # Generate URLs for both the WebOS interface and the web challenge
+        webos_url = f"https://{pod.metadata.name}.{url}"
+        web_challenge_url = f"https://web-{pod.metadata.name}.{url}"
+        
+        logging.info(f"Assigned WebOS URL: {webos_url}")
+        logging.info(f"Assigned Web Challenge URL: {web_challenge_url}")
 
-        return pod.metadata.name, challenge_url, secret_name
+        return pod.metadata.name, web_challenge_url, secret_name
 
     def create_challenge_pod(self):
         logging.info("Starting create_challenge_pod for WebChallenge")
@@ -281,33 +285,81 @@ class WebChallenge:
         service_spec['metadata']['name'] = f"service-{instance_name}"
         service_spec['spec']['selector']['app'] = instance_name
         ingress_spec['metadata']['name'] = f"ingress-{instance_name}"
-        ingress_spec['spec']['rules'][0]['host'] = f"terminal-{instance_name}.{url}"
+        
+        # Set up the main WebOS ingress
+        ingress_spec['spec']['rules'][0]['host'] = f"{instance_name}.{url}"
         ingress_spec['spec']['rules'][0]['http']['paths'][0]['backend']['service']['name'] = f"service-{instance_name}"
-        ingress_spec['spec']['rules'][0]['http']['paths'].append({
-            "path": "/terminal",
-            "pathType": "ImplementationSpecific",
-            "backend": {
-                "service": {
-                    "name": f"service-{instance_name}",
-                    "port": {
-                        "number": 3001
+        
+        # Add a new rule for the web challenge
+        ingress_spec['spec']['rules'].append({
+            "host": f"web-{instance_name}.{url}",
+            "http": {
+                "paths": [{
+                    "path": "/",
+                    "pathType": "ImplementationSpecific",
+                    "backend": {
+                        "service": {
+                            "name": f"service-{instance_name}",
+                            "port": {
+                                "number": 8080
+                            }
+                        }
                     }
-                }
+                }]
             }
         })
+        
+        # Add TLS configuration for both hosts
+        ingress_spec['spec']['tls'] = [{
+            "hosts": [
+                f"{instance_name}.{url}",
+                f"web-{instance_name}.{url}"
+            ],
+            "secretName": "wildcard-domain-certificate-prod"
+        }]
 
+        # Set the web challenge URL in the environment variables
+        web_challenge_url = f"https://web-{instance_name}.{url}"
+        
         for container in pod_spec['spec']['containers']:
-            if container['name'] == 'bridge':
+            if container['name'] == 'web-challenge-container':
+                container['image'] = self.challenge_image
+                container['env'].append({"name": "FLAG", "value": flag})
+            
+            elif container['name'] == 'bridge':
                 container['env'].append({"name": "flag_secret_name", "value": secret_name})
+                container['env'].append({"name": "WEB_CHAL_LINK", "value": web_challenge_url})
 
-                # Update the NEXT_PUBLIC_APPS_CONFIG with the correct flag secret name
+                # Update the NEXT_PUBLIC_APPS_CONFIG with the correct flag secret name and web challenge URL
                 updated_apps_config = json.loads(self.apps_config)
                 for app in updated_apps_config:
                     if app["id"] == "challenge-prompt" and "challenge" in app:
                         app["challenge"]["flagSecretName"] = secret_name
+                    if app["id"] == "web_chal":
+                        app["url"] = web_challenge_url
                 updated_apps_config_str = json.dumps(updated_apps_config)
 
                 container['env'].append({"name": "NEXT_PUBLIC_APPS_CONFIG", "value": updated_apps_config_str})
+            
+            elif container['name'] == 'webos':
+                # Update all environment variables for the WebOS container with actual values
+                for env_var in container['env']:
+                    if env_var['name'] == 'NEXT_PUBLIC_POD_NAME':
+                        env_var['value'] = instance_name
+                    elif env_var['name'] == 'NEXT_PUBLIC_APPS_CONFIG':
+                        # This is already handled in the bridge container section
+                        # We'll set it here too to ensure it's properly set
+                        updated_apps_config = json.loads(self.apps_config)
+                        for app in updated_apps_config:
+                            if app["id"] == "challenge-prompt" and "challenge" in app:
+                                app["challenge"]["flagSecretName"] = secret_name
+                            if app["id"] == "web_chal":
+                                app["url"] = f"https://web-{instance_name}.{url}"
+                        env_var['value'] = json.dumps(updated_apps_config)
+                    elif env_var['name'] == 'NEXT_PUBLIC_CHALLENGE_POD_NAME':
+                        env_var['value'] = instance_name
+                    elif env_var['name'] == 'NEXT_PUBLIC_WEB_CHALLENGE_URL':
+                        env_var['value'] = f"https://web-{instance_name}.{url}"
 
         pod = client.V1Pod(
             api_version="v1",
@@ -324,7 +376,7 @@ class WebChallenge:
                 selector={"app": instance_name, "user": sanitized_user_id},
                 ports=[
                     client.V1ServicePort(protocol="TCP", port=80, target_port=3000, name="webos-http"),
-                    client.V1ServicePort(protocol="TCP", port=3001, target_port=3001, name="terminal-http")
+                    client.V1ServicePort(protocol="TCP", port=8080, target_port=80, name="web-challenge-http")
                 ],
                 type="ClusterIP"
             )

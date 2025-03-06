@@ -1,0 +1,10 @@
+User-agent: *
+Disallow: /admin/
+Disallow: /secret.html
+Disallow: /private/
+Disallow: /backup/
+
+# Congratulations on finding the robots.txt file!
+# This file tells search engines which pages they should not index.
+# Sometimes, sensitive information is hidden in these disallowed pages.
+# Try visiting some of these disallowed URLs to see if you can find the flag. 

@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { Session } from 'next-auth';
-import { Role } from '@prisma/client';
+import { UserRole } from '@prisma/client';
 
 interface CustomSession extends Session {
   user: {

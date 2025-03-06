@@ -2,7 +2,7 @@
 
 import { Loader2 } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, use } from 'react';
 import { Leaderboard } from '@/components/Leaderboard';
 import { CompetitionNav } from '@/components/competition/CompetitionNav';
 
@@ -17,12 +17,13 @@ interface Competition {
 }
 
 interface CompetitionLeaderboardPageProps {
-  params: {
+  params: Promise<{
     id: string;
-  };
+  }>;
 }
 
-export default function CompetitionLeaderboardPage({ params }: CompetitionLeaderboardPageProps) {
+export default function CompetitionLeaderboardPage(props: CompetitionLeaderboardPageProps) {
+  const params = use(props.params);
   const { toast } = useToast();
   const [competition, setCompetition] = useState<Competition | null>(null);
   const [loading, setLoading] = useState(true);

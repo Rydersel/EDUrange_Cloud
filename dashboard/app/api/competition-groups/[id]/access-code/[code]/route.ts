@@ -4,10 +4,8 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { ActivityLogger, ActivityEventType } from '@/lib/activity-logger';
 
-export async function DELETE(
-  req: Request,
-  { params }: { params: { id: string; code: string } }
-) {
+export async function DELETE(req: Request, props: { params: Promise<{ id: string; code: string }> }) {
+  const params = await props.params;
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user) {

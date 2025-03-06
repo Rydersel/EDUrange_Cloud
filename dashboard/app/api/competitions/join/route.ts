@@ -3,15 +3,46 @@ import { prisma } from '@/lib/prisma';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { ActivityLogger, ActivityEventType } from '@/lib/activity-logger';
+import { z } from 'zod';
+import { validateAndSanitize } from '@/lib/validation';
+import rateLimit from '@/lib/rate-limit';
+import { NextRequest } from 'next/server';
 
-export async function POST(req: Request) {
+// Create a rate limiter for join operations
+const joinRateLimiter = rateLimit({
+  interval: 60 * 1000, // 1 minute
+  limit: 10, // 10 requests per minute
+});
+
+// Define validation schema for join request
+const joinSchema = z.object({
+  code: z.string().min(1, 'Access code is required')
+});
+
+export async function POST(req: NextRequest) {
   try {
+    // Apply rate limiting
+    const rateLimitResult = await joinRateLimiter.check(req);
+    if (rateLimitResult) return rateLimitResult;
+    
     const session = await getServerSession(authOptions);
     if (!session?.user) {
       return new NextResponse('Unauthorized', { status: 401 });
     }
 
-    const { code } = await req.json();
+    const body = await req.json();
+    
+    // Validate and sanitize input
+    const validationResult = validateAndSanitize(joinSchema, body);
+    
+    if (!validationResult.success) {
+      return NextResponse.json({ 
+        success: false, 
+        error: validationResult.error 
+      }, { status: 400 });
+    }
+    
+    const { code } = validationResult.data;
 
     // Find valid access code
     const accessCode = await prisma.competitionAccessCode.findFirst({
@@ -97,6 +128,12 @@ export async function POST(req: Request) {
     });
   } catch (error) {
     console.error('Error joining competition:', error);
+    if (error instanceof z.ZodError) {
+      return NextResponse.json({ 
+        success: false, 
+        errors: error.errors 
+      }, { status: 400 });
+    }
     return new NextResponse('Internal Server Error', { status: 500 });
   }
 } 

@@ -4,8 +4,17 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { Session } from 'next-auth';
 import { z } from 'zod';
+import { validateAndSanitize, validationSchemas } from '@/lib/validation';
 import { extractChallengePoints } from '@/lib/utils';
 import { ActivityLogger, ActivityEventType } from '@/lib/activity-logger';
+import rateLimit from '@/lib/rate-limit';
+import { NextRequest } from 'next/server';
+
+// Create a rate limiter for competition group operations
+const competitionGroupRateLimiter = rateLimit({
+  interval: 60 * 1000, // 1 minute
+  limit: 20, // 20 requests per minute
+});
 
 interface CustomSession extends Session {
   user: {
@@ -19,7 +28,7 @@ interface CustomSession extends Session {
 
 // Validation schema for the request body
 const createGroupSchema = z.object({
-  name: z.string().min(1, 'Name is required'),
+  name: validationSchemas.competitionName || z.string().min(1, 'Name is required'),
   description: z.string().optional(),
   startDate: z.string().transform(str => new Date(str)),
   endDate: z.string().nullable().optional().transform(str => str ? new Date(str) : null),
@@ -28,14 +37,21 @@ const createGroupSchema = z.object({
   generateAccessCode: z.boolean(),
 });
 
+// Define the expected output type of the schema
+type CreateGroupInput = z.infer<typeof createGroupSchema>;
+
 function generateAccessCode(): string {
   const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
   const length = Math.floor(Math.random() * 6) + 5; // Random length between 5-10
   return Array.from({ length }, () => characters[Math.floor(Math.random() * characters.length)]).join('');
 }
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
+    // Apply rate limiting
+    const rateLimitResult = await competitionGroupRateLimiter.check(request);
+    if (rateLimitResult) return rateLimitResult;
+    
     const session = await getServerSession(authOptions) as CustomSession | null;
     
     if (!session?.user) {
@@ -48,87 +64,114 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const validatedData = createGroupSchema.parse(body);
-
-    // Get all challenges to extract points
-    const challenges = await prisma.challenges.findMany({
-      where: {
-        id: {
-          in: validatedData.challengeIds
-        }
-      },
-      select: {
-        id: true,
-        appConfigs: true
+    
+    // Use try-catch to handle validation errors
+    try {
+      // First parse with Zod directly to handle transformations
+      const parsedData = createGroupSchema.parse(body);
+      
+      // Then use validateAndSanitize for sanitization
+      const validationResult = validateAndSanitize(z.object({
+        name: z.string(),
+        description: z.string().optional(),
+        startDate: z.date(),
+        endDate: z.date().nullable().optional(),
+        challengeIds: z.array(z.string()),
+        instructorIds: z.array(z.string()),
+        generateAccessCode: z.boolean(),
+      }), parsedData);
+      
+      if (!validationResult.success) {
+        return NextResponse.json({ 
+          success: false, 
+          error: validationResult.error 
+        }, { status: 400 });
       }
-    });
+      
+      const validatedData = validationResult.data;
 
-    // Create the competition group
-    const group = await prisma.competitionGroup.create({
-      data: {
-        name: validatedData.name,
-        description: validatedData.description,
-        startDate: validatedData.startDate,
-        endDate: validatedData.endDate,
-        instructors: {
-          connect: validatedData.instructorIds.map(id => ({ id })),
+      // Get all challenges to extract points
+      const challenges = await prisma.challenges.findMany({
+        where: {
+          id: {
+            in: validatedData.challengeIds
+          }
         },
-      },
-    });
+        select: {
+          id: true,
+          appConfigs: true
+        }
+      });
 
-    // Log group creation
-    await ActivityLogger.logGroupEvent(
-      ActivityEventType.GROUP_CREATED,
-      session.user.id,
-      group.id,
-      {
-        groupName: group.name,
-        description: group.description,
-        startDate: group.startDate,
-        endDate: group.endDate,
-        timestamp: new Date().toISOString()
-      }
-    );
-
-    // Add challenges to the group with points from appConfigs
-    await prisma.groupChallenge.createMany({
-      data: challenges.map(challenge => ({
-        challengeId: challenge.id,
-        groupId: group.id,
-        points: extractChallengePoints(challenge.appConfigs),
-      })),
-    });
-
-    // Generate access code if requested
-    if (validatedData.generateAccessCode) {
-      const code = generateAccessCode();
-      await prisma.competitionAccessCode.create({
+      // Create the competition group
+      const group = await prisma.competitionGroup.create({
         data: {
-          code,
-          groupId: group.id,
-          createdBy: session.user.id,
+          name: validatedData.name,
+          description: validatedData.description,
+          startDate: validatedData.startDate,
+          endDate: validatedData.endDate,
+          instructors: {
+            connect: validatedData.instructorIds.map(id => ({ id })),
+          },
         },
       });
-      
+
+      // Log group creation
+      await ActivityLogger.logGroupEvent(
+        ActivityEventType.GROUP_CREATED,
+        session.user.id,
+        group.id,
+        {
+          groupName: group.name,
+          description: group.description,
+          startDate: group.startDate,
+          endDate: group.endDate,
+          timestamp: new Date().toISOString()
+        }
+      );
+
+      // Add challenges to the group with points from appConfigs
+      await prisma.groupChallenge.createMany({
+        data: challenges.map(challenge => ({
+          challengeId: challenge.id,
+          groupId: group.id,
+          points: extractChallengePoints(challenge.appConfigs),
+        })),
+      });
+
+      // Generate access code if requested
+      if (validatedData.generateAccessCode) {
+        const code = generateAccessCode();
+        await prisma.competitionAccessCode.create({
+          data: {
+            code,
+            groupId: group.id,
+            createdBy: session.user.id,
+          },
+        });
+        
+        return NextResponse.json({ 
+          success: true, 
+          groupId: group.id,
+          accessCode: code
+        });
+      }
+
       return NextResponse.json({ 
         success: true, 
-        groupId: group.id,
-        accessCode: code
+        groupId: group.id 
       });
+    } catch (validationError) {
+      if (validationError instanceof z.ZodError) {
+        return NextResponse.json({ 
+          success: false, 
+          errors: validationError.errors 
+        }, { status: 400 });
+      }
+      throw validationError; // Re-throw if it's not a validation error
     }
-
-    return NextResponse.json({ 
-      success: true, 
-      groupId: group.id 
-    });
   } catch (error) {
     console.error('Error creating competition group:', error);
-    if (error instanceof z.ZodError) {
-      return NextResponse.json({ 
-        success: false, 
-        errors: error.errors 
-      }, { status: 400 });
-    }
     return new NextResponse('Internal Server Error', { status: 500 });
   }
 } 

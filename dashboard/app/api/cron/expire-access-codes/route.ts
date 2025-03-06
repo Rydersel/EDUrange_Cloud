@@ -1,8 +1,8 @@
-import { NextResponse } from 'next/server';
+import { NextResponse, NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { ActivityLogger, ActivityEventType } from '@/lib/activity-logger';
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   try {
     // Find all expired access codes that haven't been marked as expired
     const expiredCodes = await prisma.competitionAccessCode.findMany({

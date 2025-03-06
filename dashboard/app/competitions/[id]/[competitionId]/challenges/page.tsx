@@ -7,12 +7,13 @@ import { Button } from "@/components/ui/button";
 import { Play } from "lucide-react";
 
 interface Props {
-  params: {
+  params: Promise<{
     competitionId: string;
-  };
+  }>;
 }
 
-export default async function CompetitionChallengesPage({ params }: Props) {
+export default async function CompetitionChallengesPage(props: Props) {
+  const params = await props.params;
   const session = await getServerSession(authOptions);
   if (!session?.user) {
     redirect("/auth/signin");

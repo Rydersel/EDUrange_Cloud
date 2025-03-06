@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextResponse, NextRequest } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -7,7 +7,7 @@ import { transformToWebOSFormat, transformQuestionsToPromptApp } from "@/lib/web
 import { ActivityLogger, ActivityEventType } from '@/lib/activity-logger';
 import { getInstanceManagerUrl } from "@/lib/api-config";
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user) {
@@ -100,7 +100,7 @@ export async function POST(req: Request) {
       challenge_id: challengeId, // Add challenge ID for database-sync
       challenge_image: challenge.challengeImage,
       apps_config: JSON.stringify(transformedAppConfigs),
-      chal_type: "fullos", // TODO: Make this dynamic based on challenge type
+      chal_type: challenge.challengeType?.name?.toLowerCase() || "fullos", // Make this dynamic based on challenge type
       competition_id: competitionId,
     };
 

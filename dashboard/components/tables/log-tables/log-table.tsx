@@ -89,6 +89,22 @@ export function LogTable({
     }
   };
 
+  const handleEventTypeChange = (value: string) => {
+    // If "all" is selected, we want to clear the filter
+    const actualValue = value === 'all' ? '' : value;
+    table.getColumn('eventType')?.setFilterValue(actualValue);
+    
+    // Update URL params
+    const params = new URLSearchParams(searchParams.toString());
+    if (value === 'all') {
+      params.delete('eventType');
+    } else {
+      params.set('eventType', value);
+    }
+    params.set('page', '1'); // Reset to first page
+    router.push(`/dashboard/logs?${params.toString()}`);
+  };
+
   return (
     <div>
       <div className="flex items-center py-4 gap-2">
@@ -101,16 +117,14 @@ export function LogTable({
           className="max-w-sm"
         />
         <Select
-          value={(table.getColumn('eventType')?.getFilterValue() as string) ?? ''}
-          onValueChange={(value) =>
-            table.getColumn('eventType')?.setFilterValue(value)
-          }
+          value={(searchParams.get('eventType') as string) || 'all'}
+          onValueChange={handleEventTypeChange}
         >
           <SelectTrigger className="w-[180px]">
             <SelectValue placeholder="Select event type" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="">All Events</SelectItem>
+            <SelectItem value="all">All Events</SelectItem>
             {Object.entries(ActivityEventType).map(([key, value]) => (
               <SelectItem key={key} value={value}>
                 {value.replace(/_/g, ' ')}

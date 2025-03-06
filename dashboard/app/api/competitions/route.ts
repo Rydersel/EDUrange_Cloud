@@ -3,12 +3,20 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
-import { ActivityLogger } from '@/lib/activity-logger';
-import { ActivityEventType } from '@prisma/client';
+import { validateAndSanitize, validationSchemas } from '@/lib/validation';
+import { ActivityLogger, ActivityEventType } from '@/lib/activity-logger';
+import rateLimit from '@/lib/rate-limit';
+import { NextRequest } from 'next/server';
+
+// Create a rate limiter for competition operations
+const competitionRateLimiter = rateLimit({
+  interval: 60 * 1000, // 1 minute
+  limit: 20, // 20 requests per minute
+});
 
 const competitionSchema = z.object({
-  name: z.string().min(1, 'Name is required'),
-  description: z.string().min(1, 'Description is required'),
+  name: validationSchemas.competitionName || z.string().min(1, 'Name is required'),
+  description: validationSchemas.competitionDescription || z.string().min(1, 'Description is required'),
   startDate: z.date(),
   endDate: z.date().optional().nullable(),
   accessCodeFormat: z.enum(['random', 'custom']),
@@ -22,8 +30,12 @@ const competitionSchema = z.object({
   })),
 });
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   try {
+    // Apply rate limiting
+    const rateLimitResult = await competitionRateLimiter.check(req);
+    if (rateLimitResult) return rateLimitResult;
+    
     const session = await getServerSession(authOptions);
 
     if (!session?.user) {
@@ -31,7 +43,35 @@ export async function POST(req: Request) {
     }
 
     const json = await req.json();
-    const body = competitionSchema.parse(json);
+    
+    // First parse with Zod directly to handle date transformations
+    const parsedData = competitionSchema.parse(json);
+    
+    // Then use validateAndSanitize for sanitization
+    const validationResult = validateAndSanitize(z.object({
+      name: z.string(),
+      description: z.string(),
+      startDate: z.date(),
+      endDate: z.date().optional().nullable(),
+      accessCodeFormat: z.enum(['random', 'custom']),
+      codeExpiration: z.enum(['never', '24h', '7d', 'custom']),
+      challenges: z.array(z.object({
+        id: z.string(),
+        name: z.string(),
+        type: z.string(),
+        points: z.number(),
+        customPoints: z.number().optional(),
+      })),
+    }), parsedData);
+    
+    if (!validationResult.success) {
+      return NextResponse.json({ 
+        success: false, 
+        error: validationResult.error 
+      }, { status: 400 });
+    }
+    
+    const body = validationResult.data;
 
     const competition = await prisma.competitionGroup.create({
       data: {
@@ -102,9 +142,13 @@ export async function POST(req: Request) {
     return NextResponse.json(competition);
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return new NextResponse(JSON.stringify(error.errors), { status: 400 });
+      return NextResponse.json({ 
+        success: false, 
+        errors: error.errors 
+      }, { status: 400 });
     }
 
+    console.error('Error creating competition:', error);
     return new NextResponse('Internal Server Error', { status: 500 });
   }
 } 

@@ -1,9 +1,7 @@
 // /pages/api/update-challenges.ts
 
-import { NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import { NextResponse, NextRequest } from 'next/server';
+import { prisma } from '@/lib/prisma';
 
 async function updateChallengeInstances(challengePods: ChallengePod[]) {
   const existingInstanceIds = new Set(
@@ -38,6 +36,21 @@ async function updateChallengeInstances(challengePods: ChallengePod[]) {
       flag = '',
     } = pod;
 
+    // Find the user's competition group
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      include: { memberOf: true }
+    });
+
+    // Skip if user or competition group not found
+    if (!user || !user.memberOf || user.memberOf.length === 0) {
+      console.warn(`Skipping pod ${id}: User or competition group not found`);
+      continue;
+    }
+
+    // Use the first competition group the user is a member of
+    const competitionId = user.memberOf[0].id;
+
     const existingInstance = await prisma.challengeInstance.findUnique({
       where: { id },
     });
@@ -55,6 +68,7 @@ async function updateChallengeInstances(challengePods: ChallengePod[]) {
           status,
           flagSecretName,
           flag,
+          competitionId,
         },
       });
     } else {
@@ -70,6 +84,7 @@ async function updateChallengeInstances(challengePods: ChallengePod[]) {
           status,
           flagSecretName,
           flag,
+          competitionId,
         },
       });
     }
@@ -108,7 +123,7 @@ interface ChallengePod {
   flag?: string;
 }
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   const body = await fetchWithRetry(req.url, { method: 'POST', body: req.body });
   try {
     await updateChallengeInstances(body.challengePods as ChallengePod[]);

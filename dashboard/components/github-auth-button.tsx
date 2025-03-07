@@ -5,9 +5,16 @@ import { signIn } from 'next-auth/react';
 import { Button } from './ui/button';
 import { Icons } from './icons';
 
-export default function GoogleSignInButton() {
+interface GitHubAuthButtonProps {
+  callbackUrl?: string;
+}
+
+export default function GoogleSignInButton({ callbackUrl }: GitHubAuthButtonProps) {
   const searchParams = useSearchParams();
-  const callbackUrl = searchParams.get('callbackUrl');
+  const defaultCallbackUrl = searchParams.get('callbackUrl');
+  
+  // Use the prop if provided, otherwise use the URL param, or fall back to home
+  const finalCallbackUrl = callbackUrl || defaultCallbackUrl || '/home';
 
   return (
     <Button
@@ -15,7 +22,7 @@ export default function GoogleSignInButton() {
       variant="outline"
       type="button"
       onClick={() =>
-        signIn('github', { callbackUrl: callbackUrl ?? '/home' })
+        signIn('github', { callbackUrl: finalCallbackUrl })
       }
     >
       <Icons.gitHub className="mr-2 h-4 w-4" />

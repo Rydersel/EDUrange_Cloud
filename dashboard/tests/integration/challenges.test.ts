@@ -1,8 +1,8 @@
 import * as dotenv from 'dotenv';
 import path from 'path';
 import { ChallengeDifficulty, UserRole } from '@prisma/client';
-import { withTestTransaction, generateTestId, generateTestEmail, generateTestName } from './test-helpers';
-import prisma from './prisma-test-client';
+import { withTestTransaction, generateTestId, generateTestEmail, generateTestName } from '../utils/test-helpers';
+import prisma from '../utils/prisma-test-client';
 
 // Load environment variables from .env file
 dotenv.config({ path: path.resolve(__dirname, '../.env') });
@@ -136,7 +136,7 @@ describe('Challenge Management', () => {
           name: 'Test Challenge Type'
         }
       });
-      
+
       // Create a dedicated challenge for this test
       const retrieveChallenge = await tx.challenges.create({
         data: {
@@ -148,7 +148,7 @@ describe('Challenge Management', () => {
           challengeTypeId: challengeType.id
         }
       });
-      
+
       const challenge = await tx.challenges.findUnique({
         where: { id: retrieveChallenge.id }
       });
@@ -166,7 +166,7 @@ describe('Challenge Management', () => {
           name: 'Test Challenge Type'
         }
       });
-      
+
       // Create a dedicated challenge for this test
       const updateChallenge = await tx.challenges.create({
         data: {
@@ -178,7 +178,7 @@ describe('Challenge Management', () => {
           challengeTypeId: challengeType.id
         }
       });
-      
+
       const updatedChallenge = await tx.challenges.update({
         where: { id: updateChallenge.id },
         data: {
@@ -190,4 +190,4 @@ describe('Challenge Management', () => {
       expect(updatedChallenge.difficulty).toBe(ChallengeDifficulty.HARD);
     });
   });
-}); 
+});

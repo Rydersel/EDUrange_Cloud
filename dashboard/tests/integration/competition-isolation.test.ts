@@ -2,8 +2,8 @@ import * as dotenv from 'dotenv';
 import path from 'path';
 import { UserRole } from '@prisma/client';
 import { describe, test, expect } from '@jest/globals';
-import { withTestTransaction, generateTestId, generateTestEmail, generateTestName } from './test-helpers';
-import prisma from './prisma-test-client';
+import { withTestTransaction, generateTestId, generateTestEmail, generateTestName } from '../utils/test-helpers';
+import prisma from '../utils/prisma-test-client';
 
 // Load environment variables from .env file
 dotenv.config({ path: path.resolve(__dirname, '../.env') });
@@ -101,7 +101,7 @@ describe('Competition Isolation', () => {
             }
           }
         });
-        
+
         const isolationChallenge2 = await tx.challenges.create({
           data: {
             id: generateTestId('isolation-challenge2'),
@@ -114,7 +114,7 @@ describe('Competition Isolation', () => {
             }
           }
         });
-        
+
         // Add challenges to competitions with different point values
         await tx.groupChallenge.create({
           data: {

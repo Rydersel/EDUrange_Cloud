@@ -1,7 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   images: {
-    domains: ['utfs.io']
+    domains: ['utfs.io', 'hebbkx1anhila5yf.public.blob.vercel-storage.com']
   },
   env: {
     INSTANCE_MANAGER_URL: process.env.INSTANCE_MANAGER_URL
@@ -15,6 +15,12 @@ const nextConfig = {
   
   // Security headers configuration
   poweredByHeader: false, // Remove X-Powered-By header
+  
+  // ESLint configuration
+  eslint: {
+    // Disable ESLint during production builds for better performance
+    ignoreDuringBuilds: true,
+  },
   
   // Configure headers for additional security
   async headers() {

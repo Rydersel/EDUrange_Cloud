@@ -4,6 +4,14 @@ import { ActivityLogger, ActivityEventType } from '@/lib/activity-logger';
 
 export async function POST(req: NextRequest) {
   try {
+    // Validate cron secret
+    const cronSecret = req.headers.get('x-cron-secret');
+    const validCronSecret = process.env.CRON_SECRET;
+    
+    if (!cronSecret || cronSecret !== validCronSecret) {
+      return NextResponse.json({ error: 'Unauthorized - Invalid or missing cron secret' }, { status: 401 });
+    }
+    
     // Find all expired access codes that haven't been marked as expired
     const expiredCodes = await prisma.competitionAccessCode.findMany({
       where: {

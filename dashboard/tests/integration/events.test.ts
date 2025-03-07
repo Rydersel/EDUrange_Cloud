@@ -1,8 +1,8 @@
 import * as dotenv from 'dotenv';
 import path from 'path';
 import { UserRole, ActivityEventType as PrismaActivityEventType } from '@prisma/client';
-import { withTestTransaction, generateTestId, generateTestEmail } from './test-helpers';
-import prisma from './prisma-test-client';
+import { withTestTransaction, generateTestId, generateTestEmail } from '../utils/test-helpers';
+import prisma from '../utils/prisma-test-client';
 
 // Load environment variables from .env file
 dotenv.config({ path: path.resolve(__dirname, '../.env') });
@@ -302,7 +302,7 @@ describe('Activity Logging', () => {
           flag: 'test-flag'
         }
       });
-      
+
       // Test flag submission event
       await tx.activityLog.create({
         data: {
@@ -360,7 +360,7 @@ describe('Activity Logging', () => {
           expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000)
         }
       });
-      
+
       // Test access code creation event
       await tx.activityLog.create({
         data: {

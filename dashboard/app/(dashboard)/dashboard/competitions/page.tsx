@@ -3,6 +3,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { CompetitionsList } from "./competitions-list";
 import {redirect} from "next/navigation";
+import {requireAdminAccess} from "@/lib/auth-utils";
 
 export default async function CompetitionsPage() {
   const session = await getServerSession(authOptions);

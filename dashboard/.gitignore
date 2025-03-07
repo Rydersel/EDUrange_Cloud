@@ -36,3 +36,7 @@ next-env.d.ts
 
 # secrets
 **/k8s/secrets.yaml
+
+
+# changes
+changes.txt

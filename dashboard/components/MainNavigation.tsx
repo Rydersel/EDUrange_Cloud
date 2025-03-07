@@ -5,21 +5,22 @@ import { usePathname } from 'next/navigation'
 import { UserNav } from '@/components/layout/user-nav'
 import ThemeToggle from '@/components/layout/ThemeToggle/theme-toggle'
 import { useSession } from 'next-auth/react';
+import { devLog } from '@/lib/logger';
 
 export function MainNavigation() {
   const pathname = usePathname();
   const { data: session, status } = useSession();
   
-  console.log('Full Session Data:', session);
-  console.log('Session User:', session?.user);
+  devLog('Full Session Data:', session);
+  devLog('Session User:', session?.user);
 
   // Get user role from session
   const userRole = session?.user?.role;
   const isAdminOrInstructor = userRole === 'ADMIN' || userRole === 'INSTRUCTOR';
 
-  console.log('Session Status:', status);
-  console.log('User Role:', userRole);
-  console.log('Is Admin or Instructor:', isAdminOrInstructor);
+  devLog('Session Status:', status);
+  devLog('User Role:', userRole);
+  devLog('Is Admin or Instructor:', isAdminOrInstructor);
 
   const navigationItems = [
     { name: "Home", path: "/home" },

@@ -2,8 +2,8 @@ import * as dotenv from 'dotenv';
 import path from 'path';
 import { UserRole, ActivityEventType } from '@prisma/client';
 import { v4 as uuidv4 } from 'uuid';
-import prisma from './prisma-test-client';
-import { generateTestId, generateTestEmail, generateTestName, withTestTransaction } from './test-helpers';
+import prisma from '../utils/prisma-test-client';
+import { generateTestId, generateTestEmail, generateTestName, withTestTransaction } from '../utils/test-helpers';
 
 // Load environment variables from .env file
 dotenv.config({ path: path.resolve(__dirname, '../.env') });
@@ -22,12 +22,12 @@ async function verifyActivityLog(tx: any, eventType: ActivityEventType, userId: 
 
   expect(log).toBeDefined();
   expect(log?.eventType).toBe(eventType);
-  
+
   if (Object.keys(metadata).length > 0) {
-    const logMetadata = typeof log?.metadata === 'string' 
-      ? JSON.parse(log.metadata) 
+    const logMetadata = typeof log?.metadata === 'string'
+      ? JSON.parse(log.metadata)
       : log?.metadata;
-      
+
     for (const [key, value] of Object.entries(metadata)) {
       expect(logMetadata[key]).toBeDefined();
       if (value !== undefined) {
@@ -35,7 +35,7 @@ async function verifyActivityLog(tx: any, eventType: ActivityEventType, userId: 
       }
     }
   }
-  
+
   return log;
 }
 
@@ -52,7 +52,7 @@ describe('Authentication System', () => {
             role: UserRole.ADMIN
           }
         });
-        
+
         const instructor = await tx.user.create({
           data: {
             id: generateTestId('instructor'),
@@ -61,7 +61,7 @@ describe('Authentication System', () => {
             role: UserRole.INSTRUCTOR
           }
         });
-        
+
         const student = await tx.user.create({
           data: {
             id: generateTestId('student'),
@@ -70,23 +70,23 @@ describe('Authentication System', () => {
             role: UserRole.STUDENT
           }
         });
-        
+
         // Verify users were created with correct roles
         const foundAdmin = await tx.user.findUnique({ where: { id: admin.id } });
         const foundInstructor = await tx.user.findUnique({ where: { id: instructor.id } });
         const foundStudent = await tx.user.findUnique({ where: { id: student.id } });
-        
+
         expect(foundAdmin).toBeDefined();
         expect(foundAdmin?.role).toBe(UserRole.ADMIN);
-        
+
         expect(foundInstructor).toBeDefined();
         expect(foundInstructor?.role).toBe(UserRole.INSTRUCTOR);
-        
+
         expect(foundStudent).toBeDefined();
         expect(foundStudent?.role).toBe(UserRole.STUDENT);
       });
     });
-    
+
     it('should update user roles and log changes', async () => {
       await withTestTransaction(async (tx) => {
         // Create test users
@@ -98,7 +98,7 @@ describe('Authentication System', () => {
             role: UserRole.ADMIN
           }
         });
-        
+
         const user = await tx.user.create({
           data: {
             id: generateTestId('user-role-change'),
@@ -107,15 +107,15 @@ describe('Authentication System', () => {
             role: UserRole.STUDENT
           }
         });
-        
+
         // Update user role
         const updatedUser = await tx.user.update({
           where: { id: user.id },
           data: { role: UserRole.INSTRUCTOR }
         });
-        
+
         expect(updatedUser.role).toBe(UserRole.INSTRUCTOR);
-        
+
         // Log role change event
         await tx.activityLog.create({
           data: {
@@ -130,7 +130,7 @@ describe('Authentication System', () => {
             })
           }
         });
-        
+
         // Verify activity log
         await verifyActivityLog(tx, ActivityEventType.USER_ROLE_CHANGED, user.id, {
           changedBy: admin.id,
@@ -140,7 +140,7 @@ describe('Authentication System', () => {
       });
     });
   });
-  
+
   describe('Session Management', () => {
     it('should create and manage user sessions', async () => {
       await withTestTransaction(async (tx) => {
@@ -153,11 +153,11 @@ describe('Authentication System', () => {
             role: UserRole.STUDENT
           }
         });
-        
+
         // Create a session for the user
         const expiryDate = new Date();
         expiryDate.setDate(expiryDate.getDate() + 30); // 30 days from now
-        
+
         const session = await tx.session.create({
           data: {
             id: `test-session-${uuidv4()}`,
@@ -166,20 +166,20 @@ describe('Authentication System', () => {
             expires: expiryDate
           }
         });
-        
+
         expect(session).toBeDefined();
         expect(session.userId).toBe(user.id);
-        
+
         // Verify session exists
         const foundSession = await tx.session.findUnique({
           where: { id: session.id }
         });
-        
+
         expect(foundSession).toBeDefined();
         expect(foundSession?.expires.getTime()).toBe(expiryDate.getTime());
       });
     });
-    
+
     it('should handle expired sessions', async () => {
       await withTestTransaction(async (tx) => {
         // Create a dedicated user for this test
@@ -191,11 +191,11 @@ describe('Authentication System', () => {
             role: UserRole.STUDENT
           }
         });
-        
+
         // Create an expired session (1 day in the past)
         const expiredDate = new Date();
         expiredDate.setDate(expiredDate.getDate() - 1);
-        
+
         const expiredSession = await tx.session.create({
           data: {
             id: `test-expired-session-${uuidv4()}`,
@@ -204,18 +204,18 @@ describe('Authentication System', () => {
             expires: expiredDate
           }
         });
-        
+
         // Verify session is expired
         const now = new Date();
         expect(expiredSession.expires.getTime()).toBeLessThan(now.getTime());
-        
+
         // Simulate session validation logic
         const isSessionValid = expiredSession.expires.getTime() > now.getTime();
         expect(isSessionValid).toBe(false);
       });
     });
   });
-  
+
   describe('OAuth Account Management', () => {
     it('should link OAuth accounts to users', async () => {
       await withTestTransaction(async (tx) => {
@@ -228,7 +228,7 @@ describe('Authentication System', () => {
             role: UserRole.STUDENT
           }
         });
-        
+
         // Link an OAuth account
         const oauthAccount = await tx.account.create({
           data: {
@@ -245,29 +245,29 @@ describe('Authentication System', () => {
             id_token: `id-${uuidv4()}`
           }
         });
-        
+
         expect(oauthAccount).toBeDefined();
         expect(oauthAccount.userId).toBe(user.id);
         expect(oauthAccount.provider).toBe('github');
-        
+
         // Verify account is linked
         const foundAccount = await tx.account.findUnique({
           where: { id: oauthAccount.id }
         });
-        
+
         expect(foundAccount).toBeDefined();
         expect(foundAccount?.provider).toBe('github');
       });
     });
   });
-  
+
   describe('User Activity Logging', () => {
     it('should log user registration events', async () => {
       await withTestTransaction(async (tx) => {
         // Create a user and log registration
         const userEmail = generateTestEmail('registration');
         const userName = generateTestName('Registration');
-        
+
         const user = await tx.user.create({
           data: {
             id: generateTestId('registration'),
@@ -276,7 +276,7 @@ describe('Authentication System', () => {
             role: UserRole.STUDENT
           }
         });
-        
+
         // Log registration event
         await tx.activityLog.create({
           data: {
@@ -290,7 +290,7 @@ describe('Authentication System', () => {
             })
           }
         });
-        
+
         // Verify activity log
         await verifyActivityLog(tx, ActivityEventType.USER_REGISTERED, user.id, {
           email: userEmail,
@@ -298,13 +298,13 @@ describe('Authentication System', () => {
         });
       });
     });
-    
+
     it('should log user login events', async () => {
       await withTestTransaction(async (tx) => {
         // Create a user and log login
         const userEmail = generateTestEmail('login');
         const userName = generateTestName('Login');
-        
+
         const user = await tx.user.create({
           data: {
             id: generateTestId('login'),
@@ -313,7 +313,7 @@ describe('Authentication System', () => {
             role: UserRole.STUDENT
           }
         });
-        
+
         // Log login event
         await tx.activityLog.create({
           data: {
@@ -327,7 +327,7 @@ describe('Authentication System', () => {
             })
           }
         });
-        
+
         // Verify activity log
         await verifyActivityLog(tx, ActivityEventType.USER_LOGGED_IN, user.id, {
           email: userEmail,
@@ -336,7 +336,7 @@ describe('Authentication System', () => {
       });
     });
   });
-  
+
   describe('Role-Based Access Control', () => {
     it('should enforce role-based permissions', async () => {
       await withTestTransaction(async (tx) => {
@@ -349,7 +349,7 @@ describe('Authentication System', () => {
             role: UserRole.STUDENT
           }
         });
-        
+
         const admin = await tx.user.create({
           data: {
             id: generateTestId('rbac-admin'),
@@ -358,23 +358,23 @@ describe('Authentication System', () => {
             role: UserRole.ADMIN
           }
         });
-        
+
         // Simulate access control check for admin-only resource
         const canStudentAccess = student.role === UserRole.ADMIN;
         const canAdminAccess = admin.role === UserRole.ADMIN;
-        
+
         expect(canStudentAccess).toBe(false);
         expect(canAdminAccess).toBe(true);
-        
+
         // Simulate access control check for instructor/admin resource
-        const canStudentAccessInstructorResource = 
+        const canStudentAccessInstructorResource =
           student.role === UserRole.INSTRUCTOR || student.role === UserRole.ADMIN;
-        const canAdminAccessInstructorResource = 
+        const canAdminAccessInstructorResource =
           admin.role === UserRole.INSTRUCTOR || admin.role === UserRole.ADMIN;
-        
+
         expect(canStudentAccessInstructorResource).toBe(false);
         expect(canAdminAccessInstructorResource).toBe(true);
       });
     });
   });
-}); 
+});

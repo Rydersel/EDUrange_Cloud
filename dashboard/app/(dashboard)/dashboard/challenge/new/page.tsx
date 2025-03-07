@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma';
 import BreadCrumb from '@/components/breadcrumb';
 import NewChallengeForm from '@/components/forms/NewChallengeForm'; // Import the client component
 import authConfig from '@/auth.config';
+import {requireAdminAccess} from "@/lib/auth-utils";
 const breadcrumbItems = [
   { title: 'Challenges', link: '/dashboard/challenge' },
   { title: 'Create', link: '/dashboard/challenge/new' }

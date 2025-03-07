@@ -20,6 +20,8 @@ interface ChallengeModulePreviewProps {
   isInstalling: boolean;
   installError: string | null;
   installSuccess: boolean;
+  duplicates?: { name: string }[];
+  successMessage?: string;
 }
 
 const ChallengeModulePreview = ({
@@ -27,7 +29,9 @@ const ChallengeModulePreview = ({
   onInstall,
   isInstalling,
   installError,
-  installSuccess
+  installSuccess,
+  duplicates = [],
+  successMessage
 }: ChallengeModulePreviewProps) => {
   const [challengeModule, setChallengeModule] = useState<ChallengeModuleFile>(initialChallengeModule);
   const [selectedChallengeIndex, setSelectedChallengeIndex] = useState<number | null>(null);
@@ -328,7 +332,20 @@ const ChallengeModulePreview = ({
           <CheckCircle className="h-4 w-4 text-green-500" />
           <AlertTitle>Success</AlertTitle>
           <AlertDescription>
-            Successfully installed {challengeModule.challenges.length} challenges from module &quot;{challengeModule.moduleName}&quot;
+            {successMessage || `Successfully installed ${challengeModule.challenges.length} challenges from module "${challengeModule.moduleName}"`}
+            
+            {duplicates.length > 0 && (
+              <div className="mt-2">
+                <p className="font-medium text-amber-600 dark:text-amber-400">
+                  The following challenges were not installed because they already exist:
+                </p>
+                <ul className="list-disc list-inside mt-1 text-sm">
+                  {duplicates.map((duplicate, index) => (
+                    <li key={index}>{duplicate.name}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </AlertDescription>
         </Alert>
       )}

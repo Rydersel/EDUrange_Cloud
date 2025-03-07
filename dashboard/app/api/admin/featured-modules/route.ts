@@ -4,14 +4,13 @@ import authConfig from '@/auth.config';
 import { promises as fs } from 'fs';
 import path from 'path';
 import { ChallengeModuleFile } from '@/types/challenge-module';
+import { requireAdmin } from '@/lib/auth-utils';
 
 export async function GET(req: NextRequest) {
   try {
-    // Check authentication and authorization
-    const session = await getServerSession(authConfig);
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    // Check if user is admin using the utility function
+    const adminCheckResult = await requireAdmin(req);
+    if (adminCheckResult) return adminCheckResult;
 
     // Get the featured modules directory path
     const featuredModulesDir = path.join(process.cwd(), 'public', 'featured-modules');

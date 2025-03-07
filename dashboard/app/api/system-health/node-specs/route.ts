@@ -1,7 +1,32 @@
 import { NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth/next';
+import authConfig from '@/auth.config';
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    // Get the URL from the request
+    const url = new URL(request.url);
+    const sessionToken = url.searchParams.get('sessionToken');
+    
+    // Get the session either from the session token or from the request cookies
+    let session;
+    if (sessionToken === 'server-component') {
+      // This is a server component request, allow it
+      session = true;
+    } else {
+      session = await getServerSession(authConfig);
+    }
+    
+    // Check if the user is authenticated
+    if (!session) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    
+    // Check if the user is an admin
+    if (session !== true && session.user.role !== 'ADMIN') {
+      return NextResponse.json({ error: 'Forbidden - Admin access required' }, { status: 403 });
+    }
+    
     // Fetch node specifications from the monitoring service
     const monitoringServiceUrl = process.env.MONITORING_SERVICE_URL || 'http://monitoring-service:5000';
     const response = await fetch(`${monitoringServiceUrl}/metrics/node-specs`);

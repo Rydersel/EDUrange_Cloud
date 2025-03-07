@@ -3,24 +3,25 @@ import { getServerSession } from "next-auth/next";
 import authConfig from "@/auth.config";
 import React from "react";
 import { DashboardClient } from "@/components/dashboard/dashboard-client";
+import {requireAdminAccess} from "@/lib/auth-utils";
 
 // Function to fetch system health data
 async function getSystemHealth() {
   try {
     // In a production environment, this would be a real API call
     // For now, we'll use the mock data from our API route
-    const baseUrl = process.env.NEXT_PUBLIC_API_URL || 
+    const baseUrl = process.env.NEXT_PUBLIC_API_URL ||
                    (typeof window === 'undefined' ? process.env.NEXTAUTH_URL : window.location.origin);
-    
+
     // For server components, we'll pass a session token instead of using credentials
     const response = await fetch(`${baseUrl}/api/system-health?sessionToken=server-component`, {
       cache: 'no-store',
     });
-    
+
     if (!response.ok) {
       throw new Error('Failed to fetch system health data');
     }
-    
+
     return await response.json();
   } catch (error) {
     console.error('Error fetching system health:', error);
@@ -64,6 +65,7 @@ async function getSystemHealth() {
 export const revalidate = 0;
 
 export default async function DashboardPage() {
+  await requireAdminAccess()
   const session = await getServerSession(authConfig);
   if (!session) {
     redirect('/'); // Redirect to sign-in page if not authenticated

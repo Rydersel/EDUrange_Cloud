@@ -3,7 +3,7 @@ import * as authModule from '@/app/api/auth/[...nextauth]/route';
 import { getServerSession } from 'next-auth';
 import { UserRole } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
-import { generateTestEmail, generateTestId, generateTestName } from './test-helpers';
+import { generateTestEmail, generateTestId, generateTestName } from '../utils/test-helpers';
 import { authOptions } from '@/lib/auth';
 
 // Mock NextAuth
@@ -57,24 +57,24 @@ describe('Auth API Routes', () => {
       const req = new NextRequest(new URL('http://localhost:3000/api/auth/session'), {
         method: 'GET',
       });
-      
+
       // Mock the NextAuth handler response
       const mockResponse = new Response(JSON.stringify({ user: null }), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
       });
-      
+
       // Set up the mock implementation
       (authModule.GET as jest.Mock).mockResolvedValue(mockResponse);
-      
+
       // Call the handler
       const response = await authModule.GET(req);
-      
+
       // Verify the response
       expect(response.status).toBe(200);
       const data = await response.json();
       expect(data).toEqual({ user: null });
-      
+
       // Verify the handler was called
       expect(authModule.GET).toHaveBeenCalledWith(req);
     });
@@ -87,24 +87,24 @@ describe('Auth API Routes', () => {
           'Content-Type': 'application/json',
         },
       });
-      
+
       // Mock the NextAuth handler response
       const mockResponse = new Response(JSON.stringify({ ok: true }), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
       });
-      
+
       // Set up the mock implementation
       (authModule.POST as jest.Mock).mockResolvedValue(mockResponse);
-      
+
       // Call the handler
       const response = await authModule.POST(req);
-      
+
       // Verify the response
       expect(response.status).toBe(200);
       const data = await response.json();
       expect(data).toEqual({ ok: true });
-      
+
       // Verify the handler was called
       expect(authModule.POST).toHaveBeenCalledWith(req);
     });
@@ -122,26 +122,26 @@ describe('Auth API Routes', () => {
           callbackUrl: '/dashboard',
         }),
       });
-      
+
       // Mock the NextAuth handler response
-      const mockResponse = new Response(JSON.stringify({ 
+      const mockResponse = new Response(JSON.stringify({
         url: '/dashboard',
       }), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
       });
-      
+
       // Set up the mock implementation
       (authModule.POST as jest.Mock).mockResolvedValue(mockResponse);
-      
+
       // Call the handler
       const response = await authModule.POST(req);
-      
+
       // Verify the response
       expect(response.status).toBe(200);
       const data = await response.json();
       expect(data).toEqual({ url: '/dashboard' });
-      
+
       // Verify the handler was called
       expect(authModule.POST).toHaveBeenCalledWith(req);
     });
@@ -151,26 +151,26 @@ describe('Auth API Routes', () => {
       const req = new NextRequest(new URL('http://localhost:3000/api/auth/signout'), {
         method: 'POST',
       });
-      
+
       // Mock the NextAuth handler response
-      const mockResponse = new Response(JSON.stringify({ 
-        url: '/' 
+      const mockResponse = new Response(JSON.stringify({
+        url: '/'
       }), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
       });
-      
+
       // Set up the mock implementation
       (authModule.POST as jest.Mock).mockResolvedValue(mockResponse);
-      
+
       // Call the handler
       const response = await authModule.POST(req);
-      
+
       // Verify the response
       expect(response.status).toBe(200);
       const data = await response.json();
       expect(data).toEqual({ url: '/' });
-      
+
       // Verify the handler was called
       expect(authModule.POST).toHaveBeenCalledWith(req);
     });
@@ -185,33 +185,33 @@ describe('Auth API Routes', () => {
         name: generateTestName('Session Test'),
         role: UserRole.STUDENT,
       };
-      
+
       // Create a mock NextRequest
       const req = new NextRequest(new URL('http://localhost:3000/api/auth/session'), {
         method: 'GET',
       });
-      
+
       // Mock the NextAuth handler response with a session
-      const mockResponse = new Response(JSON.stringify({ 
+      const mockResponse = new Response(JSON.stringify({
         user: mockUser,
         expires: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
       }), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
       });
-      
+
       // Set up the mock implementation
       (authModule.GET as jest.Mock).mockResolvedValue(mockResponse);
-      
+
       // Call the handler
       const response = await authModule.GET(req);
-      
+
       // Verify the response
       expect(response.status).toBe(200);
       const data = await response.json();
       expect(data.user).toEqual(mockUser);
       expect(data).toHaveProperty('expires');
-      
+
       // Verify the handler was called
       expect(authModule.GET).toHaveBeenCalledWith(req);
     });
@@ -224,18 +224,18 @@ describe('Auth API Routes', () => {
     it('should reject unauthorized requests to protected endpoints', async () => {
       // Mock getServerSession to return null (unauthenticated)
       (getServerSession as jest.Mock).mockResolvedValue(null);
-      
+
       // Create a mock request for a protected endpoint
       const req = new NextRequest(new URL('http://localhost:3000/api/challenges'), {
         method: 'GET',
       });
-      
+
       // Call the handler directly
       const response = await getChallenges(req);
-      
+
       // Verify getServerSession was called with authOptions
       expect(getServerSession).toHaveBeenCalledWith(authOptions);
-      
+
       // Verify the response status
       expect(response.status).toBe(401);
     });
@@ -248,26 +248,26 @@ describe('Auth API Routes', () => {
         name: generateTestName('API Test'),
         role: UserRole.ADMIN,
       };
-      
+
       // Mock getServerSession to return a session with the mock user
       (getServerSession as jest.Mock).mockResolvedValue({
         user: mockUser,
       });
-      
+
       // Mock prisma.user.findUnique to return the mock user
       (prisma.user.findUnique as jest.Mock).mockResolvedValue(mockUser);
-      
+
       // Create a mock request for a protected endpoint
       const req = new NextRequest(new URL('http://localhost:3000/api/challenges'), {
         method: 'GET',
       });
-      
+
       // Call the handler directly
       const response = await getChallenges(req);
-      
+
       // Verify getServerSession was called with authOptions
       expect(getServerSession).toHaveBeenCalledWith(authOptions);
-      
+
       // Verify the response status
       expect(response.status).toBe(200);
     });
@@ -280,18 +280,18 @@ describe('Auth API Routes', () => {
         name: generateTestName('RBAC Test'),
         role: UserRole.STUDENT, // Non-admin role
       };
-      
+
       // Mock getServerSession to return a session with the mock user
       (getServerSession as jest.Mock).mockResolvedValue({
         user: mockUser,
       });
-      
+
       // Mock prisma.user.findUnique to return the mock user
       (prisma.user.findUnique as jest.Mock).mockResolvedValue(mockUser);
-      
+
       // Import an admin-only endpoint (POST for challenge creation is admin-only)
       const { POST: createChallenge } = require('@/app/api/challenges/route');
-      
+
       // Create a mock request for an admin-only endpoint
       const req = new NextRequest(new URL('http://localhost:3000/api/challenges'), {
         method: 'POST',
@@ -315,13 +315,13 @@ describe('Auth API Routes', () => {
           ]
         }),
       });
-      
+
       // Call the handler directly
       const response = await createChallenge(req);
-      
+
       // Verify getServerSession was called with authOptions
       expect(getServerSession).toHaveBeenCalledWith(authOptions);
-      
+
       // Verify the response status (should be 403 Forbidden for non-admin users)
       expect(response.status).toBe(403);
     });
@@ -333,22 +333,22 @@ describe('Auth API Routes', () => {
       const req = new NextRequest(new URL('http://localhost:3000/api/auth/signin?callbackUrl=%2Fhome'), {
         method: 'GET',
       });
-      
+
       // Mock the NextAuth handler response
       const mockResponse = new Response(JSON.stringify({ url: '/home' }), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
       });
-      
+
       // Set up the mock implementation
       (authModule.GET as jest.Mock).mockResolvedValue(mockResponse);
-      
+
       // Call the handler
       const response = await authModule.GET(req);
-      
+
       // Verify the response
       expect(response.status).toBe(200);
-      
+
       // Verify the handler was called
       expect(authModule.GET).toHaveBeenCalledWith(req);
     });
@@ -358,26 +358,26 @@ describe('Auth API Routes', () => {
       const req = new NextRequest(new URL('http://localhost:3000/api/auth/csrf'), {
         method: 'GET',
       });
-      
+
       // Mock the NextAuth handler response with CSRF token
-      const mockResponse = new Response(JSON.stringify({ 
-        csrfToken: 'mock-csrf-token' 
+      const mockResponse = new Response(JSON.stringify({
+        csrfToken: 'mock-csrf-token'
       }), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
       });
-      
+
       // Set up the mock implementation
       (authModule.GET as jest.Mock).mockResolvedValue(mockResponse);
-      
+
       // Call the handler
       const response = await authModule.GET(req);
-      
+
       // Verify the response
       expect(response.status).toBe(200);
       const data = await response.json();
       expect(data).toHaveProperty('csrfToken');
-      
+
       // Verify the handler was called
       expect(authModule.GET).toHaveBeenCalledWith(req);
     });
@@ -387,28 +387,28 @@ describe('Auth API Routes', () => {
       const req = new NextRequest(new URL('http://localhost:3000/api/auth/providers'), {
         method: 'GET',
       });
-      
+
       // Mock the NextAuth handler response with providers list
-      const mockResponse = new Response(JSON.stringify({ 
+      const mockResponse = new Response(JSON.stringify({
         credentials: { id: 'credentials', name: 'Credentials' }
       }), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
       });
-      
+
       // Set up the mock implementation
       (authModule.GET as jest.Mock).mockResolvedValue(mockResponse);
-      
+
       // Call the handler
       const response = await authModule.GET(req);
-      
+
       // Verify the response
       expect(response.status).toBe(200);
       const data = await response.json();
       expect(data).toHaveProperty('credentials');
-      
+
       // Verify the handler was called
       expect(authModule.GET).toHaveBeenCalledWith(req);
     });
   });
-}); 
+});

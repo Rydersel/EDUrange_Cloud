@@ -138,6 +138,15 @@ export const navItems: NavItem[] = [
     icon: 'circuit',
     label: 'logs',
     adminOnly: true
+  },
+   {
+    title: 'Docs',
+    href: 'https://docs.rydersel.cloud/',
+    icon: 'help',
+    label: 'docs',
+    adminOnly: true,
+    target: '_blank',
+    rel: 'noopener noreferrer'
   }
 ];
 

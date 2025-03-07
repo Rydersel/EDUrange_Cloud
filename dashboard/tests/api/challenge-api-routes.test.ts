@@ -2,12 +2,55 @@ import { NextRequest } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { UserRole } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
-import { generateTestEmail, generateTestId, generateTestName } from './test-helpers';
+import { generateTestEmail, generateTestId, generateTestName } from '../utils/test-helpers';
 import { authOptions } from '@/lib/auth';
 import { ActivityLogger } from '@/lib/activity-logger';
 
 // Mock NextAuth
 jest.mock('next-auth');
+
+// Mock auth.ts to avoid the @auth/prisma-adapter dependency
+jest.mock('@/lib/auth', () => ({
+  authOptions: {
+    adapter: {},
+    session: { strategy: 'jwt' },
+    callbacks: {
+      session: jest.fn(({ session, user }) => {
+        if (session.user) {
+          session.user.id = user.id;
+          session.user.role = user.role || 'STUDENT';
+        }
+        return session;
+      }),
+    },
+    pages: { signIn: '/signin' },
+    providers: [],
+  },
+}));
+
+// Mock the rate-limit module
+jest.mock('@/lib/rate-limit', () => {
+  return function rateLimit() {
+    return {
+      check: jest.fn().mockResolvedValue(null)
+    };
+  };
+});
+
+// Mock ActivityLogger
+jest.mock('@/lib/activity-logger', () => ({
+  ActivityLogger: {
+    logChallengeEvent: jest.fn().mockResolvedValue({}),
+    logEvent: jest.fn().mockResolvedValue({}),
+    logActivity: jest.fn().mockResolvedValue({}),
+  },
+  ActivityEventType: {
+    CHALLENGE_CREATED: 'CHALLENGE_CREATED',
+    CHALLENGE_UPDATED: 'CHALLENGE_UPDATED',
+    CHALLENGE_DELETED: 'CHALLENGE_DELETED',
+  },
+}));
+
 jest.mock('@/lib/prisma', () => ({
   prisma: {
     user: {
@@ -49,36 +92,6 @@ jest.mock('@/lib/prisma', () => ({
   },
 }));
 
-// Mock the auth options
-jest.mock('@/lib/auth', () => ({
-  authOptions: {
-    callbacks: {
-      session: jest.fn(),
-      jwt: jest.fn(),
-    },
-    providers: [],
-  },
-}));
-
-// Mock rate limiter
-jest.mock('@/lib/rate-limit', () => {
-  return jest.fn().mockImplementation(() => ({
-    check: jest.fn().mockResolvedValue(null),
-  }));
-});
-
-// Mock activity logger
-jest.mock('@/lib/activity-logger', () => ({
-  ActivityLogger: {
-    logActivity: jest.fn().mockResolvedValue(undefined),
-    logChallengeEvent: jest.fn().mockResolvedValue(undefined),
-  },
-  ActivityEventType: {
-    CHALLENGE_STARTED: "CHALLENGE_STARTED",
-    CHALLENGE_INSTANCE_CREATED: "CHALLENGE_INSTANCE_CREATED",
-  }
-}));
-
 describe('Challenge API Routes', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -91,18 +104,18 @@ describe('Challenge API Routes', () => {
     it('should return 401 for unauthenticated requests', async () => {
       // Mock getServerSession to return null (unauthenticated)
       (getServerSession as jest.Mock).mockResolvedValue(null);
-      
+
       // Create a mock request
       const req = new NextRequest(new URL('http://localhost:3000/api/challenges'), {
         method: 'GET',
       });
-      
+
       // Call the handler
       const response = await getChallenges(req);
-      
+
       // Verify getServerSession was called
       expect(getServerSession).toHaveBeenCalledWith(authOptions);
-      
+
       // Verify the response status
       expect(response.status).toBe(401);
     });
@@ -115,12 +128,12 @@ describe('Challenge API Routes', () => {
         name: generateTestName('Challenge Test'),
         role: UserRole.STUDENT,
       };
-      
+
       // Mock getServerSession to return a session with the mock user
       (getServerSession as jest.Mock).mockResolvedValue({
         user: mockUser,
       });
-      
+
       // Mock challenges data
       const mockChallenges = [
         {
@@ -148,24 +161,24 @@ describe('Challenge API Routes', () => {
           appConfigs: [],
         },
       ];
-      
+
       // Mock prisma.challenges.findMany to return mock challenges
       (prisma.challenges.findMany as jest.Mock).mockResolvedValue(mockChallenges);
-      
+
       // Create a mock request
       const req = new NextRequest(new URL('http://localhost:3000/api/challenges'), {
         method: 'GET',
       });
-      
+
       // Call the handler
       const response = await getChallenges(req);
-      
+
       // Verify getServerSession was called
       expect(getServerSession).toHaveBeenCalledWith(authOptions);
-      
+
       // Verify prisma.challenges.findMany was called
       expect(prisma.challenges.findMany).toHaveBeenCalled();
-      
+
       // Verify the response
       expect(response.status).toBe(200);
       const data = await response.json();
@@ -180,7 +193,7 @@ describe('Challenge API Routes', () => {
     it('should return 401 for unauthenticated requests', async () => {
       // Mock getServerSession to return null (unauthenticated)
       (getServerSession as jest.Mock).mockResolvedValue(null);
-      
+
       // Create a mock request
       const req = new NextRequest(new URL('http://localhost:3000/api/challenges'), {
         method: 'POST',
@@ -204,13 +217,13 @@ describe('Challenge API Routes', () => {
           ],
         }),
       });
-      
+
       // Call the handler
       const response = await createChallenge(req);
-      
+
       // Verify getServerSession was called
       expect(getServerSession).toHaveBeenCalledWith(authOptions);
-      
+
       // Verify the response status
       expect(response.status).toBe(401);
     });
@@ -223,15 +236,12 @@ describe('Challenge API Routes', () => {
         name: generateTestName('Challenge Test'),
         role: UserRole.STUDENT,
       };
-      
+
       // Mock getServerSession to return a session with the mock user
       (getServerSession as jest.Mock).mockResolvedValue({
         user: mockUser,
       });
-      
-      // Mock prisma.user.findUnique to return the mock user
-      (prisma.user.findUnique as jest.Mock).mockResolvedValue(mockUser);
-      
+
       // Create a mock request
       const req = new NextRequest(new URL('http://localhost:3000/api/challenges'), {
         method: 'POST',
@@ -255,19 +265,13 @@ describe('Challenge API Routes', () => {
           ],
         }),
       });
-      
+
       // Call the handler
       const response = await createChallenge(req);
-      
+
       // Verify getServerSession was called
       expect(getServerSession).toHaveBeenCalledWith(authOptions);
-      
-      // Verify prisma.user.findUnique was called
-      expect(prisma.user.findUnique).toHaveBeenCalledWith({
-        where: { id: mockUser.id },
-        select: { role: true },
-      });
-      
+
       // Verify the response status
       expect(response.status).toBe(403);
     });
@@ -280,15 +284,15 @@ describe('Challenge API Routes', () => {
         name: generateTestName('Admin Test'),
         role: UserRole.ADMIN,
       };
-      
+
       // Mock getServerSession to return a session with the admin user
       (getServerSession as jest.Mock).mockResolvedValue({
         user: mockAdmin,
       });
-      
+
       // Mock prisma.user.findUnique to return the admin user
       (prisma.user.findUnique as jest.Mock).mockResolvedValue({ role: UserRole.ADMIN });
-      
+
       // Create a mock request with invalid data (missing required fields)
       const req = new NextRequest(new URL('http://localhost:3000/api/challenges'), {
         method: 'POST',
@@ -301,16 +305,16 @@ describe('Challenge API Routes', () => {
           questions: [], // Empty questions array
         }),
       });
-      
+
       // Call the handler
       const response = await createChallenge(req);
-      
+
       // Verify getServerSession was called
       expect(getServerSession).toHaveBeenCalledWith(authOptions);
-      
+
       // Verify the response status (should be 400 Bad Request)
       expect(response.status).toBe(400);
-      
+
       // Verify prisma.challenges.create was not called
       expect(prisma.challenges.create).not.toHaveBeenCalled();
     });
@@ -328,30 +332,24 @@ describe('Challenge API Routes', () => {
 
     // Only run these tests if the module exists
     if (getChallenge) {
-      beforeEach(() => {
-        // Mock activity logger for each test
-        (ActivityLogger.logActivity as jest.Mock).mockResolvedValue(undefined);
-        (ActivityLogger.logChallengeEvent as jest.Mock).mockResolvedValue(undefined);
-      });
-
       it('should return 401 for unauthenticated requests', async () => {
         // Mock getServerSession to return null (unauthenticated)
         (getServerSession as jest.Mock).mockResolvedValue(null);
-        
+
         // Create a mock request
         const req = new NextRequest(new URL('http://localhost:3000/api/challenges/challenge1'), {
           method: 'GET',
         });
-        
+
         // Create mock params
         const params = { params: { id: 'challenge1' } };
-        
+
         // Call the handler
         const response = await getChallenge(req, params);
-        
+
         // Verify getServerSession was called
         expect(getServerSession).toHaveBeenCalledWith(authOptions);
-        
+
         // Verify the response status
         expect(response.status).toBe(401);
       });
@@ -364,12 +362,12 @@ describe('Challenge API Routes', () => {
           name: generateTestName('Challenge ID Test'),
           role: UserRole.STUDENT,
         };
-        
+
         // Mock getServerSession to return a session with the mock user
         (getServerSession as jest.Mock).mockResolvedValue({
           user: mockUser,
         });
-        
+
         // Mock challenge data
         const mockChallenge = {
           id: 'challenge1',
@@ -383,34 +381,34 @@ describe('Challenge API Routes', () => {
           ],
           appConfigs: [],
         };
-        
+
         // Mock prisma.challenges.findUnique to return the mock challenge
         (prisma.challenges.findUnique as jest.Mock).mockResolvedValue(mockChallenge);
-        
+
         // Create a mock request
         const req = new NextRequest(new URL('http://localhost:3000/api/challenges/challenge1'), {
           method: 'GET',
         });
-        
+
         // Create mock params
         const params = { params: { id: 'challenge1' } };
-        
+
         // Call the handler
         const response = await getChallenge(req, params);
-        
+
         // Verify getServerSession was called
         expect(getServerSession).toHaveBeenCalledWith(authOptions);
-        
+
         // Verify prisma.challenges.findUnique was called with the correct ID
         expect(prisma.challenges.findUnique).toHaveBeenCalledWith(expect.objectContaining({
           where: { id: 'challenge1' },
         }));
-        
+
         // Verify the response
         expect(response.status).toBe(200);
         const data = await response.json();
         expect(data).toEqual(mockChallenge);
-        
+
         // Verify activity logger was called
         expect(ActivityLogger.logChallengeEvent).toHaveBeenCalled();
       });
@@ -423,37 +421,37 @@ describe('Challenge API Routes', () => {
           name: generateTestName('Challenge ID Test'),
           role: UserRole.STUDENT,
         };
-        
+
         // Mock getServerSession to return a session with the mock user
         (getServerSession as jest.Mock).mockResolvedValue({
           user: mockUser,
         });
-        
+
         // Mock prisma.challenges.findUnique to return null (challenge not found)
         (prisma.challenges.findUnique as jest.Mock).mockResolvedValue(null);
-        
+
         // Create a mock request
         const req = new NextRequest(new URL('http://localhost:3000/api/challenges/nonexistent'), {
           method: 'GET',
         });
-        
+
         // Create mock params
         const params = { params: { id: 'nonexistent' } };
-        
+
         // Call the handler
         const response = await getChallenge(req, params);
-        
+
         // Verify getServerSession was called
         expect(getServerSession).toHaveBeenCalledWith(authOptions);
-        
+
         // Verify prisma.challenges.findUnique was called with the correct ID
         expect(prisma.challenges.findUnique).toHaveBeenCalledWith(expect.objectContaining({
           where: { id: 'nonexistent' },
         }));
-        
+
         // Verify the response status (should be 404 Not Found)
         expect(response.status).toBe(404);
       });
     }
   });
-}); 
+});

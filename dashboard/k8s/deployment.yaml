@@ -49,6 +49,10 @@ spec:
           value: "https://database.rydersel.cloud"
         - name: MONITORING_SERVICE_URL
           value: "https://eductf.rydersel.cloud/metrics"
+        - name: CONNECT_SRC_DOMAIN
+          value: "*.rydersel.cloud"
+        - name: NODE_ENV
+          value: "production"
         resources:
           limits:
             cpu: "1"

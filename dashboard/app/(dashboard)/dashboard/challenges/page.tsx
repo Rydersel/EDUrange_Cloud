@@ -13,10 +13,12 @@ import authConfig from '@/auth.config';
 import { Button } from '@/components/ui/button';
 import { PackagePlus } from 'lucide-react';
 import { ChallengeRowActions } from '@/components/challenge-row-actions';
+import {requireAdminAccess} from "@/lib/auth-utils";
 
 const breadcrumbItems = [{ title: 'Installed Challenges', link: '/dashboard/challenges' }];
 
 export default async function InstalledChallengesPage() {
+  await requireAdminAccess()
   const session = await getServerSession(authConfig);
 
   if (!session) {
@@ -93,7 +95,7 @@ export default async function InstalledChallengesPage() {
       </div>
       <Separator />
 
-      <div className="grid gap-4">
+      <div className="grid gap-4 overflow-y-auto max-h-[calc(100vh-220px)] pr-2 pb-4">
         {/* Summary card */}
         <Card>
           <CardHeader>
@@ -138,52 +140,54 @@ export default async function InstalledChallengesPage() {
               <CardDescription>{typesChallenges.length} challenges of this type</CardDescription>
             </CardHeader>
             <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Difficulty</TableHead>
-                    <TableHead>Questions</TableHead>
-                    <TableHead>Apps</TableHead>
-                    <TableHead>Image</TableHead>
-                    <TableHead className="w-[80px]">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {typesChallenges.map((challenge) => (
-                    <TableRow key={challenge.id} className="hover:bg-muted/50">
-                      <TableCell className="font-medium">
-                        <Link 
-                          href={`/dashboard/challenges/${challenge.id}`}
-                          className="text-foreground hover:underline"
-                        >
-                          {challenge.name}
-                        </Link>
-                      </TableCell>
-                      <TableCell>
-                        <Badge className={getDifficultyColor(challenge.difficulty)}>
-                          {challenge.difficulty}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>{challenge.questions.length}</TableCell>
-                      <TableCell>{challenge.appConfigs.length}</TableCell>
-                      <TableCell className="max-w-xs truncate">
-                        <code className="text-xs">{challenge.challengeImage}</code>
-                      </TableCell>
-                      <TableCell>
-                        <ChallengeRowActions 
-                          challengeId={challenge.id} 
-                          challengeName={challenge.name} 
-                        />
-                      </TableCell>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Name</TableHead>
+                      <TableHead>Difficulty</TableHead>
+                      <TableHead>Questions</TableHead>
+                      <TableHead>Apps</TableHead>
+                      <TableHead>Image</TableHead>
+                      <TableHead className="w-[80px]">Actions</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {typesChallenges.map((challenge) => (
+                      <TableRow key={challenge.id} className="hover:bg-muted/50">
+                        <TableCell className="font-medium">
+                          <Link
+                            href={`/dashboard/challenges/${challenge.id}`}
+                            className="text-foreground hover:underline"
+                          >
+                            {challenge.name}
+                          </Link>
+                        </TableCell>
+                        <TableCell>
+                          <Badge className={getDifficultyColor(challenge.difficulty)}>
+                            {challenge.difficulty}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>{challenge.questions.length}</TableCell>
+                        <TableCell>{challenge.appConfigs.length}</TableCell>
+                        <TableCell className="max-w-xs truncate">
+                          <code className="text-xs">{challenge.challengeImage}</code>
+                        </TableCell>
+                        <TableCell>
+                          <ChallengeRowActions
+                            challengeId={challenge.id}
+                            challengeName={challenge.name}
+                          />
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
             </CardContent>
           </Card>
         ))}
       </div>
     </div>
   );
-} 
+}

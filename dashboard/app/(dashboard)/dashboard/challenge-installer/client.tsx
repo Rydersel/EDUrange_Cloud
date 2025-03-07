@@ -17,12 +17,16 @@ export default function ChallengeInstallerClient() {
   const [isInstalling, setIsInstalling] = useState(false);
   const [installError, setInstallError] = useState<string | null>(null);
   const [installSuccess, setInstallSuccess] = useState(false);
+  const [duplicates, setDuplicates] = useState<{ name: string }[]>([]);
+  const [successMessage, setSuccessMessage] = useState<string>('');
 
   const handleFileLoaded = (data: ChallengeModuleFile) => {
     setChallengeModule(data);
     setActiveTab('review');
     setInstallError(null);
     setInstallSuccess(false);
+    setDuplicates([]);
+    setSuccessMessage('');
   };
 
   const handleModuleSelected = (data: ChallengeModuleFile) => {
@@ -30,6 +34,8 @@ export default function ChallengeInstallerClient() {
     setActiveTab('review');
     setInstallError(null);
     setInstallSuccess(false);
+    setDuplicates([]);
+    setSuccessMessage('');
   };
 
   const handleInstall = async () => {
@@ -37,6 +43,8 @@ export default function ChallengeInstallerClient() {
 
     setIsInstalling(true);
     setInstallError(null);
+    setDuplicates([]);
+    setSuccessMessage('');
     
     try {
       const response = await fetch('/api/admin/challenge-installer', {
@@ -54,6 +62,17 @@ export default function ChallengeInstallerClient() {
       }
 
       setInstallSuccess(true);
+      
+      // Set duplicates if any were returned
+      if (data.duplicates && data.duplicates.length > 0) {
+        setDuplicates(data.duplicates);
+      }
+      
+      // Set success message
+      if (data.message) {
+        setSuccessMessage(data.message);
+      }
+      
       // Refresh the page after a successful installation
       setTimeout(() => {
         router.refresh();
@@ -70,6 +89,8 @@ export default function ChallengeInstallerClient() {
     setActiveTab('upload');
     setInstallError(null);
     setInstallSuccess(false);
+    setDuplicates([]);
+    setSuccessMessage('');
   };
 
   return (
@@ -178,6 +199,8 @@ export default function ChallengeInstallerClient() {
             isInstalling={isInstalling}
             installError={installError}
             installSuccess={installSuccess}
+            duplicates={duplicates}
+            successMessage={successMessage}
           />
         )}
       </TabsContent>

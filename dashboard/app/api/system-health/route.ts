@@ -370,6 +370,11 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     
+    // Check if the user is an admin
+    if (session !== true && session.user.role !== 'ADMIN') {
+      return NextResponse.json({ error: 'Forbidden - Admin access required' }, { status: 403 });
+    }
+    
     // Fetch all health data in parallel
     const [
       ingressHealth,

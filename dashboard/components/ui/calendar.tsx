@@ -1,67 +1,130 @@
 'use client';
 
 import * as React from 'react';
-import { ChevronLeftIcon, ChevronRightIcon } from '@radix-ui/react-icons';
-import { DayPicker } from 'react-day-picker';
+import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
+import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
+import { DateCalendar } from '@mui/x-date-pickers/DateCalendar';
+import { ThemeProvider, createTheme } from '@mui/material/styles';
+import { useTheme } from 'next-themes';
+import dayjs, { Dayjs } from 'dayjs';
 
 import { cn } from '@/lib/utils';
-import { buttonVariants } from '@/components/ui/button';
 
-export type CalendarProps = React.ComponentProps<typeof DayPicker>;
+export interface CalendarProps {
+  className?: string;
+  selected?: Date;
+  defaultMonth?: Date;
+  onSelect?: (date: Date | undefined) => void;
+  disabled?: boolean | ((date: Date) => boolean);
+  mode?: 'single' | 'range' | 'multiple';
+  [key: string]: any;
+}
 
 function Calendar({
   className,
-  classNames,
-  showOutsideDays = true,
+  selected,
+  defaultMonth,
+  onSelect,
+  disabled = false,
   ...props
 }: CalendarProps) {
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme === 'dark';
+
+  // Create a theme that matches the current app theme
+  const theme = React.useMemo(
+    () =>
+      createTheme({
+        typography: {
+          fontFamily: 'inherit', // Use the same font as the rest of the site
+        },
+        palette: {
+          mode: isDark ? 'dark' : 'light',
+          primary: {
+            main: isDark ? '#22c55e' : '#16a34a', // Green color that matches our app theme
+          },
+          background: {
+            default: isDark ? 'hsl(143.8 50% 3%)' : 'hsl(0 0% 100%)',
+            paper: isDark ? 'hsl(143.8 50% 5%)' : 'hsl(0 0% 98%)',
+          },
+          text: {
+            primary: isDark ? 'hsl(143.8 5% 90%)' : 'hsl(222.2 84% 4.9%)',
+            secondary: isDark ? 'hsl(143.8 5% 60%)' : 'hsl(220 8.9% 30%)',
+          },
+        },
+      }),
+    [isDark]
+  );
+
+  // Convert between Date and Dayjs
+  const selectedDayjs = selected ? dayjs(selected) : null;
+  const defaultMonthDayjs = defaultMonth ? dayjs(defaultMonth) : undefined;
+
+  const handleDateChange = (newDate: Dayjs | null) => {
+    if (onSelect) {
+      onSelect(newDate ? newDate.toDate() : undefined);
+    }
+  };
+
+  // Filter out problematic props
+  const { initialFocus, ...filteredProps } = props;
+
+  // Handle the disabled prop
+  let shouldDisableDate: ((date: Dayjs) => boolean) | undefined;
+  let isReadOnly = false;
+
+  if (typeof disabled === 'function') {
+    // If disabled is a function, convert it to work with Dayjs
+    shouldDisableDate = (date: Dayjs) => disabled(date.toDate());
+  } else if (disabled === true) {
+    // If disabled is true, make the calendar read-only
+    isReadOnly = true;
+  }
+
   return (
-    <DayPicker
-      showOutsideDays={showOutsideDays}
-      className={cn('p-3', className)}
-      classNames={{
-        months: 'flex flex-col sm:flex-row space-y-4 sm:space-x-4 sm:space-y-0',
-        month: 'space-y-4',
-        caption: 'flex justify-center pt-1 relative items-center',
-        caption_label: 'text-sm font-medium',
-        nav: 'space-x-1 flex items-center',
-        nav_button: cn(
-          buttonVariants({ variant: 'outline' }),
-          'h-7 w-7 bg-transparent p-0 opacity-50 hover:opacity-100'
-        ),
-        nav_button_previous: 'absolute left-1',
-        nav_button_next: 'absolute right-1',
-        table: 'w-full border-collapse space-y-1',
-        head_row: 'flex',
-        head_cell:
-          'text-muted-foreground rounded-md w-8 font-normal text-[0.8rem]',
-        row: 'flex w-full mt-2',
-        cell: cn(
-          'relative p-0 text-center text-sm focus-within:relative focus-within:z-20 [&:has([aria-selected])]:bg-accent',
-          props.mode === 'range'
-            ? '[&:has(>.day-range-end)]:rounded-r-md [&:has(>.day-range-start)]:rounded-l-md first:[&:has([aria-selected])]:rounded-l-md last:[&:has([aria-selected])]:rounded-r-md'
-            : '[&:has([aria-selected])]:rounded-md'
-        ),
-        day: cn(
-          buttonVariants({ variant: 'ghost' }),
-          'h-8 w-8 p-0 font-normal aria-selected:opacity-100'
-        ),
-        day_range_start: 'day-range-start',
-        day_range_end: 'day-range-end',
-        day_selected:
-          'bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground focus:bg-primary focus:text-primary-foreground',
-        day_today: 'bg-accent text-accent-foreground',
-        day_outside: 'text-muted-foreground opacity-50',
-        day_disabled: 'text-muted-foreground opacity-50',
-        day_range_middle:
-          'aria-selected:bg-accent aria-selected:text-accent-foreground',
-        day_hidden: 'invisible',
-        ...classNames
-      }}
-      {...props}
-    />
+    <ThemeProvider theme={theme}>
+      <LocalizationProvider dateAdapter={AdapterDayjs}>
+        <div className={cn('p-3 font-sans', className)}>
+          <DateCalendar
+            value={selectedDayjs}
+            onChange={handleDateChange}
+            defaultValue={defaultMonthDayjs}
+            readOnly={isReadOnly}
+            shouldDisableDate={shouldDisableDate}
+            sx={{
+              width: '100%',
+              fontFamily: 'inherit',
+              '& .MuiDayCalendar-header': {
+                display: 'flex',
+                justifyContent: 'space-between',
+              },
+              '& .MuiPickersDay-root': {
+                fontSize: '0.875rem',
+                margin: '2px',
+                borderRadius: '0.375rem',
+                fontFamily: 'inherit',
+              },
+              '& .MuiTypography-root': {
+                fontFamily: 'inherit',
+              },
+              '& .MuiPickersCalendarHeader-label': {
+                fontFamily: 'inherit',
+                fontSize: '0.875rem',
+                fontWeight: 500,
+              },
+              '& .MuiDayCalendar-weekDayLabel': {
+                fontFamily: 'inherit',
+                fontSize: '0.75rem',
+              },
+            }}
+            {...filteredProps}
+          />
+        </div>
+      </LocalizationProvider>
+    </ThemeProvider>
   );
 }
+
 Calendar.displayName = 'Calendar';
 
 export { Calendar };

@@ -31,6 +31,7 @@ import { AlertTriangleIcon, Trash, Trash2Icon } from 'lucide-react';
 import { useParams, useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { SubmitHandler, useFieldArray, useForm } from 'react-hook-form';
+import { devLog } from '@/lib/logger';
 
 interface ProfileFormType {
   initialData: any | null;
@@ -117,7 +118,7 @@ export const CreateProfileOne: React.FC<ProfileFormType> = ({
   };
 
   const processForm: SubmitHandler<ProfileFormValues> = (data) => {
-    console.log('data ==>', data);
+    devLog('data ==>', data);
     setData(data);
     // api call and reset
     // form.reset();

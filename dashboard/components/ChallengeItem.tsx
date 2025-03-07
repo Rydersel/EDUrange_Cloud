@@ -14,6 +14,7 @@ import { motion, AnimatePresence } from "framer-motion"
 import { extractChallengeDescription } from "@/lib/utils"
 import { useToast } from "./ui/use-toast"
 import { useRouter } from "next/navigation"
+import { devLog } from '@/lib/logger'
 
 interface Challenge {
   id: string;
@@ -54,7 +55,7 @@ const checkUrlAvailability = async (url: string, maxAttempts = 30): Promise<bool
         return true;
       }
     } catch (error) {
-      console.log(`Attempt ${attempt + 1}: URL not ready yet`);
+      devLog(`Attempt ${attempt + 1}: URL not ready yet`);
     }
     await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2 seconds between attempts
   }

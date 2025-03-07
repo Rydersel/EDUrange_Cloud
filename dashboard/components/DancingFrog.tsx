@@ -2,6 +2,8 @@
 
 import { useEffect, useState, useRef } from 'react'
 import { motion, useAnimation } from 'framer-motion'
+import Image from 'next/image'
+import { devLog, errorLog } from '@/lib/logger'
 
 const frameImages = [
   'https://hebbkx1anhila5yf.public.blob.vercel-storage.com/frame_0_delay-0.1s-hsguR2j86lNfklFkcuWk1xwt9xEHDO.png',  // Frame 0
@@ -24,7 +26,7 @@ export function DancingFrog() {
 
   useEffect(() => {
     if (typeof Audio !== 'undefined') {
-      console.log('Creating audio element')
+      devLog('Creating audio element')
       audioRef.current = new Audio('/sounds/frog.mp3')
       audioRef.current.volume = 0
       audioRef.current.loop = true
@@ -64,12 +66,12 @@ export function DancingFrog() {
   }, [])
 
   const fadeIn = async (audio: HTMLAudioElement) => {
-    console.log('Starting fade in')
+    devLog('Starting fade in')
     try {
       // Store the play promise
       playPromiseRef.current = audio.play()
       await playPromiseRef.current
-      console.log('Audio started playing')
+      devLog('Audio started playing')
       
       const steps = 20
       const increment = 0.3 / steps // Target volume is 0.3
@@ -78,7 +80,7 @@ export function DancingFrog() {
         await new Promise(resolve => setTimeout(resolve, 50))
       }
     } catch (error) {
-      console.error('Error playing audio:', error)
+      errorLog('Error playing audio:', error)
       // Reset the play promise if it fails
       playPromiseRef.current = null
     }
@@ -97,7 +99,7 @@ export function DancingFrog() {
         }
       }
     } catch (error) {
-      console.error('Error fading out audio:', error)
+      errorLog('Error fading out audio:', error)
     }
   }
 
@@ -164,10 +166,12 @@ export function DancingFrog() {
       animate={controls}
       initial={{ x: 0 }}
     >
-      <img 
+      <Image 
         src={frameImages[currentFrame] || "/placeholder.svg"}
         alt="Hopping Frog"
-        className="w-32 h-32 object-contain"
+        width={128}
+        height={128}
+        className="object-contain"
       />
     </motion.div>
   )

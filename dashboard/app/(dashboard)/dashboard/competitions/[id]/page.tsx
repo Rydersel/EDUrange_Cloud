@@ -3,14 +3,17 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { redirect } from 'next/navigation';
 import { CompetitionDetails } from './competition-details';
-import { Prisma } from '@prisma/client';
 import { Competition } from '../types';
+
 
 export default async function CompetitionDetailsPage(props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
   const session = await getServerSession(authOptions);
+
+
+
   if (!session?.user) {
-    redirect('/auth/signin');
+    redirect('/');
   }
 
   const competition = await prisma.$transaction(async (tx) => {
@@ -112,4 +115,4 @@ export default async function CompetitionDetailsPage(props: { params: Promise<{ 
   const isInstructor = competition.instructors.some((i) => i.id === session.user.id);
 
   return <CompetitionDetails competition={competition} isInstructor={isInstructor} />;
-} 
+}

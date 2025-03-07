@@ -1,6 +1,6 @@
 import dotenv from 'dotenv';
 import path from 'path';
-import prisma from './prisma-test-client';
+import prisma from '../utils/prisma-test-client';
 
 dotenv.config({ path: path.resolve(__dirname, '../.env') });
 

@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { sanitizeString, validateAndSanitize, validationSchemas } from '@/lib/validation';
-import { withTestTransaction } from './test-helpers';
-import { generateTestId } from './test-helpers';
+import { withTestTransaction } from '../../utils/test-helpers';
+import { generateTestId } from '../../utils/test-helpers';
 
 describe('Input Validation Utilities', () => {
   describe('sanitizeString function', () => {

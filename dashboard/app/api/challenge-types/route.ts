@@ -1,24 +1,17 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
-interface RawChallengeType {
-  id: string;
-  name: string;
-  defaultAppsConfig: any;
-}
-
 export async function GET() {
   try {
-    const challengeTypes = await prisma.$queryRaw<RawChallengeType[]>`
-      SELECT id, name, default_apps_config as "defaultAppsConfig"
-      FROM challenge_types
-    `;
+    // Use Prisma client instead of raw SQL
+    const challengeTypes = await prisma.challengeType.findMany();
     
     // Transform the data to match the frontend interface
     const parsedChallengeTypes = challengeTypes.map(type => ({
       id: type.id,
       name: type.name,
-      DefaultAppsConfig: type.defaultAppsConfig
+      // Provide an empty array as default for DefaultAppsConfig
+      DefaultAppsConfig: []
     }));
     
     return NextResponse.json(parsedChallengeTypes);

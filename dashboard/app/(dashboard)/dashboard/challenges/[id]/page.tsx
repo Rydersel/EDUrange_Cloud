@@ -14,6 +14,7 @@ import { ArrowLeft, FileQuestion, Server, Info } from 'lucide-react';
 import Link from 'next/link';
 import authConfig from '@/auth.config';
 import { ChallengeActions } from '@/components/challenge-actions';
+import {requireAdminAccess} from "@/lib/auth-utils";
 
 interface ChallengeDetailPageProps {
   params: Promise<{
@@ -22,22 +23,17 @@ interface ChallengeDetailPageProps {
 }
 
 export default async function ChallengeDetailPage(props: ChallengeDetailPageProps) {
+
+
   const params = await props.params;
+  await requireAdminAccess()
   const session = await getServerSession(authConfig);
 
   if (!session) {
     redirect('/'); // Redirect to sign-in page if not authenticated
   }
 
-  // Check if user is admin
-  const user = await prisma.user.findUnique({
-    where: { id: session.user.id },
-    select: { role: true }
-  });
 
-  if (!user || user.role !== 'ADMIN') {
-    redirect('/dashboard'); // Redirect if not admin
-  }
 
   // Fetch the challenge from the database
   const challenge = await prisma.challenges.findUnique({
@@ -93,9 +89,9 @@ export default async function ChallengeDetailPage(props: ChallengeDetailPageProp
           description={challenge.description || 'No description provided'}
         />
         <div className="flex items-center space-x-2">
-          <ChallengeActions 
-            challengeId={challenge.id} 
-            challengeName={challenge.name} 
+          <ChallengeActions
+            challengeId={challenge.id}
+            challengeName={challenge.name}
           />
           <Link href="/dashboard/challenges">
             <Button variant="outline">
@@ -234,4 +230,4 @@ export default async function ChallengeDetailPage(props: ChallengeDetailPageProp
       </div>
     </div>
   );
-} 
+}

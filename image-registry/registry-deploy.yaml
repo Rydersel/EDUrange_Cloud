@@ -22,10 +22,13 @@ data:
           age: 168h
           interval: 24h
           dryrun: false
+      redirect:
+        disable: false
     http:
       addr: :5000
       headers:
         X-Content-Type-Options: [nosniff]
+      chunked: true
     health:
       storagedriver:
         enabled: true
@@ -48,7 +51,7 @@ metadata:
   name: registry-pv
 spec:
   capacity:
-    storage: 10Gi
+    storage: 20Gi
   volumeMode: Filesystem
   accessModes:
     - ReadWriteOnce
@@ -68,7 +71,7 @@ spec:
   storageClassName: manual
   resources:
     requests:
-      storage: 10Gi
+      storage: 20Gi
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -121,23 +124,25 @@ spec:
           subPath: config.yml
         resources:
           requests:
-            memory: "256Mi"
-            cpu: "100m"
-          limits:
             memory: "512Mi"
             cpu: "200m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
         livenessProbe:
+          httpGet:
+            path: /
+            port: 5000
+          initialDelaySeconds: 30
+          periodSeconds: 60
+          timeoutSeconds: 10
+        readinessProbe:
           httpGet:
             path: /
             port: 5000
           initialDelaySeconds: 10
           periodSeconds: 30
-        readinessProbe:
-          httpGet:
-            path: /
-            port: 5000
-          initialDelaySeconds: 5
-          periodSeconds: 10
+          timeoutSeconds: 5
       volumes:
       - name: registry-storage
         persistentVolumeClaim:
@@ -167,8 +172,12 @@ metadata:
   name: docker-registry
   annotations:
     nginx.ingress.kubernetes.io/proxy-body-size: "0"
-    nginx.ingress.kubernetes.io/proxy-read-timeout: "600"
-    nginx.ingress.kubernetes.io/proxy-send-timeout: "600"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-max-temp-file-size: "2048m"
+    nginx.ingress.kubernetes.io/proxy-request-buffering: "off"
+    nginx.ingress.kubernetes.io/proxy-buffering: "off"
     cert-manager.io/cluster-issuer: "letsencrypt-prod"
 spec:
   tls:

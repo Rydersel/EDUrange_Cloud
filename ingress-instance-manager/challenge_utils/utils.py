@@ -1,12 +1,15 @@
 import base64
 import logging
+import os
 import random
 import yaml
+from dotenv import load_dotenv
 from kubernetes import client, config
 import time
 import uuid
 import hashlib
 import requests
+load_dotenv()  # Load environment variables
 
 
 def wait_for_url(url, timeout=120,
@@ -121,7 +124,8 @@ def create_challenge_pod(user_id, challenge_image, yaml_path, run_as_root, apps_
     pod_spec['metadata']['name'] = instance_name  # Set the instance name here
     service_spec['metadata']['name'] = f"service-{instance_name}"
     ingress_spec['metadata']['name'] = f"ingress-{instance_name}"
-    ingress_spec['spec']['rules'][0]['host'] = f"{instance_name}.rydersel.cloud"
+    ingress_url = os.getenv("INGRESS_URL")
+    ingress_spec['spec']['rules'][0]['host'] = f"{instance_name}.{ingress_url}"
     ingress_spec['spec']['rules'][0]['http']['paths'][0]['backend']['service']['name'] = f"service-{instance_name}"
 
     # Dynamically set the challenge image
@@ -202,8 +206,11 @@ def create_pod_service_and_ingress(user_id, challenge_image, yaml_path, run_as_r
         raise
 
     logging.info(f"Creating challenge {pod.metadata.name} for user {user_id}")
-
-    challenge_url = f"http://{pod.metadata.name}.rydersel.cloud"
+    ingress_url = os.getenv("INGRESS_URL")
+    if not ingress_url:
+        logging.error("INGRESS_URL environment variable is not set. This must be configured by the installer.")
+        ingress_url = ""  # Empty string as fallback, but this should be caught by the installer
+    challenge_url = f"https://{pod.metadata.name}.{ingress_url}"
     logging.info(f"Assigned challenge URL: {challenge_url}")
 
     return pod.metadata.name, challenge_url, secret_name
@@ -259,4 +266,3 @@ def get_credentials_for_terminal(self):
     except Exception as e:
         logging.error(f"Error reading terminal credentials from ConfigMap: {e}")
         raise
-

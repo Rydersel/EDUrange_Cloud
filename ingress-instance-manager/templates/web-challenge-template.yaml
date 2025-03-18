@@ -26,6 +26,7 @@ spec:
         value: "none"  # Will be overwritten with the actual URL
   - name: webos
     image: registry.rydersel.cloud/webos
+    imagePullPolicy: Always
     ports:
     - containerPort: 3000
       name: webos-http
@@ -36,8 +37,14 @@ spec:
       value: "$(NEXT_PUBLIC_APPS_CONFIG)"
     - name: NEXT_PUBLIC_CHALLENGE_POD_NAME
       value: "$(POD_NAME)"
-    - name: NEXT_PUBLIC_WEB_CHALLENGE_URL
+    - name: NEXT_PUBLIC_CHALLENGE_URL
       value: "https://web-$(POD_NAME).$(INGRESS_URL)"
+    - name: NEXT_PUBLIC_TERMINAL_URL
+      value: "https://terminal-$(POD_NAME).$(INGRESS_URL)"
+    - name: DATABASE_API_URL
+      value: "http://database-api-service.default.svc.cluster.local"
+    - name: INSTANCE_MANAGER_URL
+      value: "http://instance-manager.default.svc.cluster.local/api"
 
 ---
 apiVersion: v1
@@ -64,6 +71,12 @@ metadata:
   name: challenge-ingress
   annotations:
     nginx.ingress.kubernetes.io/use-regex: "true"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-buffer-size: "8k"
+    nginx.ingress.kubernetes.io/proxy-buffers-number: "4"
+    nginx.ingress.kubernetes.io/websocket-services: "challenge-service"
 spec:
   ingressClassName: nginx
   rules:

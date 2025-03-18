@@ -141,7 +141,7 @@ export const navItems: NavItem[] = [
   },
    {
     title: 'Docs',
-    href: 'https://docs.rydersel.cloud/',
+    href: process.env.DOCS_URL,
     icon: 'help',
     label: 'docs',
     adminOnly: true,

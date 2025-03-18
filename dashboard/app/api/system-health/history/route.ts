@@ -2,7 +2,12 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import authConfig from '@/auth.config';
 import { getInstanceManagerUrl } from '@/lib/api-config';
-import { fetchMetricsHistory, generateMockMetricsHistory } from '@/lib/monitoring-service';
+import { 
+  fetchMetricsHistory, 
+  generateFallbackMetricsHistory,
+  fetchSystemStatusHistory,
+  generateFallbackSystemStatusHistory
+} from '@/lib/monitoring-service';
 
 export async function GET(request: Request) {
   try {
@@ -36,11 +41,11 @@ export async function GET(request: Request) {
       const challengeData = await getChallengeData();
       return NextResponse.json(challengeData);
     } else if (['cpu', 'memory', 'network'].includes(type)) {
-      const metricsData = await getResourceMetricsHistory(type, period);
+      const metricsData = await getMetricsHistory(type, period);
       return NextResponse.json(metricsData);
     } else if (type === 'status') {
       // Handle status type
-      const statusData = generateStatusHistory(period);
+      const statusData = await getSystemStatusHistory(period);
       return NextResponse.json(statusData);
     }
     
@@ -133,121 +138,46 @@ async function getChallengeData() {
   }
 }
 
-async function getResourceMetricsHistory(type: string, period: string) {
+/**
+ * Get metrics history data
+ */
+async function getMetricsHistory(type: string, period: string) {
   try {
-    // Try to fetch real metrics history from the monitoring service
-    const metricsHistory = await fetchMetricsHistory(type, period);
+    // Try to fetch real data from the monitoring service
+    const data = await fetchMetricsHistory(type, period);
     
-    if (metricsHistory) {
-      // Return real metrics history from the monitoring service
-      return metricsHistory;
+    // If we got data, return it
+    if (data) {
+      return data;
     }
     
-    // If monitoring service is unavailable, fall back to mock data
-    return generateMockMetricsHistory(type, period);
+    // Otherwise, fall back to default values
+    console.log(`Falling back to default ${type} metrics history data`);
+    return generateFallbackMetricsHistory(type, period);
   } catch (error) {
-    console.error(`Error fetching ${type} metrics history:`, error);
-    
-    // Return mock data if there's an error
-    return generateMockMetricsHistory(type, period);
+    console.error(`Error getting ${type} metrics history:`, error);
+    return generateFallbackMetricsHistory(type, period);
   }
 }
 
-function generateStatusHistory(period: string) {
-  const now = new Date();
-  const data = [];
-  const hours = period === '24h' ? 24 : period === '7d' ? 168 : 24;
-  const interval = period === '24h' ? 1 : period === '7d' ? 6 : 1;
-  
-  for (let i = hours; i >= 0; i -= interval) {
-    const time = new Date(now.getTime() - i * 3600000);
-    const timeStr = `${time.getHours()}:00`;
+/**
+ * Get system status history data
+ */
+async function getSystemStatusHistory(period: string) {
+  try {
+    // Try to fetch real data from the monitoring service
+    const data = await fetchSystemStatusHistory(period);
     
-    // Generate random status values (0-100)
-    const ingressHealth = Math.min(100, Math.max(0, 90 + Math.floor(Math.random() * 20) - 10));
-    const dbApiHealth = Math.min(100, Math.max(0, 95 + Math.floor(Math.random() * 15) - 7));
-    const dbSyncHealth = Math.min(100, Math.max(0, 85 + Math.floor(Math.random() * 30) - 15));
-    
-    // Simulate a sync issue around the middle of the timeline
-    const syncIssue = i >= hours * 0.4 && i <= hours * 0.6;
-    
-    data.push({
-      time: timeStr,
-      ingressHealth: ingressHealth,
-      dbApiHealth: dbApiHealth,
-      dbSyncHealth: syncIssue ? dbSyncHealth * 0.6 : dbSyncHealth,
-    });
-  }
-  
-  return data;
-}
-
-function generateResourceHistory(resourceType: string, period: string) {
-  const now = new Date();
-  const data = [];
-  const hours = period === '24h' ? 24 : period === '7d' ? 168 : 24;
-  const interval = period === '24h' ? 1 : period === '7d' ? 6 : 1;
-  
-  for (let i = hours; i >= 0; i -= interval) {
-    const time = new Date(now.getTime() - i * 3600000);
-    const timeStr = `${time.getHours()}:00`;
-    
-    if (resourceType === 'cpu') {
-      data.push({
-        time: timeStr,
-        system: Math.floor(Math.random() * 30) + 10,
-        challenges: Math.floor(Math.random() * 40) + 20,
-      });
-    } else if (resourceType === 'memory') {
-      data.push({
-        time: timeStr,
-        used: Math.floor(Math.random() * 40) + 30,
-        available: 100 - (Math.floor(Math.random() * 40) + 30),
-      });
-    } else if (resourceType === 'network') {
-      data.push({
-        time: timeStr,
-        inbound: Math.floor(Math.random() * 100) + 50,
-        outbound: Math.floor(Math.random() * 80) + 20,
-      });
+    // If we got data, return it
+    if (data) {
+      return data;
     }
+    
+    // Otherwise, fall back to default values
+    console.log('Falling back to default system status history data');
+    return generateFallbackSystemStatusHistory(period);
+  } catch (error) {
+    console.error('Error getting system status history:', error);
+    return generateFallbackSystemStatusHistory(period);
   }
-  
-  return data;
-}
-
-function generateChallengeHistory(period: string) {
-  const now = new Date();
-  const data = [];
-  const hours = period === '24h' ? 24 : period === '7d' ? 168 : 24;
-  const interval = period === '24h' ? 1 : period === '7d' ? 6 : 1;
-  
-  let running = 8;
-  let pending = 2;
-  let failed = 0;
-  
-  for (let i = hours; i >= 0; i -= interval) {
-    const time = new Date(now.getTime() - i * 3600000);
-    const timeStr = `${time.getHours()}:00`;
-    
-    // Randomly adjust values to simulate changes over time
-    running += Math.floor(Math.random() * 3) - 1;
-    pending += Math.floor(Math.random() * 3) - 1;
-    failed += Math.random() > 0.8 ? 1 : 0;
-    
-    // Ensure values stay within reasonable ranges
-    running = Math.max(0, Math.min(20, running));
-    pending = Math.max(0, Math.min(5, pending));
-    failed = Math.max(0, Math.min(3, failed));
-    
-    data.push({
-      time: timeStr,
-      running,
-      pending,
-      failed,
-      total: running + pending + failed
-    });
-  }
-  
-  return data;
 } 

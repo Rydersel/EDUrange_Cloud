@@ -3,10 +3,21 @@ import { getServerSession } from "next-auth/next";
 import authConfig from "@/auth.config";
 import React from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Database, CheckCircle, XCircle, AlertCircle, Activity, ArrowLeft } from "lucide-react";
+import { Database, CheckCircle, XCircle, AlertCircle, Activity, ArrowLeft, HardDrive, Clock, Server, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { getInstanceManagerUrl } from "@/lib/api-config";
+import { Progress } from "@/components/ui/progress";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+
+// Define types for PostgreSQL data
+type PostgresTable = {
+  schemaname: string;
+  table_name: string;
+  row_count: number;
+  table_size: string;
+};
 
 // Add revalidation tag to ensure dashboard is updated when navigating back
 export const revalidate = 0;
@@ -60,12 +71,43 @@ async function getDatabaseHealth() {
       // Get real connection count if available
       const connections = detailedHealth.database?.controller?.connections || 0;
       
+      // Fall back to the system health API to get detailed PostgreSQL metrics
+      const baseUrl = process.env.NEXT_PUBLIC_API_URL || 
+                     (typeof window === 'undefined' ? process.env.NEXTAUTH_URL : window.location.origin);
+      
+      const systemHealthResponse = await fetch(`${baseUrl}/api/system-health?sessionToken=server-component`, {
+        cache: 'no-store',
+      });
+      
+      if (systemHealthResponse.ok) {
+        const systemHealthData = await systemHealthResponse.json();
+        const postgresData = systemHealthData.database.postgres;
+        
+        return {
+          status: overallStatus,
+          uptime: uptime, // Use database-specific uptime
+          lastRestart: lastRestart, // Use database-specific last restart
+          version: postgresData?.version || "PostgreSQL 14.0", // Use real version if available
+          connections: connections, // Use real connection count from API
+          warningMessage: overallStatus === "warning" ? 
+            "One or more database components are not healthy" : 
+            (overallStatus === "error" ? "Database is not running" : null),
+          components: {
+            database: dbStatus === "ok" ? "healthy" : "error",
+            api: dbApiStatus === "ok" ? "healthy" : "error",
+            sync: dbSyncStatus === "ok" ? "healthy" : "error"
+          },
+          postgres: postgresData // Include detailed PostgreSQL metrics
+        };
+      }
+      
+      // If system health API fails, return data without PostgreSQL metrics
       return {
         status: overallStatus,
-        uptime: uptime, // Use database-specific uptime
-        lastRestart: lastRestart, // Use database-specific last restart
+        uptime: uptime,
+        lastRestart: lastRestart,
         version: "PostgreSQL 14.0", // Mock data for now
-        connections: connections, // Use real connection count from API
+        connections: connections,
         warningMessage: overallStatus === "warning" ? 
           "One or more database components are not healthy" : 
           (overallStatus === "error" ? "Database is not running" : null),
@@ -73,7 +115,8 @@ async function getDatabaseHealth() {
           database: dbStatus === "ok" ? "healthy" : "error",
           api: dbApiStatus === "ok" ? "healthy" : "error",
           sync: dbSyncStatus === "ok" ? "healthy" : "error"
-        }
+        },
+        postgres: null
       };
     }
     
@@ -105,7 +148,8 @@ async function getDatabaseHealth() {
         database: "error",
         api: "error",
         sync: "error"
-      }
+      },
+      postgres: null
     };
   }
 }
@@ -137,98 +181,274 @@ export default async function DatabasePage() {
         </div>
       </div>
       
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center justify-between">
-              Status
-              <span className="flex items-center space-x-2">
-                {databaseHealth.status === "healthy" ? (
-                  <CheckCircle className="h-5 w-5 text-green-500" />
-                ) : databaseHealth.status === "warning" ? (
-                  <AlertCircle className="h-5 w-5 text-yellow-500" />
-                ) : (
-                  <XCircle className="h-5 w-5 text-red-500" />
-                )}
-                <span className="text-lg font-medium capitalize">{databaseHealth.status}</span>
-              </span>
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              <div className="flex justify-between">
-                <span className="text-sm text-muted-foreground">Uptime:</span>
-                <span className="text-sm font-medium">{databaseHealth.uptime}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-sm text-muted-foreground">Version:</span>
-                <span className="text-sm font-medium">{databaseHealth.version}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-sm text-muted-foreground">Last Restart:</span>
-                <span className="text-sm font-medium">{databaseHealth.lastRestart}</span>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+      <Tabs defaultValue="overview" className="space-y-4">
+        <TabsList>
+          <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="tables">Tables</TabsTrigger>
+        </TabsList>
         
-        <Card>
-          <CardHeader>
-            <CardTitle>Connections</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-muted-foreground">Active Connections:</span>
-              <span className="text-lg font-medium">{databaseHealth.connections || 0}</span>
-            </div>
-            {databaseHealth.warningMessage && (
-              <div className="mt-4 rounded-md bg-yellow-50 p-3 text-sm text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-200">
-                <div className="flex items-center">
-                  <AlertCircle className="mr-2 h-4 w-4" />
-                  <span>{databaseHealth.warningMessage}</span>
+        <TabsContent value="overview" className="space-y-4">
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center justify-between">
+                  Status
+                  <span className="flex items-center space-x-2">
+                    {databaseHealth.status === "healthy" ? (
+                      <CheckCircle className="h-5 w-5 text-green-500" />
+                    ) : databaseHealth.status === "warning" ? (
+                      <AlertCircle className="h-5 w-5 text-yellow-500" />
+                    ) : (
+                      <XCircle className="h-5 w-5 text-red-500" />
+                    )}
+                    <span className="text-lg font-medium capitalize">{databaseHealth.status}</span>
+                  </span>
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2">
+                  <div className="flex justify-between">
+                    <span className="text-sm text-muted-foreground">Uptime:</span>
+                    <span className="text-sm font-medium">{databaseHealth.uptime}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-muted-foreground">Version:</span>
+                    <span className="text-sm font-medium">{databaseHealth.version}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-muted-foreground">Last Restart:</span>
+                    <span className="text-sm font-medium">{databaseHealth.lastRestart}</span>
+                  </div>
                 </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-        
-        <Card>
-          <CardHeader>
-            <CardTitle>Services</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <span className="flex items-center">
-                  <Activity className="mr-2 h-4 w-4 text-blue-500" />
-                  Database Pod
-                </span>
-                <span className={`font-medium ${databaseHealth.components?.database === "healthy" ? "text-green-500" : "text-red-500"}`}>
-                  {databaseHealth.components?.database === "healthy" ? "Healthy" : "Error"}
-                </span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="flex items-center">
-                  <Activity className="mr-2 h-4 w-4 text-blue-500" />
-                  Database API
-                </span>
-                <span className={`font-medium ${databaseHealth.components?.api === "healthy" ? "text-green-500" : "text-red-500"}`}>
-                  {databaseHealth.components?.api === "healthy" ? "Healthy" : "Error"}
-                </span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="flex items-center">
-                  <Activity className="mr-2 h-4 w-4 text-blue-500" />
-                  Database Sync
-                </span>
-                <span className={`font-medium ${databaseHealth.components?.sync === "healthy" ? "text-green-500" : "text-red-500"}`}>
-                  {databaseHealth.components?.sync === "healthy" ? "Healthy" : "Error"}
-                </span>
+              </CardContent>
+            </Card>
+            
+            <Card>
+              <CardHeader>
+                <CardTitle>Connections</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground">Active Connections:</span>
+                  <span className="text-lg font-medium">{databaseHealth.connections || 0}</span>
+                </div>
+                {databaseHealth.warningMessage && (
+                  <div className="mt-4 rounded-md bg-yellow-50 p-3 text-sm text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-200">
+                    <div className="flex items-center">
+                      <AlertCircle className="mr-2 h-4 w-4" />
+                      <span>{databaseHealth.warningMessage}</span>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+            
+            <Card>
+              <CardHeader>
+                <CardTitle>Services</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <span className="flex items-center">
+                      <Activity className="mr-2 h-4 w-4 text-blue-500" />
+                      Database Pod
+                    </span>
+                    <span className={`font-medium ${databaseHealth.components?.database === "healthy" ? "text-green-500" : "text-red-500"}`}>
+                      {databaseHealth.components?.database === "healthy" ? "Healthy" : "Error"}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="flex items-center">
+                      <Activity className="mr-2 h-4 w-4 text-blue-500" />
+                      Database API
+                    </span>
+                    <span className={`font-medium ${databaseHealth.components?.api === "healthy" ? "text-green-500" : "text-red-500"}`}>
+                      {databaseHealth.components?.api === "healthy" ? "Healthy" : "Error"}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="flex items-center">
+                      <Activity className="mr-2 h-4 w-4 text-blue-500" />
+                      Database Sync
+                    </span>
+                    <span className={`font-medium ${databaseHealth.components?.sync === "healthy" ? "text-green-500" : "text-red-500"}`}>
+                      {databaseHealth.components?.sync === "healthy" ? "Healthy" : "Error"}
+                    </span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+          
+          {/* PostgreSQL Detailed Metrics Section */}
+          {databaseHealth.postgres ? (
+            <div className="mt-6">
+              <h3 className="text-lg font-medium mb-4">PostgreSQL Detailed Metrics</h3>
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center">
+                      <Clock className="mr-2 h-5 w-5" />
+                      Performance
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-4">
+                      <div>
+                        <div className="flex justify-between text-sm mb-1">
+                          <span>Query Latency</span>
+                          <span>{databaseHealth.postgres.performance.query_latency_ms} ms</span>
+                        </div>
+                        <Progress 
+                          value={Math.min(100, (databaseHealth.postgres.performance.query_latency_ms || 0) / 10 * 100)} 
+                          className="h-2" 
+                        />
+                      </div>
+                      <div>
+                        <div className="flex justify-between text-sm mb-1">
+                          <span>Transaction Latency</span>
+                          <span>{databaseHealth.postgres.performance.transaction_latency_ms} ms</span>
+                        </div>
+                        <Progress 
+                          value={Math.min(100, (databaseHealth.postgres.performance.transaction_latency_ms || 0) / 20 * 100)} 
+                          className="h-2" 
+                        />
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+                
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center">
+                      <HardDrive className="mr-2 h-5 w-5" />
+                      Storage
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-4">
+                      <div className="flex justify-between">
+                        <span className="text-sm text-muted-foreground">Database Size:</span>
+                        <span className="text-sm font-medium">{databaseHealth.postgres.storage.database_size_mb} MB</span>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+                
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center">
+                      <Server className="mr-2 h-5 w-5" />
+                      PostgreSQL Info
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-2">
+                      <div className="flex justify-between">
+                        <span className="text-sm text-muted-foreground">Version:</span>
+                        <span className="text-sm font-medium">{databaseHealth.postgres.version}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-sm text-muted-foreground">Uptime:</span>
+                        <span className="text-sm font-medium">{databaseHealth.postgres.uptime}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-sm text-muted-foreground">Status:</span>
+                        <span className={`text-sm font-medium ${databaseHealth.postgres.status === "ok" ? "text-green-500" : "text-red-500"}`}>
+                          {databaseHealth.postgres.status === "ok" ? "Healthy" : "Error"}
+                        </span>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
               </div>
             </div>
-          </CardContent>
-        </Card>
-      </div>
+          ) : (
+            <Card className="mt-6">
+              <CardHeader>
+                <CardTitle>Detailed PostgreSQL Metrics</CardTitle>
+                <CardDescription>
+                  Detailed PostgreSQL metrics are not available. This could be because the database controller is not accessible or the detailed health check endpoint is not responding.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-center justify-center p-6">
+                  <AlertCircle className="h-12 w-12 text-yellow-500" />
+                  <div className="ml-4">
+                    <h3 className="text-lg font-medium">Metrics Unavailable</h3>
+                    <p className="text-sm text-muted-foreground">
+                      Try refreshing the page or check if the database controller is running properly.
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
+        
+        <TabsContent value="tables" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Database Tables</CardTitle>
+              <CardDescription>
+                {databaseHealth.postgres?.tables_error || databaseHealth.postgres?.tables_info || 
+                 (databaseHealth.postgres?.tables && databaseHealth.postgres.tables.length > 0 
+                  ? "Top tables by row count in the PostgreSQL database" 
+                  : "No tables found in the database")}
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {databaseHealth.postgres?.tables && databaseHealth.postgres.tables.length > 0 ? (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Schema</TableHead>
+                      <TableHead>Table Name</TableHead>
+                      <TableHead className="text-right">Row Count</TableHead>
+                      <TableHead className="text-right">Size</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {databaseHealth.postgres.tables.map((table: PostgresTable, index: number) => (
+                      <TableRow key={index}>
+                        <TableCell className="font-medium">{table.schemaname}</TableCell>
+                        <TableCell>{table.table_name}</TableCell>
+                        <TableCell className="text-right">{table.row_count.toLocaleString()}</TableCell>
+                        <TableCell className="text-right">{table.table_size}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              ) : (
+                <div className="flex flex-col items-center justify-center p-6 text-center">
+                  <AlertCircle className="h-12 w-12 text-yellow-500 mb-4" />
+                  <h3 className="text-lg font-medium mb-2">No Tables Available</h3>
+                  <p className="text-sm text-muted-foreground max-w-md">
+                    {databaseHealth.postgres?.tables_error ? (
+                      <>
+                        Error: {databaseHealth.postgres.tables_error}
+                      </>
+                    ) : databaseHealth.postgres?.tables_info ? (
+                      <>
+                        {databaseHealth.postgres.tables_info}
+                      </>
+                    ) : !databaseHealth.postgres ? (
+                      <>
+                        Database metrics are not available. Please check if the database controller is running properly.
+                      </>
+                    ) : (
+                      <>
+                        No tables have been created in the database yet. Tables will appear here once they are created.
+                      </>
+                    )}
+                  </p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 } 

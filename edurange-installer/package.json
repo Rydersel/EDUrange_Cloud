@@ -1,0 +1,71 @@
+{
+  "name": "edurange-installer",
+  "version": "0.1.0",
+  "description": "Installer for EDURange Cloud Kubernetes cluster",
+  "main": "src/main/main.js",
+  "scripts": {
+    "start": "electron .",
+    "start:prod": "cross-env NODE_ENV=production electron .",
+    "dev": "concurrently \"npm run dev:react\" \"npm run dev:electron\"",
+    "dev:react": "cross-env BROWSER=none npm run start --prefix src/renderer",
+    "dev:electron": "wait-on http://localhost:3000 && electron .",
+    "build": "npm run build --prefix src/renderer && electron-builder",
+    "build:mac": "npm run build --prefix src/renderer && electron-builder --mac",
+    "build:win": "npm run build --prefix src/renderer && electron-builder --win",
+    "build:linux": "npm run build --prefix src/renderer && electron-builder --linux",
+    "rebuild": "npm run build --prefix src/renderer"
+  },
+  "build": {
+    "appId": "com.edurange.installer",
+    "productName": "EDURange Cloud Installer",
+    "files": [
+      "src/main/**/*",
+      "src/renderer/build/**/*",
+      "node_modules/**/*"
+    ],
+    "directories": {
+      "buildResources": "assets"
+    },
+    "mac": {
+      "category": "public.app-category.developer-tools",
+      "target": [
+        "dmg"
+      ],
+      "icon": "assets/icon.png"
+    },
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "icon": "assets/icon.ico"
+    },
+    "linux": {
+      "target": [
+        "AppImage"
+      ],
+      "category": "Development",
+      "icon": "assets/icon.png"
+    },
+    "dmg": {
+      "icon": "assets/icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  },
+  "author": "EDURange Team",
+  "license": "MIT",
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "cross-env": "^7.0.3",
+    "electron": "^29.1.0",
+    "electron-builder": "^24.9.1",
+    "wait-on": "^7.2.0"
+  },
+  "dependencies": {
+    "csj": "^1.0.0",
+    "electron-is-dev": "^2.0.0",
+    "electron-log": "^5.1.0"
+  }
+}

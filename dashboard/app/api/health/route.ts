@@ -15,7 +15,8 @@ export async function GET() {
       'AUTH_GITHUB_SECRET',
       'INSTANCE_MANAGER_URL',
       'DATABASE_API_URL',
-      'CONNECT_SRC_DOMAIN',
+      'NODE_ENV',
+
     ];
 
     const missingEnvVars = requiredEnvVars.filter(varName => !process.env[varName]);

@@ -2,12 +2,23 @@ import React, { useState, useEffect } from 'react';
 import { Terminal, ArrowRight, Check, Trophy, Info, X } from 'lucide-react';
 import LoadingAnimation from '../util-components/loading-animation';
 import JumbledText from '../util-components/jumbled-text';
+import useWebOSConfig from '../../utils/useWebOSConfig';
 
-// Create ActivityLogger class
+// Create ActivityLogger class that uses the WebOS configuration
 class ActivityLogger {
-  static async logQuestionAttempt(userId, challengeId, groupId, metadata) {
+  static async logQuestionAttempt(userId, challengeId, groupId, metadata, databaseApiUrl) {
     try {
-      const response = await fetch('https://database.rydersel.cloud/activity/log', {
+      // Use the proxy URL if we're in a browser environment
+      const apiUrl = typeof window !== 'undefined' && window.location.protocol === 'https:' 
+        ? `/api/database-proxy?path=activity/log` 
+        : `${databaseApiUrl}/activity/log`;
+      
+      console.log('🔄 Logging question attempt via:', apiUrl);
+      
+      // Ensure metadata is properly formatted
+      const formattedMetadata = typeof metadata === 'string' ? metadata : JSON.stringify(metadata);
+      
+      const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -17,24 +28,31 @@ class ActivityLogger {
           userId,
           challengeId,
           groupId,
-          metadata: JSON.stringify(metadata)
+          metadata: formattedMetadata
         }),
       });
-      
+
       if (!response.ok) {
-        throw new Error(`Failed to log question attempt: ${response.statusText}`);
+        console.error('Failed to log question attempt:', await response.text());
       }
-      
-      return await response.json();
     } catch (error) {
-      console.error('Failed to log question attempt:', error);
-      throw error;
+      console.error('Error logging question attempt:', error);
     }
   }
 
-  static async logQuestionCompletion(userId, challengeId, groupId, metadata) {
+  static async logQuestionCompletion(userId, challengeId, groupId, metadata, databaseApiUrl) {
     try {
-      const response = await fetch('https://database.rydersel.cloud/activity/log', {
+      // Use the proxy URL if we're in a browser environment
+      const apiUrl = typeof window !== 'undefined' && window.location.protocol === 'https:' 
+        ? `/api/database-proxy?path=activity/log` 
+        : `${databaseApiUrl}/activity/log`;
+      
+      console.log('🔄 Logging question completion via:', apiUrl);
+      
+      // Ensure metadata is properly formatted
+      const formattedMetadata = typeof metadata === 'string' ? metadata : JSON.stringify(metadata);
+      
+      const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -44,18 +62,15 @@ class ActivityLogger {
           userId,
           challengeId,
           groupId,
-          metadata: JSON.stringify(metadata)
+          metadata: formattedMetadata
         }),
       });
-      
+
       if (!response.ok) {
-        throw new Error(`Failed to log question completion: ${response.statusText}`);
+        console.error('Failed to log question completion:', await response.text());
       }
-      
-      return await response.json();
     } catch (error) {
-      console.error('Failed to log question completion:', error);
-      throw error;
+      console.error('Error logging question completion:', error);
     }
   }
 }
@@ -99,9 +114,9 @@ async function sleep(ms) {
 }
 
 function getChallengeInstanceId() {
-  // First try to get the ID from environment variable
-  if (typeof process !== 'undefined' && process.env.NEXT_PUBLIC_CHALLENGE_POD_NAME) {
-    console.log('✅ Using challenge instance ID from NEXT_PUBLIC_CHALLENGE_POD_NAME:', process.env.NEXT_PUBLIC_CHALLENGE_POD_NAME);
+  // First try to get from environment variable
+  if (process.env.NEXT_PUBLIC_CHALLENGE_POD_NAME) {
+    console.log('✅ Using challenge instance ID from environment variable:', process.env.NEXT_PUBLIC_CHALLENGE_POD_NAME);
     return process.env.NEXT_PUBLIC_CHALLENGE_POD_NAME;
   }
 
@@ -110,11 +125,23 @@ function getChallengeInstanceId() {
     const hostname = window.location.hostname;
     console.log('🔍 Falling back to extracting challenge instance ID from hostname:', hostname);
     
-    // Extract everything before the first .rydersel.cloud
-    const match = hostname.split('.rydersel.cloud')[0];
-    if (match) {
-      console.log('✅ Successfully extracted challenge instance ID from hostname:', match);
-      return match;
+    // Get domain from environment variable or use a default
+    const domain = process.env.NEXT_PUBLIC_DOMAIN_NAME || '';
+    
+    if (domain) {
+      // Extract everything before the domain
+      const match = hostname.split(`.${domain}`)[0];
+      if (match) {
+        console.log('✅ Successfully extracted challenge instance ID from hostname:', match);
+        return match;
+      }
+    } else {
+      // Fallback to splitting by the first dot if no domain is configured
+      const match = hostname.split('.')[0];
+      if (match) {
+        console.log('✅ Successfully extracted challenge instance ID from hostname using first segment:', match);
+        return match;
+      }
     }
     
     console.error("❌ Failed to extract challenge instance ID from hostname:", hostname);
@@ -159,6 +186,11 @@ async function fetchWithRetry(url, options = {}, retries = MAX_RETRIES) {
 }
 
 export default function ChallengePrompt() {
+  const config = useWebOSConfig();
+  const databaseApiUrl = config.urls.databaseApi;
+  const databaseApiProxyUrl = config.urls.databaseApiProxy;
+  const instanceManagerProxyUrl = config.urls.instanceManagerProxy;
+  
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
@@ -174,9 +206,21 @@ export default function ChallengePrompt() {
   const [userId, setUserId] = useState(null);
   const [groupChallengeId, setGroupChallengeId] = useState(null);
   const [groupId, setGroupId] = useState(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState(null);
+
+  // If the config is still loading, show a loading state
+  useEffect(() => {
+    if (config.isLoading) {
+      setIsLoading(true);
+    }
+  }, [config.isLoading]);
 
   useEffect(() => {
     const fetchChallengeData = async () => {
+      // Don't fetch if the config is still loading
+      if (config.isLoading) return;
+      
       setIsLoading(true);
       setLoadError(false);
       setErrorMessage("");
@@ -191,21 +235,48 @@ export default function ChallengePrompt() {
 
         console.log('📡 Fetching challenge instance details...', { challengeInstanceId });
         
-        // Try both URL formats
-        const urls = [
-          `https://database.rydersel.cloud/get_challenge_instance?challenge_instance_id=${challengeInstanceId}`,
-          `https://database.rydersel.cloud/api/get_challenge_instance?challenge_instance_id=${challengeInstanceId}`
-        ];
-
+        // Try proxy first, then fall back to direct API calls
         let instanceData = null;
         let lastError = null;
-        for (const url of urls) {
-          const result = await fetchWithRetry(url);
-          if (result.ok) {
-            instanceData = result.data;
-            break;
+        
+        // Try using the proxy endpoint
+        if (databaseApiProxyUrl) {
+          try {
+            // Ensure we have a full URL for the proxy
+            const proxyUrl = `${databaseApiProxyUrl}?path=get_challenge_instance&challenge_instance_id=${challengeInstanceId}`;
+            console.log('🔄 Attempting to fetch via proxy:', proxyUrl);
+            const proxyResult = await fetchWithRetry(proxyUrl);
+            if (proxyResult.ok) {
+              instanceData = proxyResult.data;
+              console.log('✅ Successfully fetched instance data via proxy');
+            } else {
+              lastError = proxyResult.error;
+              console.warn('⚠️ Proxy fetch failed:', lastError);
+            }
+          } catch (error) {
+            console.warn('⚠️ Error with proxy fetch:', error);
+            lastError = error;
           }
-          lastError = result.error;
+        }
+        
+        // Fall back to direct API calls if proxy failed
+        if (!instanceData && databaseApiUrl) {
+          console.log('🔄 Falling back to direct API calls');
+          // Try both URL formats
+          const urls = [
+            `${databaseApiUrl}/get_challenge_instance?challenge_instance_id=${challengeInstanceId}`,
+            `${databaseApiUrl}/api/get_challenge_instance?challenge_instance_id=${challengeInstanceId}`
+          ];
+
+          for (const url of urls) {
+            const result = await fetchWithRetry(url);
+            if (result.ok) {
+              instanceData = result.data;
+              console.log('✅ Successfully fetched instance data directly:', url);
+              break;
+            }
+            lastError = result.error;
+          }
         }
 
         if (!instanceData) {
@@ -235,31 +306,95 @@ export default function ChallengePrompt() {
 
         // Only proceed if we have both user ID and group challenge ID
         if (instanceData.userId && instanceData.groupChallengeId) {
-          // Fetch completed questions with retry
-          const completedResult = await fetchWithRetry(
-            `https://database.rydersel.cloud/question/completed?user_id=${instanceData.userId}&group_challenge_id=${instanceData.groupChallengeId}`
-          );
+          // Try to fetch completed questions via proxy first
+          let completedQuestionData = null;
           
-          if (completedResult.ok) {
-            const completedQuestionData = completedResult.data.completed_questions;
-            console.log('✅ Fetched completed questions:', completedQuestionData);
+          if (databaseApiProxyUrl) {
+            try {
+              const proxyUrl = `${databaseApiProxyUrl}?path=question/completed&user_id=${instanceData.userId}&group_challenge_id=${instanceData.groupChallengeId}`;
+              console.log('🔄 Fetching completed questions via proxy:', proxyUrl);
+              const completedProxyResult = await fetchWithRetry(proxyUrl);
+              
+              if (completedProxyResult.ok) {
+                completedQuestionData = completedProxyResult.data.completed_questions;
+                console.log('✅ Fetched completed questions via proxy:', completedQuestionData);
+              }
+            } catch (error) {
+              console.warn('⚠️ Error fetching completed questions via proxy:', error);
+            }
+          }
+          
+          // Fall back to direct API call if proxy failed
+          if (completedQuestionData === null && databaseApiUrl) {
+            try {
+              const directUrl = `${databaseApiUrl}/question/completed?user_id=${instanceData.userId}&group_challenge_id=${instanceData.groupChallengeId}`;
+              console.log('🔄 Falling back to direct API for completed questions:', directUrl);
+              const completedResult = await fetchWithRetry(directUrl);
+              
+              if (completedResult.ok) {
+                completedQuestionData = completedResult.data.completed_questions;
+                console.log('✅ Fetched completed questions directly:', completedQuestionData);
+              }
+            } catch (error) {
+              console.warn('⚠️ Error fetching completed questions directly:', error);
+            }
+          }
+          
+          if (completedQuestionData) {
             setCompletedQuestions(completedQuestionData);
           }
 
-          // Fetch user points with retry
-          const pointsResult = await fetchWithRetry(
-            `https://database.rydersel.cloud/get_points?user_id=${instanceData.userId}&group_id=${instanceData.groupId}`
-          );
+          // Try to fetch user points via proxy first
+          let userPointsData = null;
           
-          if (pointsResult.ok) {
-            setUserPoints(pointsResult.data.points);
+          if (databaseApiProxyUrl) {
+            try {
+              const proxyUrl = `${databaseApiProxyUrl}?path=get_points&user_id=${instanceData.userId}&group_id=${instanceData.groupId}`;
+              console.log('🔄 Fetching user points via proxy:', proxyUrl);
+              const pointsProxyResult = await fetchWithRetry(proxyUrl);
+              
+              if (pointsProxyResult.ok) {
+                userPointsData = pointsProxyResult.data.points;
+                console.log('✅ Fetched user points via proxy:', userPointsData);
+              }
+            } catch (error) {
+              console.warn('⚠️ Error fetching user points via proxy:', error);
+            }
+          }
+          
+          // Fall back to direct API call if proxy failed
+          if (userPointsData === null && databaseApiUrl) {
+            try {
+              const directUrl = `${databaseApiUrl}/get_points?user_id=${instanceData.userId}&group_id=${instanceData.groupId}`;
+              console.log('🔄 Falling back to direct API for user points:', directUrl);
+              const pointsResult = await fetchWithRetry(directUrl);
+              
+              if (pointsResult.ok) {
+                userPointsData = pointsResult.data.points;
+                console.log('✅ Fetched user points directly:', userPointsData);
+              }
+            } catch (error) {
+              console.warn('⚠️ Error fetching user points directly:', error);
+            }
+          }
+          
+          if (userPointsData !== null) {
+            setUserPoints(userPointsData);
           }
         }
 
         // Get challenge config with retry
         const configResult = await fetchWithRetry('/api/config');
         if (configResult.ok) {
-          const challengeApp = configResult.data.find(app => app.id === 'challenge-prompt');
+          console.log('✅ Received config data:', configResult.data);
+          
+          // Handle both new format (object with apps array) and old format (direct array)
+          const appsArray = Array.isArray(configResult.data) 
+            ? configResult.data 
+            : (configResult.data && Array.isArray(configResult.data.apps) ? configResult.data.apps : []);
+          
+          // Find the challenge app in the apps array
+          const challengeApp = appsArray.find(app => app.id === 'challenge-prompt');
           if (challengeApp && challengeApp.challenge) {
             console.log('📝 Setting challenge data and initial question');
             setChallengeData(challengeApp.challenge);
@@ -294,7 +429,7 @@ export default function ChallengePrompt() {
     };
 
     fetchChallengeData();
-  }, []);
+  }, [config, databaseApiUrl, databaseApiProxyUrl]);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -342,7 +477,7 @@ export default function ChallengePrompt() {
           }, 0);
           
           // Call the API to complete the challenge
-          const response = await fetch('https://database.rydersel.cloud/competition/complete-challenge', {
+          const response = await fetch(`${databaseApiUrl}/competition/complete-challenge`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json'
@@ -389,6 +524,127 @@ export default function ChallengePrompt() {
       ...prev,
       [currentQuestionId]: value
     }));
+  };
+
+  const submitAnswer = async (questionId, answer) => {
+    if (!challengeData) return false;
+    
+    setIsSubmitting(true);
+    setSubmitError(null);
+    
+    try {
+      console.log('🔄 Submitting answer for question:', questionId);
+      
+      // Find the question in the challenge data
+      const question = allQuestions.find(q => q.id === questionId);
+      if (!question) {
+        console.error('❌ Question not found:', questionId);
+        throw new Error('Question not found');
+      }
+      
+      let isCorrect = false;
+      
+      if (question.type === 'flag') {
+        try {
+          // Try to verify flag via proxy first
+          let flagVerified = null;
+          
+          if (instanceManagerProxyUrl) {
+            try {
+              console.log('🔄 Verifying flag via proxy:', instanceManagerProxyUrl);
+              const response = await fetch(`${instanceManagerProxyUrl}?path=get-secret`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                  secret_name: challengeData.flagSecretName,
+                  namespace: 'default'
+                })
+              });
+              
+              // Handle the response more thoroughly
+              if (response.ok) {
+                const data = await response.json();
+                console.log('✅ Proxy response received:', JSON.stringify(data).substring(0, 100));
+                
+                if (data && typeof data.secret_value !== 'undefined') {
+                  console.log('✅ Flag verification via proxy successful');
+                  flagVerified = answer === data.secret_value;
+                  console.log(`🏁 Flag verification result: ${flagVerified ? 'CORRECT' : 'INCORRECT'}`);
+                } else {
+                  console.warn('⚠️ Flag verification via proxy returned invalid format:', data);
+                  // Don't set flagVerified, let it fall back to direct API call
+                }
+              } else {
+                const errorText = await response.text();
+                console.warn(`⚠️ Flag verification via proxy failed (${response.status}): ${errorText}`);
+                // Don't throw, just let it fall back to direct API call
+              }
+            } catch (error) {
+              console.warn('⚠️ Error verifying flag via proxy:', error);
+              // Don't throw, just let it fall back to direct API call
+            }
+          } else {
+            console.warn('⚠️ No instanceManagerProxyUrl available for flag verification');
+          }
+          
+          // Fall back to direct API call if proxy failed
+          if (flagVerified === null) {
+            try {
+              console.log('🔄 Falling back to direct API call for flag verification');
+              const response = await fetch('/api/config', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                  questionId,
+                  answer
+                })
+              });
+              
+              // Handle the response thoroughly
+              if (response.ok) {
+                const data = await response.json();
+                
+                if (data && typeof data.isCorrect !== 'undefined') {
+                  console.log('✅ Flag verification via config API successful');
+                  flagVerified = data.isCorrect;
+                  console.log(`🏁 Flag verification result: ${flagVerified ? 'CORRECT' : 'INCORRECT'}`);
+                } else {
+                  console.warn('⚠️ Flag verification via config API returned invalid format:', data);
+                  throw new Error('Invalid response format from config API');
+                }
+              } else {
+                const errorText = await response.text();
+                console.warn(`⚠️ Flag verification via config API failed (${response.status}): ${errorText}`);
+                throw new Error(`Failed to verify flag: ${errorText}`);
+              }
+            } catch (error) {
+              console.error('❌ Error verifying flag via config API:', error);
+              throw error;
+            }
+          }
+          
+          if (flagVerified === null) {
+            throw new Error('Failed to verify flag after all attempts');
+          }
+          
+          isCorrect = flagVerified;
+        } catch (error) {
+          console.error('❌ Error verifying flag:', error);
+          throw error;
+        }
+      } else {
+        // For non-flag questions, check against the hardcoded answer
+        isCorrect = answer === question.answer;
+      }
+      
+      // ... rest of the function ...
+    } catch (error) {
+      // ... error handling ...
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -450,17 +706,25 @@ export default function ChallengePrompt() {
           attemptNumber: verifyData.attemptCount,
           points: verifyData.isCorrect ? currentQuestion.points : 0,
           timestamp: new Date().toISOString()
-        }
+        },
+        databaseApiUrl
       );
 
       if (verifyData.isCorrect) {
         console.log('📡 Fetching question details...');
         // Get question details for points
-        const questionResponse = await fetch(`https://database.rydersel.cloud/question/details?question_id=${currentQuestionId}`); // TODO: Set from env
+        const questionDetailsUrl = typeof window !== 'undefined' && window.location.protocol === 'https:' 
+          ? `${databaseApiProxyUrl}?path=question/details&question_id=${currentQuestionId}`
+          : `${databaseApiUrl}/question/details?question_id=${currentQuestionId}`;
+        
+        console.log('🔄 Fetching question details via:', questionDetailsUrl);
+        const questionResponse = await fetch(questionDetailsUrl);
+        
         if (!questionResponse.ok) {
           console.error('❌ Failed to get question details:', {
             status: questionResponse.status,
-            statusText: questionResponse.statusText
+            statusText: questionResponse.statusText,
+            response: await questionResponse.text()
           });
           throw new Error(`Failed to get question details: ${questionResponse.statusText}`);
         }
@@ -475,7 +739,12 @@ export default function ChallengePrompt() {
         });
         
         // Complete question and award points
-        const completeResponse = await fetch('https://database.rydersel.cloud/question/complete', {
+        const completeQuestionUrl = typeof window !== 'undefined' && window.location.protocol === 'https:' 
+          ? `${databaseApiProxyUrl}?path=question/complete`
+          : `${databaseApiUrl}/question/complete`;
+        
+        console.log('🔄 Completing question via:', completeQuestionUrl);
+        const completeResponse = await fetch(completeQuestionUrl, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json'
@@ -484,8 +753,9 @@ export default function ChallengePrompt() {
             user_id: userId,
             question_id: currentQuestionId,
             group_challenge_id: groupChallengeId,
-            points: questionData.points
-          })
+            is_correct: verifyData.isCorrect,
+            points: verifyData.isCorrect ? questionData.points : 0
+          }),
         });
 
         if (!completeResponse.ok) {
@@ -511,7 +781,8 @@ export default function ChallengePrompt() {
             pointsEarned: questionData.points,
             totalAttempts: verifyData.attemptCount,
             completionTime: new Date().toISOString()
-          }
+          },
+          databaseApiUrl
         );
         
         setUserPoints(completionData.points.points);

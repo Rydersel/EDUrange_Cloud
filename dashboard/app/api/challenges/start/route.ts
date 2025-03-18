@@ -5,7 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { User } from "@prisma/client";
 import { transformToWebOSFormat, transformQuestionsToPromptApp } from "@/lib/webos/transform";
 import { ActivityLogger, ActivityEventType } from '@/lib/activity-logger';
-import { getInstanceManagerUrl } from "@/lib/api-config";
+import { getInstanceManagerUrl } from '@/lib/api-config';
 
 export async function POST(req: NextRequest) {
   try {
@@ -100,8 +100,18 @@ export async function POST(req: NextRequest) {
     );
     transformedAppConfigs.push(promptApp);
 
-    // Get the instance manager URL
+    // Get the instance manager URL using the centralized function
     const instanceManagerUrl = getInstanceManagerUrl();
+    
+    if (!instanceManagerUrl) {
+      console.error('Instance manager URL is undefined');
+      return NextResponse.json(
+        { error: 'Instance manager URL is undefined' },
+        { status: 500 }
+      );
+    }
+    
+    console.log("Instance manager URL:", instanceManagerUrl);
     
     // Call instance manager to create challenge
     const instanceManagerPayload = {
@@ -116,8 +126,11 @@ export async function POST(req: NextRequest) {
     console.log("Calling instance manager with payload:", instanceManagerPayload);
 
     try {
+      const fullUrl = `${instanceManagerUrl}/start-challenge`;
+      console.log("Full URL for API call:", fullUrl);
+      
       const response = await fetch(
-        `${instanceManagerUrl}/start-challenge`,
+        fullUrl,
         {
           method: "POST",
           headers: {

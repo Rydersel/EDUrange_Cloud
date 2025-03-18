@@ -9,5 +9,5 @@ spec:
     name: cert-clusterissuer
     kind: ClusterIssuer
   dnsNames:
-  - '*.rydersel.cloud'
-  - 'rydersel.cloud'
+  - '*.edurange.cloud'
+  - 'edurange.cloud'

@@ -16,35 +16,67 @@ spec:
     spec:
       containers:
       - name: database-api
-        image: registry.rydersel.cloud/database-api:latest
+        image: ${REGISTRY_URL}/database-api:latest
         imagePullPolicy: Always
         ports:
         - containerPort: 8000
         env:
         - name: POSTGRES_HOST
-          value: "172.233.210.28"
+          valueFrom:
+            secretKeyRef:
+              name: database-secrets
+              key: postgres-host
         - name: POSTGRES_NAME
-          value: "postgres"
+          valueFrom:
+            secretKeyRef:
+              name: database-secrets
+              key: postgres-name
         - name: POSTGRES_USER
-          value: "admin"
+          valueFrom:
+            secretKeyRef:
+              name: database-secrets
+              key: postgres-user
         - name: POSTGRES_PASSWORD
-          value: "rydersel1927"
+          valueFrom:
+            secretKeyRef:
+              name: database-secrets
+              key: postgres-password
         - name: DATABASE_URL
-          value: "postgresql://admin:rydersel1927@172.233.210.28:5432/postgres?schema=public"
+          valueFrom:
+            secretKeyRef:
+              name: database-secrets
+              key: database-url
       - name: database-sync
-        image: registry.rydersel.cloud/database-sync:latest
+        image: ${REGISTRY_URL}/database-sync:latest
         imagePullPolicy: Always
         env:
         - name: POSTGRES_HOST
-          value: "172.233.210.28"
+          valueFrom:
+            secretKeyRef:
+              name: database-secrets
+              key: postgres-host
         - name: POSTGRES_NAME
-          value: "postgres"
+          valueFrom:
+            secretKeyRef:
+              name: database-secrets
+              key: postgres-name
         - name: POSTGRES_USER
-          value: "admin"
+          valueFrom:
+            secretKeyRef:
+              name: database-secrets
+              key: postgres-user
         - name: POSTGRES_PASSWORD
-          value: "rydersel1927"
+          valueFrom:
+            secretKeyRef:
+              name: database-secrets
+              key: postgres-password
         - name: DATABASE_URL
-          value: "postgresql://admin:rydersel1927@172.233.210.28:5432/postgres?schema=public"
+          valueFrom:
+            secretKeyRef:
+              name: database-secrets
+              key: database-url
+        - name: INSTANCE_MANAGER_URL
+          value: "http://instance-manager.default.svc.cluster.local/api"
 
 ---
 
@@ -62,29 +94,3 @@ spec:
       port: 80
       targetPort: 8000
   type: ClusterIP
-
----
-
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: database-api-ingress
-  annotations:
-    nginx.ingress.kubernetes.io/rewrite-target: /
-spec:
-  ingressClassName: nginx
-  rules:
-  - host: database.rydersel.cloud
-    http:
-      paths:
-      - path: /
-        pathType: Prefix
-        backend:
-          service:
-            name: database-api-service
-            port:
-              number: 80
-  tls:
-    - hosts:
-        - database.rydersel.cloud
-      secretName: wildcard-domain-certificate-prod

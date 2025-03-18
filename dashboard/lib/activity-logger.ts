@@ -1,11 +1,11 @@
 import axios from 'axios';
-import * as dotenv from 'dotenv';
+import dotenv from 'dotenv';
 import path from 'path';
 
 // Load environment variables
 dotenv.config({ path: path.resolve(process.cwd(), '.env') });
 
-const DATABASE_API_URL = process.env.DATABASE_API_URL || 'http://localhost:8000';
+const DATABASE_API_URL = process.env.DATABASE_API_URL || 'http://database-api-service.default.svc.cluster.local';
 
 // Define event types to match backend
 export enum ActivityEventType {
@@ -13,27 +13,34 @@ export enum ActivityEventType {
   CHALLENGE_COMPLETED = "CHALLENGE_COMPLETED",
   GROUP_JOINED = "GROUP_JOINED",
   GROUP_CREATED = "GROUP_CREATED",
-  GROUP_LEFT = "GROUP_LEFT",
-  GROUP_DELETED = "GROUP_DELETED",
-  GROUP_UPDATED = "GROUP_UPDATED",
-  GROUP_MEMBER_REMOVED = "GROUP_MEMBER_REMOVED",
   ACCESS_CODE_GENERATED = "ACCESS_CODE_GENERATED",
-  ACCESS_CODE_USED = "ACCESS_CODE_USED",
-  ACCESS_CODE_EXPIRED = "ACCESS_CODE_EXPIRED",
-  ACCESS_CODE_DELETED = "ACCESS_CODE_DELETED",
   USER_REGISTERED = "USER_REGISTERED",
   USER_LOGGED_IN = "USER_LOGGED_IN",
   USER_ROLE_CHANGED = "USER_ROLE_CHANGED",
   USER_UPDATED = "USER_UPDATED",
-  USER_DELETED = "USER_DELETED",
   CHALLENGE_INSTANCE_CREATED = "CHALLENGE_INSTANCE_CREATED",
   CHALLENGE_INSTANCE_DELETED = "CHALLENGE_INSTANCE_DELETED",
   QUESTION_ATTEMPTED = "QUESTION_ATTEMPTED",
   QUESTION_COMPLETED = "QUESTION_COMPLETED",
-  SYSTEM_ERROR = "SYSTEM_ERROR"
+  GROUP_UPDATED = "GROUP_UPDATED",
+  GROUP_LEFT = "GROUP_LEFT",
+  GROUP_DELETED = "GROUP_DELETED",
+  ACCESS_CODE_USED = "ACCESS_CODE_USED",
+  ACCESS_CODE_EXPIRED = "ACCESS_CODE_EXPIRED",
+  ACCESS_CODE_DELETED = "ACCESS_CODE_DELETED",
+  SYSTEM_ERROR = "SYSTEM_ERROR",
+  GROUP_MEMBER_REMOVED = "GROUP_MEMBER_REMOVED",
+  USER_DELETED = "USER_DELETED",
+  CHALLENGE_PACK_INSTALLED = "CHALLENGE_PACK_INSTALLED",
+  ACCESS_CODE_INVALID = "ACCESS_CODE_INVALID",
 }
 
-export type LogSeverity = 'INFO' | 'WARNING' | 'ERROR' | 'CRITICAL';
+export enum LogSeverity {
+  INFO = "INFO",
+  WARNING = "WARNING",
+  ERROR = "ERROR",
+  CRITICAL = "CRITICAL"
+}
 
 interface LogActivityParams {
   eventType: ActivityEventType;
@@ -43,28 +50,54 @@ interface LogActivityParams {
   groupId?: string;
   challengeInstanceId?: string;
   accessCodeId?: string;
-  metadata: Record<string, any>;
+  metadata?: Record<string, any>;
 }
 
 export class ActivityLogger {
   static async logActivity(params: LogActivityParams) {
     try {
-      // Add timestamp to metadata if not present
-      if (!params.metadata.timestamp) {
-        params.metadata.timestamp = new Date().toISOString();
+      // Ensure metadata is a plain object
+      const metadata = params.metadata || {};
+
+      // Add timestamp to metadata if not already present
+      if (!metadata.timestamp) {
+        metadata.timestamp = new Date().toISOString();
       }
 
-      // Convert metadata to JSON string
-      const payload = {
-        ...params,
-        metadata: JSON.stringify(params.metadata)
+      // Create a clean payload with proper type annotations
+      const payload: any = {
+        eventType: params.eventType,
+        userId: params.userId,
+        severity: params.severity || LogSeverity.INFO,
+        metadata: metadata // Send the object directly, don't stringify it
       };
 
+      // Add optional fields only if they exist
+      if (params.challengeId) payload.challengeId = params.challengeId;
+      if (params.groupId) payload.groupId = params.groupId;
+      if (params.challengeInstanceId) payload.challengeInstanceId = params.challengeInstanceId;
+      if (params.accessCodeId) payload.accessCodeId = params.accessCodeId;
+
+      // Send the request
       const response = await axios.post(`${DATABASE_API_URL}/activity/log`, payload);
       return response.data;
-    } catch (error) {
-      console.error('Error logging activity:', error);
-      return null;
+    } catch (error: any) {
+      console.error('=== ACTIVITY LOGGER: Error logging activity ===');
+      console.error('Error:', error);
+      if (error.response) {
+        console.error('==== ERROR RESPONSE DETAILS ====');
+        console.error('Status:', error.response.status);
+        console.error('Headers:', JSON.stringify(error.response.headers, null, 2));
+        console.error('Data:', JSON.stringify(error.response.data, null, 2));
+        console.error('===============================');
+      } else if (error.request) {
+        console.error('==== ERROR REQUEST DETAILS ====');
+        console.error('No response received, request details:', error.request);
+        console.error('===============================');
+      }
+
+      console.error('Original params:', JSON.stringify(params, null, 2));
+      throw error;
     }
   }
 
@@ -77,10 +110,10 @@ export class ActivityLogger {
     metadata: Record<string, any>
   ) {
     const severityMap: Partial<Record<ActivityEventType, LogSeverity>> = {
-      [ActivityEventType.CHALLENGE_STARTED]: 'INFO',
-      [ActivityEventType.CHALLENGE_COMPLETED]: 'INFO',
-      [ActivityEventType.CHALLENGE_INSTANCE_CREATED]: 'INFO',
-      [ActivityEventType.CHALLENGE_INSTANCE_DELETED]: 'INFO'
+      [ActivityEventType.CHALLENGE_STARTED]: LogSeverity.INFO,
+      [ActivityEventType.CHALLENGE_COMPLETED]: LogSeverity.INFO,
+      [ActivityEventType.CHALLENGE_INSTANCE_CREATED]: LogSeverity.INFO,
+      [ActivityEventType.CHALLENGE_INSTANCE_DELETED]: LogSeverity.INFO
     };
 
     return this.logActivity({
@@ -88,7 +121,7 @@ export class ActivityLogger {
       userId,
       challengeId,
       challengeInstanceId,
-      severity: severityMap[eventType] || 'INFO',
+      severity: severityMap[eventType] || LogSeverity.INFO,
       metadata
     });
   }
@@ -102,10 +135,10 @@ export class ActivityLogger {
     metadata: Record<string, any>
   ) {
     const severityMap: Partial<Record<ActivityEventType, LogSeverity>> = {
-      [ActivityEventType.ACCESS_CODE_GENERATED]: 'INFO',
-      [ActivityEventType.ACCESS_CODE_EXPIRED]: 'WARNING',
-      [ActivityEventType.ACCESS_CODE_DELETED]: 'WARNING',
-      [ActivityEventType.ACCESS_CODE_USED]: 'INFO'
+      [ActivityEventType.ACCESS_CODE_GENERATED]: LogSeverity.INFO,
+      [ActivityEventType.ACCESS_CODE_EXPIRED]: LogSeverity.WARNING,
+      [ActivityEventType.ACCESS_CODE_DELETED]: LogSeverity.WARNING,
+      [ActivityEventType.ACCESS_CODE_USED]: LogSeverity.INFO
     };
 
     return this.logActivity({
@@ -113,7 +146,7 @@ export class ActivityLogger {
       userId,
       accessCodeId,
       groupId,
-      severity: severityMap[eventType] || 'INFO',
+      severity: severityMap[eventType] || LogSeverity.INFO,
       metadata
     });
   }
@@ -126,19 +159,19 @@ export class ActivityLogger {
     metadata: Record<string, any>
   ) {
     const severityMap: Partial<Record<ActivityEventType, LogSeverity>> = {
-      [ActivityEventType.GROUP_CREATED]: 'INFO',
-      [ActivityEventType.GROUP_JOINED]: 'INFO',
-      [ActivityEventType.GROUP_LEFT]: 'INFO',
-      [ActivityEventType.GROUP_DELETED]: 'WARNING',
-      [ActivityEventType.GROUP_UPDATED]: 'INFO',
-      [ActivityEventType.GROUP_MEMBER_REMOVED]: 'WARNING'
+      [ActivityEventType.GROUP_CREATED]: LogSeverity.INFO,
+      [ActivityEventType.GROUP_JOINED]: LogSeverity.INFO,
+      [ActivityEventType.GROUP_LEFT]: LogSeverity.INFO,
+      [ActivityEventType.GROUP_DELETED]: LogSeverity.WARNING,
+      [ActivityEventType.GROUP_UPDATED]: LogSeverity.INFO,
+      [ActivityEventType.GROUP_MEMBER_REMOVED]: LogSeverity.WARNING
     };
 
     return this.logActivity({
       eventType,
       userId,
       groupId,
-      severity: severityMap[eventType] || 'INFO',
+      severity: severityMap[eventType] || LogSeverity.INFO,
       metadata
     });
   }
@@ -150,17 +183,17 @@ export class ActivityLogger {
     metadata: Record<string, any>
   ) {
     const severityMap: Partial<Record<ActivityEventType, LogSeverity>> = {
-      [ActivityEventType.USER_REGISTERED]: 'INFO',
-      [ActivityEventType.USER_LOGGED_IN]: 'INFO',
-      [ActivityEventType.USER_ROLE_CHANGED]: 'WARNING',
-      [ActivityEventType.USER_UPDATED]: 'INFO',
-      [ActivityEventType.USER_DELETED]: 'WARNING'
+      [ActivityEventType.USER_REGISTERED]: LogSeverity.INFO,
+      [ActivityEventType.USER_LOGGED_IN]: LogSeverity.INFO,
+      [ActivityEventType.USER_ROLE_CHANGED]: LogSeverity.WARNING,
+      [ActivityEventType.USER_UPDATED]: LogSeverity.INFO,
+      [ActivityEventType.USER_DELETED]: LogSeverity.WARNING
     };
 
     return this.logActivity({
       eventType,
       userId,
-      severity: severityMap[eventType] || 'INFO',
+      severity: severityMap[eventType] || LogSeverity.INFO,
       metadata
     });
   }
@@ -170,7 +203,7 @@ export class ActivityLogger {
     return this.logActivity({
       eventType: ActivityEventType.SYSTEM_ERROR,
       userId,
-      severity: 'ERROR',
+      severity: LogSeverity.ERROR,
       metadata: {
         errorTime: new Date().toISOString(),
         ...metadata
@@ -187,8 +220,8 @@ export class ActivityLogger {
     metadata: Record<string, any>
   ) {
     const severityMap: Partial<Record<ActivityEventType, LogSeverity>> = {
-      [ActivityEventType.QUESTION_ATTEMPTED]: 'INFO',
-      [ActivityEventType.QUESTION_COMPLETED]: 'INFO'
+      [ActivityEventType.QUESTION_ATTEMPTED]: LogSeverity.INFO,
+      [ActivityEventType.QUESTION_COMPLETED]: LogSeverity.INFO
     };
 
     return this.logActivity({
@@ -196,7 +229,7 @@ export class ActivityLogger {
       userId,
       challengeId,
       groupId,
-      severity: severityMap[eventType] || 'INFO',
+      severity: severityMap[eventType] || LogSeverity.INFO,
       metadata
     });
   }

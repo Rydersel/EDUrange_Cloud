@@ -11,6 +11,14 @@ YELLOW='\033[1;33m'
 RED='\033[0;31m'
 NC='\033[0m' # No Color
 
+# Set environment variables for deployment
+export REGISTRY_URL="registry.rydersel.cloud"
+export DOMAIN_NAME="edurange.cloud"
+export INSTANCE_MANAGER_SUBDOMAIN="eductf"
+export DASHBOARD_SUBDOMAIN="dashboard"
+export DATABASE_SUBDOMAIN="database"
+export MONITORING_SUBDOMAIN="monitoring"
+
 echo -e "${GREEN}EDURange Cloud Monitoring Installation Script${NC}"
 echo "This script will install and configure Prometheus and the monitoring service"
 
@@ -85,6 +93,40 @@ cleanup_existing_monitoring() {
             kubectl delete servicemonitor monitoring-service -n monitoring
             echo "ServiceMonitor for monitoring-service deleted."
         fi
+
+        # Delete any persistent volume claims related to monitoring
+        echo "Checking for persistent volume claims related to monitoring..."
+        
+        # Find and delete PVCs related to Prometheus
+        for pvc in $(kubectl get pvc -n monitoring -o name | grep "prometheus" || true); do
+            echo "Deleting PVC: $pvc"
+            kubectl delete $pvc -n monitoring --ignore-not-found
+        done
+        
+        # Find and delete PVCs related to Grafana
+        for pvc in $(kubectl get pvc -n monitoring -o name | grep "grafana" || true); do
+            echo "Deleting PVC: $pvc"
+            kubectl delete $pvc -n monitoring --ignore-not-found
+        done
+        
+        # Find and delete PVCs related to alertmanager
+        for pvc in $(kubectl get pvc -n monitoring -o name | grep "alertmanager" || true); do
+            echo "Deleting PVC: $pvc"
+            kubectl delete $pvc -n monitoring --ignore-not-found
+        done
+        
+        # Find and delete any other monitoring-related PVCs
+        for pvc in $(kubectl get pvc -n monitoring -o name || true); do
+            echo "Deleting remaining PVC: $pvc"
+            kubectl delete $pvc -n monitoring --ignore-not-found
+        done
+        
+        # Find and delete any persistent volumes that might be stuck
+        echo "Checking for stuck persistent volumes..."
+        for pv in $(kubectl get pv -o name | grep "monitoring" || true); do
+            echo "Deleting PV: $pv"
+            kubectl delete $pv --ignore-not-found
+        done
 
         # Delete all Prometheus-related resources in the monitoring namespace
         echo "Deleting all Prometheus-related resources in the monitoring namespace..."
@@ -181,12 +223,11 @@ build_deploy_monitoring_service() {
     echo -e "${YELLOW}Building and deploying monitoring service...${NC}"
 
     # Build the Docker image
-    docker buildx build -f Dockerfile --platform linux/amd64 -t registry.rydersel.cloud/monitoring-service . --push
-
+    docker buildx build -f Dockerfile --platform linux/amd64 -t ${REGISTRY_URL}/monitoring-service . --push
 
     # Apply the Kubernetes manifests
     echo "Applying Kubernetes manifests..."
-    kubectl apply -f deployment.yaml
+    envsubst < deployment.yaml | kubectl apply -f -
 
     echo -e "${GREEN}Monitoring service deployed successfully!${NC}"
 }
@@ -196,14 +237,14 @@ main() {
     echo -e "${YELLOW}Starting installation...${NC}"
 
     # Clean up existing monitoring deployments
-  #  cleanup_existing_monitoring
+    cleanup_existing_monitoring
 
     # Install Prometheus and Grafana
-  #  install_prometheus_grafana
+    install_prometheus_grafana
 
     # Wait for Prometheus CRDs to be ready
-   #  echo -e "${YELLOW}Waiting for Prometheus CRDs to be ready...${NC}"
-   #  sleep 20
+    echo -e "${YELLOW}Waiting for Prometheus CRDs to be ready...${NC}"
+    sleep 20
 
     # Create ServiceMonitor for instance-manager
     create_instance_manager_service_monitor

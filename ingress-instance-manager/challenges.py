@@ -5,10 +5,27 @@ import uuid
 import json
 from dotenv import load_dotenv
 from kubernetes import client
+from kubernetes.client import ApiException
+import yaml
 from challenge_utils.utils import generate_unique_flag, create_flag_secret, read_yaml_file, get_credentials_for_terminal
 
 load_dotenv()  # Load environmental variables
 url = os.getenv("INGRESS_URL")
+if not url:
+    logging.error("INGRESS_URL environment variable is not set. This must be configured by the installer.")
+    url = ""  # Empty string as fallback, but this should be caught by the installer
+logging.info(f"Using domain for challenge URLs: {url}")
+
+# Get Kubernetes service account token for terminal container
+KUBERNETES_SERVICE_ACCOUNT_TOKEN_PATH = "/var/run/secrets/kubernetes.io/serviceaccount/token"
+KUBERNETES_HOST = "https://kubernetes.default.svc"
+
+try:
+    with open(KUBERNETES_SERVICE_ACCOUNT_TOKEN_PATH, "r") as f:
+        KUBERNETES_SERVICE_ACCOUNT_TOKEN = f.read()
+except Exception as e:
+    logging.error(f"Error reading Kubernetes service account token: {e}")
+    KUBERNETES_SERVICE_ACCOUNT_TOKEN = ""
 
 
 def transform_app_config(app_config):
@@ -33,7 +50,7 @@ def transform_app_config(app_config):
             additional_config = json.loads(app_config["additional_config"])
         else:
             additional_config = app_config["additional_config"]
-        
+
         # Add each key from additional_config directly to the root
         for key, value in additional_config.items():
             transformed[key] = value
@@ -151,6 +168,17 @@ class FullOsChallenge:
                 container['env'].append({"name": "FLAG", "value": flag})
 
             elif container['name'] == 'webos':
+                # Get the instance manager subdomain from environment variable or use default
+                instance_manager_subdomain = os.getenv("INSTANCE_MANAGER_SUBDOMAIN", "instance-manager")
+                database_subdomain = os.getenv("DATABASE_SUBDOMAIN", "database")
+                
+                # Construct the URLs with the correct subdomains
+                instance_manager_url = "http://instance-manager.default.svc.cluster.local/api"
+                database_url = "http://database-api-service.default.svc.cluster.local"
+                
+                logging.info(f"Using instance manager URL for WebOS container: {instance_manager_url}")
+                logging.info(f"Using database URL for WebOS container: {database_url}")
+                
                 # Pass through the apps config without transformation
                 container['env'] = [
                     {"name": "NEXT_PUBLIC_POD_NAME", "value": instance_name},
@@ -158,8 +186,16 @@ class FullOsChallenge:
                     {"name": "NEXT_PUBLIC_CHALLENGE_POD_NAME", "value": instance_name},
                     {"name": "NEXT_PUBLIC_CHALLENGE_API_URL", "value": "http://localhost:5000/execute"},
                     {"name": "NEXT_PUBLIC_TERMINAL_URL", "value": f"https://terminal-{instance_name}.{url}"},
-                    {"name": "NEXT_PUBLIC_CHALLENGE_URL", "value": f"https://{instance_name}.{url}"}
+                    {"name": "NEXT_PUBLIC_CHALLENGE_URL", "value": f"https://{instance_name}.{url}"},
+                    {"name": "DATABASE_API_URL", "value": database_url},
+                    {"name": "INSTANCE_MANAGER_URL", "value": instance_manager_url},
+                    {"name": "HOSTNAME", "value": instance_name},
+                    {"name": "DOMAIN_NAME", "value": url},
+                    {"name": "NODE_ENV", "value": "production"}
                 ]
+                # Set imagePullPolicy to Always to ensure we get the latest image
+                if 'imagePullPolicy' not in container:
+                    container['imagePullPolicy'] = 'Always'
 
             elif container['name'] == 'bridge':
                 container['env'].append({"name": "flag_secret_name", "value": secret_name})
@@ -256,7 +292,7 @@ class WebChallenge:
         # Generate URLs for both the WebOS interface and the web challenge
         webos_url = f"https://{pod.metadata.name}.{url}"
         web_challenge_url = f"https://web-{pod.metadata.name}.{url}"
-        
+
         logging.info(f"Assigned WebOS URL: {webos_url}")
         logging.info(f"Assigned Web Challenge URL: {web_challenge_url}")
 
@@ -285,11 +321,11 @@ class WebChallenge:
         service_spec['metadata']['name'] = f"service-{instance_name}"
         service_spec['spec']['selector']['app'] = instance_name
         ingress_spec['metadata']['name'] = f"ingress-{instance_name}"
-        
+
         # Set up the main WebOS ingress
         ingress_spec['spec']['rules'][0]['host'] = f"{instance_name}.{url}"
         ingress_spec['spec']['rules'][0]['http']['paths'][0]['backend']['service']['name'] = f"service-{instance_name}"
-        
+
         # Add a new rule for the web challenge
         ingress_spec['spec']['rules'].append({
             "host": f"web-{instance_name}.{url}",
@@ -308,7 +344,7 @@ class WebChallenge:
                 }]
             }
         })
-        
+
         # Add TLS configuration for both hosts
         ingress_spec['spec']['tls'] = [{
             "hosts": [
@@ -320,12 +356,12 @@ class WebChallenge:
 
         # Set the web challenge URL in the environment variables
         web_challenge_url = f"https://web-{instance_name}.{url}"
-        
+
         for container in pod_spec['spec']['containers']:
             if container['name'] == 'web-challenge-container':
                 container['image'] = self.challenge_image
                 container['env'].append({"name": "FLAG", "value": flag})
-            
+
             elif container['name'] == 'bridge':
                 container['env'].append({"name": "flag_secret_name", "value": secret_name})
                 container['env'].append({"name": "WEB_CHAL_LINK", "value": web_challenge_url})
@@ -340,26 +376,38 @@ class WebChallenge:
                 updated_apps_config_str = json.dumps(updated_apps_config)
 
                 container['env'].append({"name": "NEXT_PUBLIC_APPS_CONFIG", "value": updated_apps_config_str})
-            
+
             elif container['name'] == 'webos':
-                # Update all environment variables for the WebOS container with actual values
-                for env_var in container['env']:
-                    if env_var['name'] == 'NEXT_PUBLIC_POD_NAME':
-                        env_var['value'] = instance_name
-                    elif env_var['name'] == 'NEXT_PUBLIC_APPS_CONFIG':
-                        # This is already handled in the bridge container section
-                        # We'll set it here too to ensure it's properly set
-                        updated_apps_config = json.loads(self.apps_config)
-                        for app in updated_apps_config:
-                            if app["id"] == "challenge-prompt" and "challenge" in app:
-                                app["challenge"]["flagSecretName"] = secret_name
-                            if app["id"] == "web_chal":
-                                app["url"] = f"https://web-{instance_name}.{url}"
-                        env_var['value'] = json.dumps(updated_apps_config)
-                    elif env_var['name'] == 'NEXT_PUBLIC_CHALLENGE_POD_NAME':
-                        env_var['value'] = instance_name
-                    elif env_var['name'] == 'NEXT_PUBLIC_WEB_CHALLENGE_URL':
-                        env_var['value'] = f"https://web-{instance_name}.{url}"
+                # Get the instance manager subdomain from environment variable or use default
+                instance_manager_subdomain = os.getenv("INSTANCE_MANAGER_SUBDOMAIN", "instance-manager")
+                database_subdomain = os.getenv("DATABASE_SUBDOMAIN", "database")
+                
+                # Construct the URLs with the correct subdomains
+                instance_manager_url = "http://instance-manager.default.svc.cluster.local/api"
+                database_url = "http://database-api-service.default.svc.cluster.local"
+                
+                logging.info(f"Using instance manager URL for WebOS container: {instance_manager_url}")
+                logging.info(f"Using database URL for WebOS container: {database_url}")
+                
+                # Pass through the apps config without transformation
+                container['env'] = [
+                    {"name": "NEXT_PUBLIC_POD_NAME", "value": instance_name},
+                    {"name": "NEXT_PUBLIC_APPS_CONFIG", "value": self.apps_config},  # Pass through directly
+                    {"name": "NEXT_PUBLIC_CHALLENGE_POD_NAME", "value": instance_name},
+                    {"name": "NEXT_PUBLIC_CHALLENGE_API_URL", "value": "http://localhost:5000/execute"},
+                    {"name": "NEXT_PUBLIC_TERMINAL_URL", "value": f"https://terminal-{instance_name}.{url}"},
+                    {"name": "NEXT_PUBLIC_CHALLENGE_URL", "value": f"https://{instance_name}.{url}"},
+                    {"name": "DATABASE_API_URL", "value": database_url},
+                    {"name": "INSTANCE_MANAGER_URL", "value": instance_manager_url},
+                    {"name": "HOSTNAME", "value": instance_name},
+                    {"name": "DOMAIN_NAME", "value": url},
+                    {"name": "NODE_ENV", "value": "production"},
+                    {"name": "NEXT_PUBLIC_APPS_CONFIG", "value": updated_apps_config_str}
+                ]
+
+                # Set imagePullPolicy to Always to ensure we get the latest image
+                if 'imagePullPolicy' not in container:
+                    container['imagePullPolicy'] = 'Always'
 
         pod = client.V1Pod(
             api_version="v1",
@@ -514,6 +562,38 @@ class MetasploitChallenge:
 
                 container['env'].append({"name": "NEXT_PUBLIC_APPS_CONFIG", "value": updated_apps_config_str})
                 container['env'].append({"name": "CHALLENGE_POD_NAME", "value": instance_name})
+
+            elif container['name'] == 'webos':
+                # Get the instance manager subdomain from environment variable or use default
+                instance_manager_subdomain = os.getenv("INSTANCE_MANAGER_SUBDOMAIN", "instance-manager")
+                database_subdomain = os.getenv("DATABASE_SUBDOMAIN", "database")
+                
+                # Construct the URLs with the correct subdomains
+                instance_manager_url = "http://instance-manager.default.svc.cluster.local/api"
+                database_url = "http://database-api-service.default.svc.cluster.local"
+                
+                logging.info(f"Using instance manager URL for WebOS container: {instance_manager_url}")
+                logging.info(f"Using database URL for WebOS container: {database_url}")
+                
+                # Pass through the apps config without transformation
+                container['env'] = [
+                    {"name": "NEXT_PUBLIC_POD_NAME", "value": instance_name},
+                    {"name": "NEXT_PUBLIC_APPS_CONFIG", "value": self.apps_config},  # Pass through directly
+                    {"name": "NEXT_PUBLIC_CHALLENGE_POD_NAME", "value": instance_name},
+                    {"name": "NEXT_PUBLIC_CHALLENGE_API_URL", "value": "http://localhost:5000/execute"},
+                    {"name": "NEXT_PUBLIC_TERMINAL_URL", "value": f"https://terminal-{instance_name}.{url}"},
+                    {"name": "NEXT_PUBLIC_CHALLENGE_URL", "value": f"https://{instance_name}.{url}"},
+                    {"name": "DATABASE_API_URL", "value": database_url},
+                    {"name": "INSTANCE_MANAGER_URL", "value": instance_manager_url},
+                    {"name": "HOSTNAME", "value": instance_name},
+                    {"name": "DOMAIN_NAME", "value": url},
+                    {"name": "NODE_ENV", "value": "production"},
+                    {"name": "NEXT_PUBLIC_APPS_CONFIG", "value": updated_apps_config_str}
+                ]
+
+                # Set imagePullPolicy to Always to ensure we get the latest image
+                if 'imagePullPolicy' not in container:
+                    container['imagePullPolicy'] = 'Always'
 
             if container['name'] == 'terminal':
                 container['env'] = [

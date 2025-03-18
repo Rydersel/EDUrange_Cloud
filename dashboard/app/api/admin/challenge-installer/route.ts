@@ -71,7 +71,7 @@ export async function POST(req: NextRequest) {
     // Check if user is admin using the utility function
     const adminCheckResult = await requireAdmin(req);
     if (adminCheckResult) return adminCheckResult;
-    
+
     // Get session for activity logging
     const session = await getServerSession(authConfig);
 
@@ -93,7 +93,7 @@ export async function POST(req: NextRequest) {
     // Create each challenge in the module
     const createdChallenges = [];
     const duplicateChallenges = [];
-    
+
     for (const challengeData of challengeModule.challenges) {
       // Check if challenge with the same name already exists
       const existingChallenge = await prisma.challenges.findFirst({
@@ -109,7 +109,7 @@ export async function POST(req: NextRequest) {
         });
         continue;
       }
-      
+
       // Find or create the challenge type
       let challengeType = await prisma.challengeType.findFirst({
         where: {
@@ -178,24 +178,10 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // Log the activity
-    await prisma.activityLog.create({
-      data: {
-        eventType: 'SYSTEM_ERROR',
-        severity: 'INFO',
-        userId: session?.user?.id || 'unknown',
-        metadata: {
-          action: 'CHALLENGE_MODULE_INSTALLED',
-          moduleName: challengeModule.moduleName,
-          challengesCount: createdChallenges.length,
-          duplicatesCount: duplicateChallenges.length
-        }
-      }
-    });
 
     // Prepare response message
     let message = `Successfully installed ${createdChallenges.length} challenges from module "${challengeModule.moduleName}"`;
-    
+
     // Add warning about duplicates if any were found
     if (duplicateChallenges.length > 0) {
       message += `. ${duplicateChallenges.length} challenge(s) were skipped because they already exist.`;

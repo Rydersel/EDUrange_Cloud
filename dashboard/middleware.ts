@@ -4,7 +4,7 @@ import { getToken } from 'next-auth/jwt';
 
 // Get the domain from environment variable or use a default
 // Edge Runtime can access process.env directly but not dotenv.config()
-const CONNECT_SRC_DOMAIN = process.env.CONNECT_SRC_DOMAIN || '*.rydersel.cloud';
+const CONNECT_SRC_DOMAIN = process.env.CONNECT_SRC_DOMAIN || '*.localhost';
 
 // Define protected routes
 const ADMIN_ROUTES = [

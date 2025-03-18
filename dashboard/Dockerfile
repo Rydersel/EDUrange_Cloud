@@ -1,3 +1,5 @@
+# docker buildx build --platform linux/amd64 -t registry.rydersel.cloud/dashboard . --push
+
 FROM node:20-alpine AS base
 
 # Install dependencies only when needed
@@ -24,8 +26,13 @@ ENV PRISMA_CLIENT_ENGINE_TYPE=binary
 # Generate Prisma client
 RUN npx prisma generate
 
-
+# Set Next.js telemetry to disabled
 ENV NEXT_TELEMETRY_DISABLED=1
+
+# Set build-time environment variables directly (minimal set needed just for build)
+ENV NEXTAUTH_SECRET=temporary-build-secret-not-used-in-production
+ENV NEXTAUTH_URL=http://localhost:3000
+ENV DATABASE_URL=postgresql://postgres:postgres@localhost:5432/postgres
 
 # Build the application
 RUN npm run build
@@ -66,6 +73,7 @@ EXPOSE 3000
 
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
+
 
 
 CMD ["node", "server.js"]

@@ -60,7 +60,8 @@ def start_challenge():
             challenge_image=challenge_image,
             yaml_path='templates/web-challenge-template.yaml',
             apps_config=apps_config,
-            competition_id=competition_id
+            competition_id=competition_id,
+
         )
         deployment_name, web_challenge_url, secret_name = web_challenge.create_pod_service_and_ingress()
         # The WebOS URL is different from the web challenge URL
@@ -111,11 +112,21 @@ def list_challenge_pods():
         v1 = client.CoreV1Api()
         pods = v1.list_pod_for_all_namespaces(watch=False)
         challenge_pods = []
+        
+        # Get the domain from the environment variable
+        domain = os.getenv("INGRESS_URL")
+        if not domain:
+            logging.error("INGRESS_URL environment variable is not set. This must be configured by the installer.")
+            domain = ""  # Empty string as fallback, but this should be caught by the installer
+        logging.info(f"Using domain for challenge URLs: {domain}")
 
         for pod in pods.items:  # Probally fine
             if pod.metadata.name.startswith('ctfchal-'):
                 user_id = pod.metadata.labels.get('user', 'unknown')
                 challenge_image = 'unknown'
+                flag_secret_name = None
+                competition_id = pod.metadata.labels.get('competition_id', 'unknown')
+                
                 for container in pod.spec.containers:
                     if container.name == 'challenge-container':
                         challenge_image = container.image
@@ -125,7 +136,7 @@ def list_challenge_pods():
                                 flag_secret_name = env_var.value
                                 break
 
-                challenge_url = f"https://{pod.metadata.name}.{url}"
+                challenge_url = f"https://{pod.metadata.name}.{domain}"
                 creation_time = pod.metadata.creation_timestamp
                 status = get_pod_status_logic(pod)
 
@@ -136,7 +147,8 @@ def list_challenge_pods():
                     "challenge_url": challenge_url,
                     "flag_secret_name": flag_secret_name,
                     "creation_time": creation_time,
-                    "status": status
+                    "status": status,
+                    "competition_id": competition_id
                 })
 
         return jsonify({"challenge_pods": challenge_pods}), 200

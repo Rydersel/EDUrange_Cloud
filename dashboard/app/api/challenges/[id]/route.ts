@@ -12,6 +12,11 @@ export async function GET(req: Request, props: { params: Promise<{ id: string }>
       return new NextResponse('Unauthorized', { status: 401 });
     }
 
+    // Check if the challenge ID is valid
+    if (!params.id) {
+      return NextResponse.json({ error: 'Challenge ID is required' }, { status: 400 });
+    }
+
     const challenge = await prisma.challenges.findUnique({
       where: { id: params.id },
       include: {
@@ -21,39 +26,44 @@ export async function GET(req: Request, props: { params: Promise<{ id: string }>
     });
 
     if (!challenge) {
-      return new NextResponse('Challenge not found', { status: 404 });
+      return NextResponse.json({ error: 'Challenge not found' }, { status: 404 });
     }
 
     // Log challenge start event
-    await ActivityLogger.logChallengeEvent(
-      ActivityEventType.CHALLENGE_STARTED,
-      session.user.id,
-      challenge.id,
-      undefined,
-      {
-        challengeName: challenge.name,
-        challengeType: challenge.challengeType.name,
-        startTime: new Date().toISOString()
-      }
-    );
+    try {
+      await ActivityLogger.logChallengeEvent(
+        ActivityEventType.CHALLENGE_STARTED,
+        session.user.id,
+        challenge.id,
+        undefined,
+        {
+          challengeName: challenge.name,
+          challengeType: challenge.challengeType.name,
+          startTime: new Date().toISOString()
+        }
+      );
 
-    // Log challenge instance creation
-    await ActivityLogger.logChallengeEvent(
-      ActivityEventType.CHALLENGE_INSTANCE_CREATED,
-      session.user.id,
-      params.id,
-      undefined,
-      {
-        competitionId: undefined,
-        challengeImage: challenge.challengeImage,
-        challengeUrl: undefined,
-        creationTime: new Date().toISOString()
-      }
-    );
+      // Log challenge instance creation
+      await ActivityLogger.logChallengeEvent(
+        ActivityEventType.CHALLENGE_INSTANCE_CREATED,
+        session.user.id,
+        params.id,
+        undefined,
+        {
+          competitionId: undefined,
+          challengeImage: challenge.challengeImage,
+          challengeUrl: undefined,
+          creationTime: new Date().toISOString()
+        }
+      );
+    } catch (logError) {
+      console.error('Error logging challenge events:', logError);
+      // Continue even if logging fails
+    }
 
     return NextResponse.json(challenge);
   } catch (error) {
     console.error('Error fetching challenge:', error);
-    return new NextResponse('Internal Server Error', { status: 500 });
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 } 

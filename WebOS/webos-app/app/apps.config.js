@@ -14,9 +14,19 @@ const fetchConfig = async () => {
     if (!response.ok) {
       throw new Error('Failed to fetch config');
     }
-    const config = await response.json();
-    console.log(config)
-    return config;
+    const data = await response.json();
+    console.log('Fetched app config:', data);
+    
+    // Check if data is an object and has the apps property
+    if (data && typeof data === 'object' && Array.isArray(data.apps)) {
+      return data.apps;
+    } else if (Array.isArray(data)) {
+      // For backward compatibility, if data is already an array
+      return data;
+    } else {
+      console.error("Unexpected response format:", data);
+      return [];
+    }
   } catch (error) {
     console.error("Failed to fetch apps config:", error);
     return [];

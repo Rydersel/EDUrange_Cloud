@@ -123,9 +123,10 @@ const defaultApps = [
 ];
 
 export default function CreateChallengePage() {
+
   const router = useRouter();
   const { toast } = useToast();
-  
+
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [type, setType] = useState("");
@@ -239,7 +240,7 @@ export default function CreateChallengePage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     try {
       const enabledApps = apps.filter(app => !app.disabled);
       const response = await fetch("/api/challenges", {
@@ -590,4 +591,4 @@ export default function CreateChallengePage() {
       </Tabs>
     </form>
   );
-} 
+}

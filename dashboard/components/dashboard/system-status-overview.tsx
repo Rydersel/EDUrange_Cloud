@@ -53,7 +53,14 @@ export function SystemStatusOverview() {
         }
         
         const result = await response.json();
-        setData(result);
+        
+        // Check if the result is an array of data points
+        if (Array.isArray(result)) {
+          setData(result);
+        } else {
+          console.error('Unexpected data format:', result);
+          throw new Error('Unexpected data format');
+        }
       } catch (err) {
         console.error('Error fetching system status data:', err);
         setError('Failed to load system status data');
@@ -81,19 +88,11 @@ export function SystemStatusOverview() {
       const time = new Date(now.getTime() - i * 3600000);
       const timeStr = `${time.getHours()}:00`;
       
-      // Generate random status values (0-100)
-      const ingressHealth = Math.min(100, Math.max(0, 90 + Math.floor(Math.random() * 20) - 10));
-      const dbApiHealth = Math.min(100, Math.max(0, 95 + Math.floor(Math.random() * 15) - 7));
-      const dbSyncHealth = Math.min(100, Math.max(0, 85 + Math.floor(Math.random() * 30) - 15));
-      
-      // Simulate a sync issue around the middle of the timeline
-      const syncIssue = i >= 10 && i <= 14;
-      
       data.push({
         time: timeStr,
-        ingressHealth: ingressHealth,
-        dbApiHealth: dbApiHealth,
-        dbSyncHealth: syncIssue ? dbSyncHealth * 0.6 : dbSyncHealth,
+        ingressHealth: 0,
+        dbApiHealth: 0,
+        dbSyncHealth: 0,
       });
     }
     

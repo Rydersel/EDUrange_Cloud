@@ -7,6 +7,7 @@ import rateLimit from '@/lib/rate-limit';
 import { z } from 'zod';
 import { validateAndSanitize, validationSchemas } from '@/lib/validation';
 import { ChallengeDifficulty } from '@prisma/client';
+import { requireAdmin } from '@/lib/auth-utils';
 
 // Create a rate limiter for operations
 const adminRateLimiter = rateLimit({
@@ -17,7 +18,7 @@ const adminRateLimiter = rateLimit({
 // Define validation schema for challenge module
 const challengeQuestionSchema = z.object({
   content: z.string().min(5, 'Question content must be at least 5 characters'),
-  type: z.enum(['text', 'multiple_choice', 'code']),
+  type: z.enum(['text', 'multiple_choice', 'flag']),
   points: z.number().min(1, 'Points must be at least 1'),
   answer: z.string().optional(),
   options: z.array(z.string()).optional(),
@@ -42,13 +43,14 @@ const appConfigSchema = z.object({
 const difficultyMap: Record<string, ChallengeDifficulty> = {
   'easy': 'EASY',
   'medium': 'MEDIUM',
-  'hard': 'HARD'
+  'hard': 'HARD',
+  'very hard': "VERY_HARD"
 };
 
 const challengeSchema = z.object({
   name: validationSchemas.challengeName,
   description: validationSchemas.challengeDescription,
-  difficulty: z.enum(['easy', 'medium', 'hard']),
+  difficulty: z.enum(['EASY', 'MEDIUM', 'HARD', 'VERY HARD']),
   challengeType: z.string().optional(),
   challengeImage: z.string().optional(),
   questions: z.array(challengeQuestionSchema).min(1, 'At least one question is required'),
@@ -65,41 +67,49 @@ export async function POST(req: NextRequest) {
     // Apply rate limiting
     const rateLimitResult = await adminRateLimiter.check(req);
     if (rateLimitResult) return rateLimitResult;
-    
-    // Check authentication and authorization
+
+    // Check if user is admin using the utility function
+    const adminCheckResult = await requireAdmin(req);
+    if (adminCheckResult) return adminCheckResult;
+
+    // Get session for activity logging
     const session = await getServerSession(authConfig);
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    // Check if user is admin
-    const user = await prisma.user.findUnique({
-      where: { id: session.user.id },
-      select: { role: true }
-    });
-
-    if (!user || user.role !== 'ADMIN') {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
 
     // Parse the request body
     const data = await req.json();
-    
+
     // Validate and sanitize input
     const validationResult = validateAndSanitize(challengeModuleSchema, data);
-    
+
     if (!validationResult.success) {
-      return NextResponse.json({ 
-        success: false, 
-        error: validationResult.error 
+      return NextResponse.json({
+        success: false,
+        error: validationResult.error
       }, { status: 400 });
     }
-    
+
     const challengeModule = validationResult.data;
 
     // Create each challenge in the module
     const createdChallenges = [];
+    const duplicateChallenges = [];
+
     for (const challengeData of challengeModule.challenges) {
+      // Check if challenge with the same name already exists
+      const existingChallenge = await prisma.challenges.findFirst({
+        where: {
+          name: challengeData.name
+        }
+      });
+
+      if (existingChallenge) {
+        // Skip this challenge and add to duplicates list
+        duplicateChallenges.push({
+          name: challengeData.name
+        });
+        continue;
+      }
+
       // Find or create the challenge type
       let challengeType = await prisma.challengeType.findFirst({
         where: {
@@ -168,33 +178,29 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // Log the activity
-    await prisma.activityLog.create({
-      data: {
-        eventType: 'SYSTEM_ERROR',
-        severity: 'INFO',
-        userId: session.user.id,
-        metadata: {
-          action: 'CHALLENGE_MODULE_INSTALLED',
-          moduleName: challengeModule.moduleName,
-          challengesCount: createdChallenges.length
-        }
-      }
-    });
+
+    // Prepare response message
+    let message = `Successfully installed ${createdChallenges.length} challenges from module "${challengeModule.moduleName}"`;
+
+    // Add warning about duplicates if any were found
+    if (duplicateChallenges.length > 0) {
+      message += `. ${duplicateChallenges.length} challenge(s) were skipped because they already exist.`;
+    }
 
     return NextResponse.json({
       success: true,
-      message: `Successfully installed ${createdChallenges.length} challenges from module "${challengeModule.moduleName}"`,
-      challenges: createdChallenges
+      message,
+      challenges: createdChallenges,
+      duplicates: duplicateChallenges
     });
   } catch (error) {
     console.error('Error installing challenge module:', error);
     if (error instanceof z.ZodError) {
-      return NextResponse.json({ 
-        success: false, 
-        errors: error.errors 
+      return NextResponse.json({
+        success: false,
+        errors: error.errors
       }, { status: 400 });
     }
     return NextResponse.json({ error: 'Failed to install challenge module' }, { status: 500 });
   }
-} 
+}

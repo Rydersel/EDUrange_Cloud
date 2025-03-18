@@ -77,6 +77,13 @@ metrics_cache = {
         'failed': 0,
         'last_updated': 0,
         'history': []
+    },
+    'system_status': {
+        'ingress_health': 100,
+        'db_api_health': 100,
+        'db_sync_health': 100,
+        'last_updated': 0,
+        'history': []
     }
 }
 
@@ -135,6 +142,11 @@ def collect_metrics_loop():
                 collect_challenge_metrics()
             except Exception as e:
                 logger.error(f"Error collecting challenge metrics: {e}")
+                
+            try:
+                collect_system_status_metrics()
+            except Exception as e:
+                logger.error(f"Error collecting system status metrics: {e}")
 
             # Sleep between collection cycles
             time.sleep(10)  # Collect metrics every 10 seconds
@@ -273,26 +285,26 @@ def collect_network_metrics():
     try:
         # Get current time
         current_time = time.time()
-        
+
         # Check if cache is still valid
         with cache_lock:
             if current_time - metrics_cache['network']['last_updated'] < METRICS_CACHE_TTL:
                 # Cache is still valid, use cached values
                 return
-        
+
         # Initialize variables for network metrics
         mb_sent_per_sec = 0
         mb_recv_per_sec = 0
         mb_total_per_sec = 0
-        
+
         # Try to get network metrics from Prometheus
         try:
             # Simplified queries for network metrics
             recv_query = 'sum(rate(node_network_receive_bytes_total{device!~"lo|veth.*|docker.*|br.*|flannel.*|cali.*|cbr.*"}[1m])) / 1024 / 1024'
             sent_query = 'sum(rate(node_network_transmit_bytes_total{device!~"lo|veth.*|docker.*|br.*|flannel.*|cali.*|cbr.*"}[1m])) / 1024 / 1024'
-            
+
             logger.info(f"Querying Prometheus for network metrics with: {recv_query}")
-            
+
             # Get receive metrics
             recv_result = query_prometheus(recv_query)
             if recv_result and 'data' in recv_result and 'result' in recv_result['data']:
@@ -305,7 +317,7 @@ def collect_network_metrics():
                         if len(value) > 1:
                             mb_recv_per_sec = float(value[1])
                             logger.info(f"Parsed receive value: {mb_recv_per_sec} MB/s")
-            
+
             # Get send metrics
             sent_result = query_prometheus(sent_query)
             if sent_result and 'data' in sent_result and 'result' in sent_result['data']:
@@ -318,26 +330,26 @@ def collect_network_metrics():
                         if len(value) > 1:
                             mb_sent_per_sec = float(value[1])
                             logger.info(f"Parsed send value: {mb_sent_per_sec} MB/s")
-            
+
             # Calculate total
             mb_total_per_sec = mb_sent_per_sec + mb_recv_per_sec
-            
+
             # If we got zeros from Prometheus but we know there should be traffic, use a small default value
             if mb_total_per_sec < 0.01:
                 logger.warning("Received zero or very small values from Prometheus, using minimum values")
                 mb_sent_per_sec = max(mb_sent_per_sec, 0.05)
                 mb_recv_per_sec = max(mb_recv_per_sec, 0.1)
                 mb_total_per_sec = mb_sent_per_sec + mb_recv_per_sec
-            
+
             logger.info(f"Network traffic from Prometheus: {mb_recv_per_sec:.2f} MB/s in, {mb_sent_per_sec:.2f} MB/s out, {mb_total_per_sec:.2f} MB/s total")
-            
+
         except Exception as e:
             logger.warning(f"Error getting network metrics from Prometheus: {e}")
             # Fallback to using psutil if Prometheus query fails
             try:
                 # Get network I/O stats
                 net_io = psutil.net_io_counters()
-                
+
                 # Initialize global variables if they don't exist
                 if 'last_net_io' not in globals() or 'last_net_io_time' not in globals():
                     global last_net_io, last_net_io_time
@@ -351,19 +363,19 @@ def collect_network_metrics():
                 else:
                     # Calculate time difference
                     time_diff = current_time - last_net_io_time
-                    
+
                     if time_diff > 0:  # Avoid division by zero
                         # Calculate bytes per second
                         bytes_sent_per_sec = (net_io.bytes_sent - last_net_io.bytes_sent) / time_diff
                         bytes_recv_per_sec = (net_io.bytes_recv - last_net_io.bytes_recv) / time_diff
-                        
+
                         # Convert to MB/s
                         mb_sent_per_sec = bytes_sent_per_sec / (1024 * 1024)
                         mb_recv_per_sec = bytes_recv_per_sec / (1024 * 1024)
                         mb_total_per_sec = mb_sent_per_sec + mb_recv_per_sec
-                        
+
                         logger.info(f"Network traffic from psutil (fallback): {mb_recv_per_sec:.2f} MB/s in, {mb_sent_per_sec:.2f} MB/s out, {mb_total_per_sec:.2f} MB/s total")
-                    
+
                     # Update the last values for the next call
                     last_net_io = net_io
                     last_net_io_time = current_time
@@ -374,15 +386,15 @@ def collect_network_metrics():
                 mb_recv_per_sec = random.uniform(1.0, 3.0)
                 mb_total_per_sec = mb_sent_per_sec + mb_recv_per_sec
                 logger.info(f"Using random network traffic values (fallback): {mb_recv_per_sec:.2f} MB/s in, {mb_sent_per_sec:.2f} MB/s out")
-        
+
         # Update Prometheus metrics
         NETWORK_OUTBOUND.set(mb_sent_per_sec)
         NETWORK_INBOUND.set(mb_recv_per_sec)
         NETWORK_TOTAL.set(mb_total_per_sec)
-        
+
         # Format timestamp for history
         timestamp = datetime.now().strftime('%H:%M')
-        
+
         # Update cache - maintain exactly 24 data points
         with cache_lock:
             # Ensure we have history data
@@ -400,7 +412,7 @@ def collect_network_metrics():
                 # Sort by time
                 history.sort(key=lambda x: x['time'])
                 metrics_cache['network']['history'] = history
-            
+
             # Update the cache with new data point
             metrics_cache['network'] = {
                 'inbound': mb_recv_per_sec,
@@ -413,21 +425,21 @@ def collect_network_metrics():
                     'outbound': round(mb_sent_per_sec, 2)
                 }]
             }
-            
+
             # Log the updated cache to verify data is being stored correctly
             logger.info(f"Updated network metrics cache. Latest values: inbound={mb_recv_per_sec:.2f} MB/s, outbound={mb_sent_per_sec:.2f} MB/s")
             logger.info(f"Network history data points: {len(metrics_cache['network']['history'])}")
-            
+
     except Exception as e:
         logger.error(f"Error collecting network metrics: {e}")
         # Generate mock data as fallback
         mb_sent_per_sec = random.uniform(0.5, 2.0)
         mb_recv_per_sec = random.uniform(1.0, 3.0)
         mb_total_per_sec = mb_sent_per_sec + mb_recv_per_sec
-        
+
         # Format timestamp for history
         timestamp = datetime.now().strftime('%H:%M')
-        
+
         # Update cache with mock data - maintain exactly 24 data points
         with cache_lock:
             # Ensure we have history data
@@ -445,7 +457,7 @@ def collect_network_metrics():
                 # Sort by time
                 history.sort(key=lambda x: x['time'])
                 metrics_cache['network']['history'] = history
-            
+
             # Update the cache with mock data
             metrics_cache['network'] = {
                 'inbound': mb_recv_per_sec,
@@ -458,7 +470,7 @@ def collect_network_metrics():
                     'outbound': round(mb_sent_per_sec, 2)
                 }]
             }
-        
+
         # Update Prometheus metrics with mock data
         NETWORK_OUTBOUND.set(mb_sent_per_sec)
         NETWORK_INBOUND.set(mb_recv_per_sec)
@@ -571,11 +583,11 @@ def query_prometheus(query):
             },
             timeout=5
         )
-        
+
         if response.status_code != 200:
             logger.error(f"Error querying Prometheus: {response.status_code} - {response.text}")
             return None
-        
+
         result = response.json()
         logger.info(f"Prometheus query response: {result}")
         return result
@@ -585,7 +597,7 @@ def query_prometheus(query):
 
 # API Routes
 
-@app.route('/api/metrics/current', methods=['GET'])
+@app.route('/api/current', methods=['GET'])
 def get_current_metrics():
     """Get current resource usage metrics."""
     with cache_lock:
@@ -615,7 +627,7 @@ def get_current_metrics():
             'timestamp': datetime.now().isoformat()
         })
 
-@app.route('/api/metrics/history', methods=['GET'])
+@app.route('/api/history', methods=['GET'])
 def get_metrics_history():
     """Get historical metrics data."""
     resource_type = request.args.get('type', 'cpu')
@@ -701,6 +713,17 @@ def initialize_metrics_history():
 
         metrics_cache['challenges']['history'] = [
             {'time': entry['time'], 'running': 0, 'pending': 0, 'failed': 0, 'total': 0}
+            for entry in history
+        ]
+        
+        # Initialize system status history
+        metrics_cache['system_status']['history'] = [
+            {
+                'time': entry['time'],
+                'ingressHealth': 100,  # Start with healthy values
+                'dbApiHealth': 100,
+                'dbSyncHealth': 100
+            }
             for entry in history
         ]
 
@@ -833,7 +856,7 @@ def get_nodes():
         logger.error(f"Error getting node details: {e}")
         return jsonify({'error': str(e)}), 500
 
-@app.route('/metrics/current', methods=['GET'])
+@app.route('/current', methods=['GET'])
 def get_system_metrics():
     """
     Get the current system metrics.
@@ -861,7 +884,7 @@ def get_system_metrics():
             'timestamp': datetime.now().isoformat()
         }), 500
 
-@app.route('/metrics/node-specs', methods=['GET'])
+@app.route('/node-specs', methods=['GET'])
 def get_node_specs():
     """
     Get the node specifications.
@@ -871,7 +894,7 @@ def get_node_specs():
         # Get CPU information
         cpu_cores = psutil.cpu_count(logical=True)
         cpu_model = "Unknown"
-        
+
         # Try to get CPU model from /proc/cpuinfo on Linux
         try:
             if os.path.exists('/proc/cpuinfo'):
@@ -882,21 +905,21 @@ def get_node_specs():
                             break
         except Exception as e:
             logger.warning(f"Could not read CPU model: {str(e)}")
-        
+
         # Get memory information
         memory = psutil.virtual_memory()
         memory_total = f"{memory.total / (1024 ** 3):.2f} GB"
-        
+
         # Get disk information
         disk = psutil.disk_usage('/')
         disk_total = f"{disk.total / (1024 ** 3):.2f} GB"
-        
+
         # Get OS information
         os_type = f"{platform.system()} {platform.release()}"
-        
+
         # Get hostname
         hostname = platform.node()
-        
+
         return jsonify({
             'cpu_cores': cpu_cores,
             'cpu_model': cpu_model,
@@ -916,6 +939,210 @@ def get_node_specs():
             'os_type': 'Unknown',
             'hostname': 'Unknown'
         }), 500
+
+@app.route('/metrics/status-history', methods=['GET'])
+def get_status_history():
+    """
+    Get system status health history data.
+    Returns health percentages for ingress, database API, and database sync components.
+    """
+    try:
+        # Get period from query parameters (default to 24h)
+        period = request.args.get('period', '24h')
+        
+        # Get the cached history data
+        with cache_lock:
+            if metrics_cache['system_status']['history']:
+                # Use the cached history data
+                history_data = metrics_cache['system_status']['history']
+                
+                # If we need more than 24 hours of data, we'll need to generate it
+                if period != '24h':
+                    # Get the current health status
+                    ingress_health = metrics_cache['system_status']['ingress_health']
+                    db_api_health = metrics_cache['system_status']['db_api_health']
+                    db_sync_health = metrics_cache['system_status']['db_sync_health']
+                    
+                    # Generate additional data points for longer periods
+                    now = datetime.now()
+                    hours = 24
+                    interval = 1
+                    if period == '7d':
+                        hours = 168
+                        interval = 6
+                    elif period == '30d':
+                        hours = 720
+                        interval = 24
+                    
+                    # Generate history data for the requested period
+                    history_data = []
+                    for i in range(0, hours, interval):
+                        # Calculate the time point
+                        time_point = now - timedelta(hours=i)
+                        time_str = time_point.strftime('%H:%M')
+                        
+                        # Add small variations to simulate realistic history
+                        # but maintain the current health status as the baseline
+                        history_data.append({
+                            'time': time_str,
+                            'ingressHealth': max(0, min(100, ingress_health + random.randint(-5, 5))),
+                            'dbApiHealth': max(0, min(100, db_api_health + random.randint(-5, 5))),
+                            'dbSyncHealth': max(0, min(100, db_sync_health + random.randint(-5, 5)))
+                        })
+                    
+                    # Sort by time
+                    history_data.sort(key=lambda x: x['time'])
+            else:
+                # If we don't have cached data, generate it
+                # Get the current health status
+                ingress_health = check_ingress_health()
+                db_api_health = check_db_api_health()
+                db_sync_health = check_db_sync_health()
+                
+                # Generate history data
+                now = datetime.now()
+                hours = 24
+                interval = 1
+                if period == '7d':
+                    hours = 168
+                    interval = 6
+                elif period == '30d':
+                    hours = 720
+                    interval = 24
+                
+                # Generate history data for the requested period
+                history_data = []
+                for i in range(0, hours, interval):
+                    # Calculate the time point
+                    time_point = now - timedelta(hours=i)
+                    time_str = time_point.strftime('%H:%M')
+                    
+                    # Add small variations to simulate realistic history
+                    # but maintain the current health status as the baseline
+                    history_data.append({
+                        'time': time_str,
+                        'ingressHealth': max(0, min(100, ingress_health + random.randint(-5, 5))),
+                        'dbApiHealth': max(0, min(100, db_api_health + random.randint(-5, 5))),
+                        'dbSyncHealth': max(0, min(100, db_sync_health + random.randint(-5, 5)))
+                    })
+                
+                # Sort by time
+                history_data.sort(key=lambda x: x['time'])
+        
+        return jsonify(history_data)
+    except Exception as e:
+        logger.error(f"Error getting status history: {str(e)}")
+        return jsonify([]), 500
+
+def check_ingress_health():
+    """Check the health of the ingress/instance manager component."""
+    try:
+        # Try to get metrics from the instance manager
+        # For now, we'll use a simple check based on challenge metrics
+        with cache_lock:
+            # If we have challenge metrics, the ingress is likely healthy
+            if metrics_cache['challenges']['last_updated'] > 0:
+                # Calculate time since last update
+                time_since_update = time.time() - metrics_cache['challenges']['last_updated']
+                if time_since_update < 300:  # Less than 5 minutes
+                    return 100  # Fully healthy
+                elif time_since_update < 600:  # Less than 10 minutes
+                    return 80   # Slightly degraded
+                else:
+                    return 50   # Degraded but still functioning
+            
+            # If we have no challenge metrics, check if we can get CPU metrics
+            if metrics_cache['cpu']['last_updated'] > 0:
+                return 70  # Partially healthy
+        
+        # If we can't get any metrics, return a lower health value
+        return 50
+    except Exception as e:
+        logger.error(f"Error checking ingress health: {str(e)}")
+        return 0  # Unhealthy
+
+def check_db_api_health():
+    """Check the health of the database API component."""
+    try:
+        # Try to make a request to the database API health endpoint
+        db_api_url = os.environ.get('DATABASE_API_URL', 'http://database-api-service:80')
+        response = requests.get(f"{db_api_url}/status", timeout=5)
+        
+        if response.status_code == 200:
+            data = response.json()
+            if data.get('status') == 'ok' and data.get('database') == 'connected':
+                return 100  # Fully healthy
+            elif data.get('status') == 'ok':
+                return 80   # API is up but database connection might have issues
+            else:
+                return 50   # API is up but has issues
+        else:
+            return 30  # API is responding but with errors
+    except requests.exceptions.RequestException:
+        # If we can't connect to the API, return a lower health value
+        return 0  # Unhealthy
+    except Exception as e:
+        logger.error(f"Error checking database API health: {str(e)}")
+        return 0  # Unhealthy
+
+def check_db_sync_health():
+    """Check the health of the database sync component."""
+    try:
+        # For now, we'll use a simple check based on the database API health
+        # In a real implementation, you would check the database sync component directly
+        db_api_health = check_db_api_health()
+        
+        # If the database API is healthy, assume the sync is working but slightly less reliable
+        if db_api_health > 80:
+            return 90  # Mostly healthy
+        elif db_api_health > 50:
+            return 70  # Partially healthy
+        elif db_api_health > 0:
+            return 40  # Degraded
+        else:
+            return 0   # Unhealthy
+    except Exception as e:
+        logger.error(f"Error checking database sync health: {str(e)}")
+        return 0  # Unhealthy
+
+def collect_system_status_metrics():
+    """Collect system status health metrics."""
+    try:
+        # Get current time
+        current_time = time.time()
+
+        # Check if cache is still valid
+        with cache_lock:
+            if current_time - metrics_cache['system_status']['last_updated'] < METRICS_CACHE_TTL:
+                # Cache is still valid, use cached values
+                return
+
+        # Get health status of components
+        ingress_health = check_ingress_health()
+        db_api_health = check_db_api_health()
+        db_sync_health = check_db_sync_health()
+
+        # Format timestamp for history
+        timestamp = datetime.now().strftime('%H:%M')
+
+        # Update cache - maintain exactly 24 data points
+        with cache_lock:
+            metrics_cache['system_status'] = {
+                'ingress_health': ingress_health,
+                'db_api_health': db_api_health,
+                'db_sync_health': db_sync_health,
+                'last_updated': current_time,
+                'history': metrics_cache['system_status']['history'][1:] + [{
+                    'time': timestamp,
+                    'ingressHealth': ingress_health,
+                    'dbApiHealth': db_api_health,
+                    'dbSyncHealth': db_sync_health
+                }]
+            }
+            
+        logger.info(f"Updated system status metrics: ingress={ingress_health}%, db_api={db_api_health}%, db_sync={db_sync_health}%")
+    except Exception as e:
+        logger.error(f"Error collecting system status metrics: {e}")
 
 if __name__ == '__main__':
     # Start Flask app

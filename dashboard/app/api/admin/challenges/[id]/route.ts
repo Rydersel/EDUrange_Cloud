@@ -2,25 +2,17 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import authConfig from '@/auth.config';
 import { prisma } from '@/lib/prisma';
+import { requireAdmin } from '@/lib/auth-utils';
 
 export async function DELETE(req: NextRequest, props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
   try {
-    // Check authentication and authorization
+    // Check if user is admin using the utility function
+    const adminCheckResult = await requireAdmin(req);
+    if (adminCheckResult) return adminCheckResult;
+
+    // Get session for activity logging
     const session = await getServerSession(authConfig);
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    // Check if user is admin
-    const user = await prisma.user.findUnique({
-      where: { id: session.user.id },
-      select: { role: true }
-    });
-
-    if (!user || user.role !== 'ADMIN') {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
 
     const challengeId = params.id;
 
@@ -57,7 +49,7 @@ export async function DELETE(req: NextRequest, props: { params: Promise<{ id: st
       data: {
         eventType: 'SYSTEM_ERROR',
         severity: 'INFO',
-        userId: session.user.id,
+        userId: session?.user?.id || 'unknown',
         metadata: {
           action: 'CHALLENGE_DELETED',
           challengeName: challenge.name,

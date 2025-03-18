@@ -9,6 +9,7 @@ import { UserRole } from '@prisma/client';
 import { ActivityLogger, ActivityEventType } from './lib/activity-logger';
 import { User } from 'next-auth';
 import { prisma } from './lib/prisma';
+import { getDevAuthProvider } from './lib/dev-auth-provider';
 
 declare module 'next-auth' {
   interface Session {
@@ -35,20 +36,60 @@ interface OAuthUser extends User {
   image?: string | null;
 }
 
+// Only include the GitHub provider by default
+const providers = [
+  GithubProvider({
+    clientId: process.env.AUTH_GITHUB_ID ?? '',
+    clientSecret: process.env.AUTH_GITHUB_SECRET ?? '',
+  }),
+];
+
+// Add development login provider in non-production environments
+const devProviders = getDevAuthProvider();
+if (devProviders.length > 0) {
+  // Use type assertion to avoid type errors with different provider types
+  providers.push(...(devProviders as any[]));
+}
+
+// Ensure we have a valid NEXTAUTH_SECRET
+if (!process.env.NEXTAUTH_SECRET) {
+  throw new Error("NEXTAUTH_SECRET is not defined. Please set this environment variable.");
+}
+
 const authConfig: AuthOptions = {
   adapter: PrismaAdapter(prisma) as Adapter,
   session: {
-    strategy: "database",
+    strategy: "jwt",
     maxAge: 30 * 24 * 60 * 60, // 30 days
   },
-  providers: [
-    GithubProvider({
-      clientId: process.env.AUTH_GITHUB_ID ?? '',
-      clientSecret: process.env.AUTH_GITHUB_SECRET ?? '',
-    }),
-  ],
+  providers,
   pages: {
-    signIn: '/' // Sign-in page
+    signIn: '/signin',
+  },
+  secret: process.env.NEXTAUTH_SECRET,
+  jwt: {
+    // Force JWT encoding/decoding to use the secret directly
+    encode: ({ secret, token }) => {
+      if (!token) return "";
+      return require('jsonwebtoken').sign(token, secret);
+    },
+    decode: ({ secret, token }) => {
+      if (!token) return null;
+      
+      const jwt = require('jsonwebtoken');
+      
+      try {
+        // Try to verify the token with the current secret
+        return jwt.verify(token, secret);
+      } catch (error: any) {
+        // Log the error for debugging
+        console.error("JWT verification failed:", error.message);
+        
+        // Return null to force re-authentication
+        // This is safer than trying to use old secrets
+        return null;
+      }
+    }
   },
   cookies: {
     sessionToken: {
@@ -80,13 +121,35 @@ const authConfig: AuthOptions = {
     },
   },
   callbacks: {
-    async redirect({ url, baseUrl }: { url: string; baseUrl: string }) {
-      return url.startsWith(baseUrl) ? '/home' : baseUrl;
+    async jwt({ token, user, account }) {
+      if (user) {
+        token.id = user.id;
+        token.role = user.role;
+      }
+      return token;
     },
-    async session({ session, user }: { session: Session; user: AuthUser & { role: UserRole } }) {
-      if (session.user) {
-        session.user.id = user.id;
-        session.user.role = user.role;
+    async redirect({ url, baseUrl }) {
+      // Redirect to home instead of dashboard
+      if (url.includes('/dashboard')) {
+        return `${baseUrl}/home`;
+      }
+      
+      // Allow relative URLs
+      if (url.startsWith('/')) {
+        return `${baseUrl}${url}`;
+      }
+      
+      // Allow callback URLs on the same origin
+      if (new URL(url).origin === baseUrl) {
+        return url;
+      }
+      
+      return baseUrl;
+    },
+    async session({ session, token }) {
+      if (session.user && token) {
+        session.user.id = token.id as string;
+        session.user.role = token.role as UserRole;
       }
       return session;
     },
@@ -152,7 +215,8 @@ const authConfig: AuthOptions = {
         return false;
       }
     }
-  }
+  },
+  debug: process.env.NODE_ENV !== 'production',
 }
 
 export default authConfig;

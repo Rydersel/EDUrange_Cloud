@@ -23,12 +23,8 @@ export async function GET(req: NextRequest) {
 
     // Check if the requesting user is the same as the userId or is an admin
     if (session.user.id !== userId) {
-      const requestingUser = await prisma.user.findUnique({
-        where: { id: session.user.id },
-        select: { role: true }
-      });
-
-      if (!requestingUser || requestingUser.role !== 'ADMIN') {
+      // Check if user is admin directly from the session
+      if (session.user.role !== 'ADMIN') {
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
       }
     }

@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label';
 import { AppConfigModal } from '@/components/modal/AppConfigModal';
 import { Button } from '@/components/ui/button';
 import { v4 as uuidv4 } from 'uuid';
+import { devLog, errorLog } from '@/lib/logger';
 
 const breadcrumbItems = [
   { title: 'Challenges', link: '/dashboard/challenge' },
@@ -81,10 +82,10 @@ export default function NewChallengeForm({ userId }: NewChallengeFormProps) {
           throw new Error('Failed to fetch challenges');
         }
         const data = await response.json();
-        console.log('Fetched challenges:', data); // Debug log
+        devLog('Fetched challenges:', data); // Debug log
         setChallenges(data);
       } catch (error) {
-        console.error('Error fetching challenges:', error);
+        errorLog('Error fetching challenges:', error);
       }
     }
 
@@ -196,7 +197,7 @@ export default function NewChallengeForm({ userId }: NewChallengeFormProps) {
     setSelectedChallengeId(selectedChallengeId);
     const selectedChallenge = challenges.find(challenge => challenge.id === selectedChallengeId);
     if (selectedChallenge) {
-      console.log('Selected challenge:', selectedChallenge); // Debug log
+      devLog('Selected challenge:', selectedChallenge); // Debug log
       setChallengeType(selectedChallenge.challengeType?.name || '');
       setChallengeImage(selectedChallenge.challengeImage || '');
       

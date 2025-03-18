@@ -18,7 +18,7 @@ spec:
       serviceAccountName: monitoring-service-sa
       containers:
       - name: monitoring-service
-        image: registry.rydersel.cloud/monitoring-service
+        image: ${REGISTRY_URL}/monitoring-service
         imagePullPolicy: Always
         ports:
         - containerPort: 5000
@@ -130,11 +130,10 @@ metadata:
     nginx.ingress.kubernetes.io/use-regex: "true"
     nginx.ingress.kubernetes.io/rewrite-target: /$2
 
-
 spec:
   ingressClassName: nginx
   rules:
-  - host: eductf.rydersel.cloud
+  - host: ${MONITORING_SUBDOMAIN}.${DOMAIN_NAME}
     http:
       paths:
       - path: /metrics(/|$)(.*)
@@ -146,6 +145,6 @@ spec:
               number: 5000
   tls:
     - hosts:
-        - eductf.rydersel.cloud
+        - ${MONITORING_SUBDOMAIN}.${DOMAIN_NAME}
       secretName: wildcard-domain-certificate-prod
 

@@ -13,8 +13,8 @@ export const prisma =
   globalForPrisma.prisma ||
   new PrismaClient({
     log: ['query'],
-    // Set connection pool settings directly in the PrismaClient constructor
-    // instead of modifying the DATABASE_URL
+    // Use the DATABASE_URL directly without modifying it
+    // This will use the default 'public' schema
     datasourceUrl: process.env.DATABASE_URL,
   });
 

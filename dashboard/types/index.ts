@@ -9,6 +9,8 @@ export interface NavItem {
   label?: string;
   description?: string;
   adminOnly?: boolean;
+  target?: string;
+  rel?: string;
 }
 
 export interface NavItemWithChildren extends NavItem {

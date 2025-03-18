@@ -5,6 +5,7 @@ import BreadCrumb from '@/components/breadcrumb';
 import InstanceComponent from './InstanceComponent'; // Import the client component
 import authConfig from '@/auth.config';
 import type { Metadata } from 'next';
+import {requireAdminAccess} from "@/lib/auth-utils";
 
 export const metadata: Metadata = {
   title: 'Challenge Instances | EDUrange Cloud',
@@ -14,8 +15,8 @@ export const metadata: Metadata = {
 const breadcrumbItems = [{ title: 'Challenge Instances', link: '/dashboard/challenge' }];
 
 export default async function ChallengesPage() {
+  await requireAdminAccess()
   const session = await getServerSession(authConfig);
-
   if (!session) {
     redirect('/'); // Redirect to sign-in page if not authenticated
   }

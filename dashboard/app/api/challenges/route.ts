@@ -153,53 +153,69 @@ export async function POST(req: NextRequest) {
       return new NextResponse('Unauthorized', { status: 401 });
     }
 
-    // Check if user is admin
-    const user = await prisma.user.findUnique({
-      where: { id: session.user.id },
-      select: { role: true }
-    });
-
-    if (!user || user.role !== 'ADMIN') {
+    // Check if user is admin directly from the session
+    if (session.user.role !== 'ADMIN') {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    // Parse and validate request body
-    const body = await req.json();
+    // Parse request body
+    let body;
+    try {
+      body = await req.json();
+    } catch (error) {
+      return NextResponse.json({ error: 'Invalid JSON in request body' }, { status: 400 });
+    }
+
+    // Validate request body
     const validationResult = validateAndSanitize(createChallengeSchema, body);
 
     if (!validationResult.success) {
-      return NextResponse.json({ error: validationResult.error }, { status: 400 });
+      return NextResponse.json({ 
+        error: 'Validation failed', 
+        details: validationResult.error 
+      }, { status: 400 });
     }
 
     const { name, description, difficulty, challengeTypeId, challengeImage, questions } = validationResult.data;
 
     // Create the challenge
-    const challenge = await prisma.challenges.create({
-      data: {
-        name,
-        description,
-        difficulty,
-        challengeTypeId,
-        challengeImage,
-        questions: {
-          create: questions.map((q, index) => ({
-            content: q.content,
-            type: q.type,
-            points: q.points,
-            answer: q.answer,
-            options: q.options,
-            order: q.order ?? index + 1 // Use provided order or generate based on index
-          }))
+    try {
+      const challenge = await prisma.challenges.create({
+        data: {
+          name,
+          description,
+          difficulty,
+          challengeTypeId,
+          challengeImage,
+          questions: {
+            create: questions.map((q, index) => ({
+              content: q.content,
+              type: q.type,
+              points: q.points,
+              answer: q.answer,
+              options: q.options,
+              order: q.order ?? index + 1 // Use provided order or generate based on index
+            }))
+          }
+        },
+        include: {
+          questions: true
         }
-      },
-      include: {
-        questions: true
-      }
-    });
+      });
 
-    return NextResponse.json(challenge, { status: 201 });
+      return NextResponse.json(challenge, { status: 201 });
+    } catch (dbError) {
+      console.error('Database error creating challenge:', dbError);
+      return NextResponse.json({ 
+        error: 'Failed to create challenge in database',
+        details: dbError instanceof Error ? dbError.message : 'Unknown error'
+      }, { status: 500 });
+    }
   } catch (error) {
     console.error('Error creating challenge:', error);
-    return NextResponse.json({ error: 'Failed to create challenge' }, { status: 500 });
+    return NextResponse.json({ 
+      error: 'Failed to create challenge',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    }, { status: 500 });
   }
 }

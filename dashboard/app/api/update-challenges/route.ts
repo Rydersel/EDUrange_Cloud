@@ -124,8 +124,16 @@ interface ChallengePod {
 }
 
 export async function POST(req: NextRequest) {
-  const body = await fetchWithRetry(req.url, { method: 'POST', body: req.body });
   try {
+    // Validate cron secret
+    const cronSecret = req.headers.get('x-cron-secret');
+    const validCronSecret = process.env.CRON_SECRET;
+    
+    if (!cronSecret || cronSecret !== validCronSecret) {
+      return NextResponse.json({ error: 'Unauthorized - Invalid or missing cron secret' }, { status: 401 });
+    }
+    
+    const body = await fetchWithRetry(req.url, { method: 'POST', body: req.body });
     await updateChallengeInstances(body.challengePods as ChallengePod[]);
     return NextResponse.json({ message: 'Challenge instances updated successfully' });
   } catch (error) {

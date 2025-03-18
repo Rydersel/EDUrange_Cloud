@@ -8,21 +8,21 @@ const createJestConfig = nextJest({
 
 // Add any custom config to be passed to Jest
 const customJestConfig: Config = {
+  preset: 'jest-puppeteer',
   setupFilesAfterEnv: ['<rootDir>/jest.setup.ts'],
-  testEnvironment: 'node',
+  testEnvironment: 'jest-environment-puppeteer',
   testMatch: [
-    "<rootDir>/tests/**/*.test.ts",
-    "<rootDir>/tests/**/*.test.tsx"
+    '<rootDir>/tests/**/*.test.ts',
+    '<rootDir>/tests/**/*.test.tsx',
+    '<rootDir>/tests/e2e/**/*.test.ts',
   ],
   moduleNameMapper: {
-    // Handle module aliases (if you're using them in tsconfig.json)
     '^@/(.*)$': '<rootDir>/$1',
   },
-  // Add more setup options before each test is run
-  globalSetup: '<rootDir>/tests/global-setup.ts',
-  // Add more teardown options after each test is run
-  globalTeardown: '<rootDir>/tests/global-teardown.ts',
+  transform: {
+    '^.+\\.(ts|tsx)$': ['ts-jest', { tsconfig: 'tsconfig.json' }],
+  },
 };
 
 // createJestConfig is exported this way to ensure that next/jest can load the Next.js config which is async
-export default createJestConfig(customJestConfig); 
+export default createJestConfig(customJestConfig);

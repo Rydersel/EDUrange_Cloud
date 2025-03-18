@@ -5,7 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { User } from "@prisma/client";
 import { transformToWebOSFormat, transformQuestionsToPromptApp } from "@/lib/webos/transform";
 import { ActivityLogger, ActivityEventType } from '@/lib/activity-logger';
-import { getInstanceManagerUrl } from "@/lib/api-config";
+import { getInstanceManagerUrl } from '@/lib/api-config';
 
 export async function POST(req: NextRequest) {
   try {
@@ -14,7 +14,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { challengeId, competitionId } = await req.json();
+    const body = await req.json();
+    const { challengeId, competitionId } = body;
+
+    // Validate required fields
+    if (!challengeId || !competitionId) {
+      return NextResponse.json(
+        { error: "Challenge ID and Competition ID are required" },
+        { status: 400 }
+      );
+    }
 
     // Validate competition membership
     const competition = await prisma.competitionGroup.findFirst({
@@ -91,8 +100,18 @@ export async function POST(req: NextRequest) {
     );
     transformedAppConfigs.push(promptApp);
 
-    // Get the instance manager URL
+    // Get the instance manager URL using the centralized function
     const instanceManagerUrl = getInstanceManagerUrl();
+    
+    if (!instanceManagerUrl) {
+      console.error('Instance manager URL is undefined');
+      return NextResponse.json(
+        { error: 'Instance manager URL is undefined' },
+        { status: 500 }
+      );
+    }
+    
+    console.log("Instance manager URL:", instanceManagerUrl);
     
     // Call instance manager to create challenge
     const instanceManagerPayload = {
@@ -106,81 +125,97 @@ export async function POST(req: NextRequest) {
 
     console.log("Calling instance manager with payload:", instanceManagerPayload);
 
-    const response = await fetch(
-      `${instanceManagerUrl}/start-challenge`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(instanceManagerPayload),
-      }
-    );
+    try {
+      const fullUrl = `${instanceManagerUrl}/start-challenge`;
+      console.log("Full URL for API call:", fullUrl);
+      
+      const response = await fetch(
+        fullUrl,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(instanceManagerPayload),
+        }
+      );
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error("Instance manager error:", {
-        status: response.status,
-        statusText: response.statusText,
-        error: errorText
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error("Instance manager error:", {
+          status: response.status,
+          statusText: response.statusText,
+          error: errorText
+        });
+        throw new Error(`Failed to create challenge instance: ${errorText}`);
+      }
+
+      const instanceData = await response.json();
+      console.log("Instance manager response:", instanceData);
+
+      // Add flag secret name to challenge prompt app
+      if (promptApp.challenge) {
+        promptApp.challenge.flagSecretName = instanceData.flag_secret_name;
+      }
+
+      // Update instance manager with transformed configs including flag secret
+      const updatePayload = {
+        pod_name: instanceData.deployment_name,
+        apps_config: JSON.stringify(transformedAppConfigs),
+      };
+
+      await fetch(
+        `${instanceManagerUrl}/update-challenge`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(updatePayload),
+        }
+      );
+
+      // Create initial challenge instance record
+      const challengeInstance = await prisma.challengeInstance.create({
+        data: {
+          id: instanceData.deployment_name,
+          challengeId: challengeId,
+          userId: session.user.id,
+          competitionId: competitionId,
+          challengeImage: challenge.challengeImage,
+          challengeUrl: instanceData.challenge_url,
+          status: "creating",
+          flagSecretName: instanceData.flag_secret_name || "null",
+          flag: "null", // Let sync service update this
+        },
       });
-      throw new Error(`Failed to create challenge instance: ${errorText}`);
-    }
 
-    const instanceData = await response.json();
-    console.log("Instance manager response:", instanceData);
-
-    // Add flag secret name to challenge prompt app
-    if (promptApp.challenge) {
-      promptApp.challenge.flagSecretName = instanceData.flag_secret_name;
-    }
-
-    // Update instance manager with transformed configs including flag secret
-    const updatePayload = {
-      pod_name: instanceData.deployment_name,
-      apps_config: JSON.stringify(transformedAppConfigs),
-    };
-
-    await fetch(
-      `${instanceManagerUrl}/update-challenge`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(updatePayload),
+      // Log challenge start
+      try {
+        await ActivityLogger.logChallengeEvent(
+          ActivityEventType.CHALLENGE_INSTANCE_CREATED,
+          session.user.id,
+          challengeId,
+          challengeInstance.id,
+          {
+            challengeName: challenge.name,
+            challengeType: challenge.challengeType.name,
+            startTime: new Date().toISOString()
+          }
+        );
+      } catch (logError) {
+        console.error("Error logging challenge start:", logError);
+        // Continue even if logging fails
       }
-    );
 
-    // Create initial challenge instance record
-    const challengeInstance = await prisma.challengeInstance.create({
-      data: {
-        id: instanceData.deployment_name,
-        challengeId: challengeId,
-        userId: session.user.id,
-        competitionId: competitionId,
-        challengeImage: challenge.challengeImage,
-        challengeUrl: instanceData.challenge_url,
-        status: "creating",
-        flagSecretName: instanceData.flag_secret_name || "null",
-        flag: "null", // Let sync service update this
-      },
-    });
-
-    // Log challenge start
-    await ActivityLogger.logChallengeEvent(
-      ActivityEventType.CHALLENGE_INSTANCE_CREATED,
-      session.user.id,
-      challengeId,
-      challengeInstance.id,
-      {
-        challengeName: challenge.name,
-        challengeType: challenge.challengeType.name,
-        startTime: new Date().toISOString()
-      }
-    );
-
-    return NextResponse.json(challengeInstance);
+      return NextResponse.json(challengeInstance);
+    } catch (instanceError) {
+      console.error("Error with instance manager:", instanceError);
+      return NextResponse.json(
+        { error: instanceError instanceof Error ? instanceError.message : "Failed to start challenge" },
+        { status: 500 }
+      );
+    }
   } catch (error) {
     console.error("Error starting challenge:", error);
     return NextResponse.json(

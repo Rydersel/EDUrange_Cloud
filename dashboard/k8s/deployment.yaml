@@ -49,13 +49,17 @@ spec:
           value: "https://database.rydersel.cloud"
         - name: MONITORING_SERVICE_URL
           value: "https://eductf.rydersel.cloud/metrics"
+        - name: CONNECT_SRC_DOMAIN
+          value: "*.rydersel.cloud"
+        - name: NODE_ENV
+          value: "production"
         resources:
           limits:
-            cpu: "1"
-            memory: "1Gi"
-          requests:
             cpu: "500m"
             memory: "512Mi"
+          requests:
+            cpu: "100m"
+            memory: "256Mi"
         readinessProbe:
           httpGet:
             path: /api/health

@@ -1,4 +1,4 @@
- # Dependencies
+# Dependencies
 node_modules
 .pnp
 .pnp.js
@@ -18,10 +18,6 @@ dist
 # Misc
 .DS_Store
 *.pem
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
 
 # Debug
 npm-debug.log*
@@ -29,7 +25,16 @@ yarn-debug.log*
 yarn-error.log*
 
 # Local env files
-.env*.local
+.env
+.env.local
+.env.development
+.env.test
+.env.production
+.env.development.local
+.env.test.local
+.env.production.local
+.env.build
+# No exceptions for env files - all environment variables should be provided at runtime
 
 # Vercel
 .vercel

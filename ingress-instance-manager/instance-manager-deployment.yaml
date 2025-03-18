@@ -16,12 +16,19 @@ spec:
       serviceAccountName: default
       containers:
       - name: instance-manager
-        image: registry.rydersel.cloud/instance-manager-ingress
+        image: ${REGISTRY_URL}/instance-manager-ingress
+        imagePullPolicy: Always
         ports:
         - containerPort: 8000
         env:
           - name: INGRESS_URL
-            value: "rydersel.cloud"
+            value: "${DOMAIN_NAME}"
+          - name: INSTANCE_MANAGER_SUBDOMAIN
+            value: "${INSTANCE_MANAGER_SUBDOMAIN}"
+          - name: DATABASE_SUBDOMAIN
+            value: "${DATABASE_SUBDOMAIN}"
+          - name: REGISTRY_URL
+            value: "${REGISTRY_URL}"
 
 ---
 apiVersion: v1
@@ -42,7 +49,7 @@ spec:
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: instance-manager-ingress
+  name: instance-manager
   namespace: default
   annotations:
     nginx.ingress.kubernetes.io/use-regex: "true"
@@ -52,7 +59,7 @@ metadata:
 spec:
   ingressClassName: nginx
   rules:
-  - host: eductf.rydersel.cloud
+  - host: ${INSTANCE_MANAGER_SUBDOMAIN}.${DOMAIN_NAME}
     http:
       paths:
       - path: /instance-manager(/|$)(.*)
@@ -64,6 +71,6 @@ spec:
               number: 80
   tls:
     - hosts:
-        - eductf.rydersel.cloud
+        - ${INSTANCE_MANAGER_SUBDOMAIN}.${DOMAIN_NAME}
       secretName: wildcard-domain-certificate-prod
 

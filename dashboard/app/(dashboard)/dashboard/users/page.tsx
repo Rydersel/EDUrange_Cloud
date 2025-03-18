@@ -1,15 +1,17 @@
+import { getServerSession } from 'next-auth/next';
+import authConfig from '@/auth.config';
 import { prisma } from '@/lib/prisma';
+import { redirect } from 'next/navigation';
+import { Shield } from 'lucide-react';
+import { Prisma, User } from '@prisma/client';
+import { requireAdminAccess } from '@/lib/auth-utils';
 import BreadCrumb from '@/components/breadcrumb';
 import { columns } from '@/components/tables/user-tables/columns';
 import { UserTable } from '@/components/tables/user-tables/user-table';
 import { Heading } from '@/components/ui/heading';
 import { Separator } from '@/components/ui/separator';
-import { redirect } from 'next/navigation';
-import { getServerSession } from 'next-auth/next';
-import authConfig from '@/auth.config';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Shield } from 'lucide-react';
-import { Prisma, User } from '@prisma/client';
+import { Metadata } from 'next';
 
 const breadcrumbItems = [{ title: 'Users', link: '/dashboard/users' }];
 
@@ -28,32 +30,16 @@ type UserWithRelations = User & {
 
 export default async function Page(props: ParamsProps) {
   const searchParams = await props.searchParams;
+
+  await requireAdminAccess()
+
   const session = await getServerSession(authConfig);
 
   if (!session) {
     redirect('/');
   }
 
-  // Check if user is admin
-  const user = await prisma.user.findUnique({
-    where: { id: session.user.id },
-    select: { role: true }
-  });
-
-  if (!user || user.role !== 'ADMIN') {
-    return (
-      <div className="flex-1 space-y-4 p-4 pt-6 md:p-8">
-        <Alert variant="destructive">
-          <Shield className="h-4 w-4" />
-          <AlertTitle>Access Denied</AlertTitle>
-          <AlertDescription>
-            You do not have permission to view this page. Only administrators can access user management.
-          </AlertDescription>
-        </Alert>
-      </div>
-    );
-  }
-
+  // Fetch users with pagination
   const page = Number(searchParams.page) || 1;
   const pageLimit = Number(searchParams.limit) || 10;
   const search = searchParams.search as string | undefined;
@@ -62,17 +48,17 @@ export default async function Page(props: ParamsProps) {
   // Build the where clause for search with proper types
   const where: Prisma.UserWhereInput = search ? {
     OR: [
-      { 
-        name: { 
-          contains: search, 
+      {
+        name: {
+          contains: search,
           mode: 'insensitive'
-        } 
+        }
       },
-      { 
-        email: { 
-          contains: search, 
+      {
+        email: {
+          contains: search,
           mode: 'insensitive'
-        } 
+        }
       }
     ]
   } : {};

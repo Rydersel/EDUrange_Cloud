@@ -19,6 +19,13 @@ function execute_and_exit_on_failure {
     fi
 }
 
+# Set environment variables for deployment
+export REGISTRY_URL="registry.rydersel.cloud"
+export DOMAIN_NAME="rydersel.cloud"
+export INSTANCE_MANAGER_SUBDOMAIN="eductf"
+export DASHBOARD_SUBDOMAIN="dashboard"
+export DATABASE_SUBDOMAIN="database"
+
 # Create the terminal-account service account if it doesn't exist
 execute_and_continue kubectl create serviceaccount terminal-account -n default
 
@@ -53,13 +60,27 @@ data:
   KUBERNETES_SERVICE_ACCOUNT_TOKEN: "${KUBERNETES_SERVICE_ACCOUNT_TOKEN}"
 EOF
 
+# Create a ConfigMap for WebOS environment variables
+cat <<EOF | kubectl apply -f -
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: webos-environment
+data:
+  DOMAIN_NAME: "${DOMAIN_NAME}"
+  INSTANCE_MANAGER_SUBDOMAIN: "${INSTANCE_MANAGER_SUBDOMAIN}"
+  DATABASE_SUBDOMAIN: "${DATABASE_SUBDOMAIN}"
+  REGISTRY_URL: "${REGISTRY_URL}"
+EOF
+
 execute_and_continue kubectl delete deployment instance-manager
 
 execute_and_continue kubectl delete svc instance-manager
 
-execute_and_exit_on_failure docker buildx build --platform linux/amd64 -t registry.rydersel.cloud/instance-manager-ingress . --push
+execute_and_exit_on_failure docker buildx build --platform linux/amd64 -t ${REGISTRY_URL}/instance-manager . --push
 
-execute_and_exit_on_failure kubectl apply -f instance-manager-deployment.yaml
+# Use envsubst to replace environment variables in the deployment file
+envsubst < instance-manager-deployment.yaml | kubectl apply -f -
 
 execute_and_exit_on_failure kubectl apply -f instance-manager-clusterrole.yaml
 

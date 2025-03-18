@@ -1,4 +1,4 @@
-# docker buildx build --platform linux/amd64,linux/arm64 -t registry.rydersel.cloud/bridge  . --push
+# docker buildx build --platform linux/amd64 -t registry.rydersel.cloud/bridge  . --push
 
 FROM python:3.9-slim
 

@@ -7,7 +7,7 @@ const InvalidPermissionPage = () => {
   const router = useRouter();
 
   const handleReturnHome = () => {
-    router.push('/dashboard');
+    router.push('/home');
   };
 
   return (

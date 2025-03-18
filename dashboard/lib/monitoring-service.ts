@@ -5,16 +5,7 @@
  * for retrieving real-time and historical metrics data.
  */
 
-// Get the monitoring service URL from environment or use default
-export function getMonitoringServiceUrl(): string {
-  // In production, use the external URL from environment variable
-  if (process.env.NODE_ENV === 'production') {
-    return process.env.MONITORING_SERVICE_URL || 'https://eductf.rydersel.cloud/metrics';
-  }
-  
-  // In development, use localhost with port forwarding
-  return process.env.MONITORING_SERVICE_URL || 'http://localhost:5000';
-}
+import { getMonitoringServiceUrl } from './api-config';
 
 /**
  * Fetch current metrics from the monitoring service
@@ -28,7 +19,9 @@ export async function fetchCurrentMetrics() {
       return null;
     }
     
-    const response = await fetch(`${monitoringServiceUrl}/api/metrics/current`, {
+    console.log('Fetching metrics using Monitoring Service URL:', monitoringServiceUrl);
+    
+    const response = await fetch(`${monitoringServiceUrl}/metrics/current`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
@@ -63,7 +56,9 @@ export async function fetchMetricsHistory(type: string, period: string = '24h') 
       return null;
     }
     
-    const response = await fetch(`${monitoringServiceUrl}/api/metrics/history?type=${type}&period=${period}`, {
+    console.log('Fetching metrics history using Monitoring Service URL:', monitoringServiceUrl);
+    
+    const response = await fetch(`${monitoringServiceUrl}/metrics/history?type=${type}&period=${period}`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
@@ -98,40 +93,40 @@ export async function fetchMetricsHistory(type: string, period: string = '24h') 
 }
 
 /**
- * Generate mock metrics data for fallback when the monitoring service is unavailable
+ * Generate default metrics data for fallback when the monitoring service is unavailable
  */
-export function generateMockMetrics() {
+export function generateFallbackMetrics() {
   return {
     cpu: {
-      system: Math.floor(Math.random() * 30) + 10,
-      challenges: Math.floor(Math.random() * 40) + 20,
-      total: Math.floor(Math.random() * 70) + 30,
+      system: 0,
+      challenges: 0,
+      total: 0,
     },
     memory: {
-      used: Math.floor(Math.random() * 40) + 30,
-      available: Math.floor(Math.random() * 30) + 30,
-      total_bytes: 8 * 1024 * 1024 * 1024, // 8 GB
-      used_bytes: (Math.floor(Math.random() * 40) + 30) * 0.08 * 1024 * 1024 * 1024,
+      used: 0,
+      available: 0,
+      total_bytes: 0,
+      used_bytes: 0,
     },
     network: {
-      inbound: Math.random() * 5,
-      outbound: Math.random() * 3,
-      total: Math.random() * 8,
+      inbound: 0,
+      outbound: 0,
+      total: 0,
     },
     challenges: {
-      total: Math.floor(Math.random() * 20) + 10,
-      running: Math.floor(Math.random() * 15) + 5,
-      pending: Math.floor(Math.random() * 5),
-      failed: Math.floor(Math.random() * 3),
+      total: 0,
+      running: 0,
+      pending: 0,
+      failed: 0,
     },
     timestamp: new Date().toISOString(),
   };
 }
 
 /**
- * Generate mock metrics history data for fallback when the monitoring service is unavailable
+ * Generate default metrics history data for fallback when the monitoring service is unavailable
  */
-export function generateMockMetricsHistory(type: string, period: string = '24h') {
+export function generateFallbackMetricsHistory(type: string, period: string = '24h') {
   const now = new Date();
   const data = [];
   const hours = period === '24h' ? 24 : period === '7d' ? 168 : 24;
@@ -144,35 +139,114 @@ export function generateMockMetricsHistory(type: string, period: string = '24h')
     if (type === 'cpu') {
       data.push({
         time: timeStr,
-        system: Math.floor(Math.random() * 30) + 10,
-        challenges: Math.floor(Math.random() * 40) + 20,
+        system: 0,
+        challenges: 0,
       });
     } else if (type === 'memory') {
       data.push({
         time: timeStr,
-        used: Math.floor(Math.random() * 40) + 30,
-        available: 100 - (Math.floor(Math.random() * 40) + 30),
+        used: 0,
+        available: 0,
       });
     } else if (type === 'network') {
       data.push({
         time: timeStr,
-        inbound: Math.floor(Math.random() * 100) + 50,
-        outbound: Math.floor(Math.random() * 80) + 20,
+        inbound: 0,
+        outbound: 0,
       });
     } else if (type === 'challenges') {
       data.push({
         time: timeStr,
-        running: Math.floor(Math.random() * 15) + 5,
-        pending: Math.floor(Math.random() * 5),
-        failed: Math.floor(Math.random() * 3),
-        total: Math.floor(Math.random() * 20) + 10,
+        running: 0,
+        pending: 0,
+        failed: 0,
+        total: 0,
       });
     }
   }
   
-  // Return mock data in the new format with current_time
+  // Return fallback data in the new format with current_time
   return {
     current_time: now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }),
     data: data
   };
+}
+
+/**
+ * Fetch system status health history data from the monitoring service
+ * 
+ * @param period - The time period to fetch (24h, 7d, etc.)
+ */
+export async function fetchSystemStatusHistory(period: string = '24h') {
+  try {
+    const monitoringServiceUrl = getMonitoringServiceUrl();
+    
+    if (!monitoringServiceUrl) {
+      console.error('Monitoring service URL is undefined');
+      return null;
+    }
+    
+    console.log('Fetching system status history using Monitoring Service URL:', monitoringServiceUrl);
+    
+    const response = await fetch(`${monitoringServiceUrl}/metrics/status-history?period=${period}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      cache: 'no-store',
+      next: { revalidate: 60 }, // Revalidate every minute for historical data
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch system status history: ${response.statusText}`);
+    }
+    
+    const result = await response.json();
+    
+    // Handle the response format
+    if (result && result.data && Array.isArray(result.data)) {
+      return result.data;
+    } else if (Array.isArray(result)) {
+      return result;
+    }
+    
+    return null;
+  } catch (error) {
+    console.error(`Error fetching system status history from monitoring service:`, error);
+    return null;
+  }
+}
+
+/**
+ * Generate default system status health history data for fallback
+ */
+export function generateFallbackSystemStatusHistory(period: string = '24h') {
+  const now = new Date();
+  const data = [];
+  const hours = period === '24h' ? 24 : period === '7d' ? 168 : 24;
+  const interval = period === '24h' ? 1 : period === '7d' ? 6 : 1;
+  
+  // Generate random but realistic health values
+  let ingressHealth = 95 + Math.random() * 5; // Start with high health (95-100%)
+  let dbApiHealth = 90 + Math.random() * 10; // Start with high health (90-100%)
+  let dbSyncHealth = 85 + Math.random() * 15; // Start with high health (85-100%)
+  
+  for (let i = hours; i >= 0; i -= interval) {
+    const time = new Date(now.getTime() - i * 3600000);
+    const timeStr = `${time.getHours()}:00`;
+    
+    // Add small random variations to simulate realistic health fluctuations
+    ingressHealth = Math.min(100, Math.max(70, ingressHealth + (Math.random() * 6 - 3)));
+    dbApiHealth = Math.min(100, Math.max(60, dbApiHealth + (Math.random() * 8 - 4)));
+    dbSyncHealth = Math.min(100, Math.max(50, dbSyncHealth + (Math.random() * 10 - 5)));
+    
+    data.push({
+      time: timeStr,
+      ingressHealth: Math.round(ingressHealth),
+      dbApiHealth: Math.round(dbApiHealth),
+      dbSyncHealth: Math.round(dbSyncHealth),
+    });
+  }
+  
+  return data;
 } 

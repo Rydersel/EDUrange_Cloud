@@ -138,6 +138,15 @@ export const navItems: NavItem[] = [
     icon: 'circuit',
     label: 'logs',
     adminOnly: true
+  },
+   {
+    title: 'Docs',
+    href: process.env.DOCS_URL,
+    icon: 'help',
+    label: 'docs',
+    adminOnly: true,
+    target: '_blank',
+    rel: 'noopener noreferrer'
   }
 ];
 

@@ -1,0 +1,96 @@
+# EDURange Cloud .gitignore
+
+# Documentation directory
+/docs/
+docs/
+
+# Node.js dependencies and build artifacts
+node_modules/
+dist/
+build/
+.next/
+out/
+npm-debug.log
+yarn-debug.log
+yarn-error.log
+.pnpm-debug.log
+
+# Python build artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+build/
+develop-eggs/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Environment and sensitive files
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+*.pem
+*.key
+*.cert
+*.crt
+*-secrets.yaml
+*credentials*.json
+*secret*.json
+*secrets*.json
+*_secrets*.json
+
+# Database files
+*.sqlite
+*.sqlite3
+*.db
+
+# Build results and temporary files
+/tmp/
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+.cursor/
+.cursorrules
+logs/
+*.log
+
+# Kubernetes & Docker temporary files
+kubeconfig
+docker-compose.override.yml
+
+# Generated files
+/dev-scripts/converted_config.json
+
+# Installer build artifacts
+/edurange-installer/dist/
+/edurange-installer/src/renderer/build/
+
+# Registry specific
+image-registry/storage/
+
+.idea
+.env.local
+.env
+changes.txt
+bundle.js
+package-lock.json
+postgres-configmap.yaml
+migrations/

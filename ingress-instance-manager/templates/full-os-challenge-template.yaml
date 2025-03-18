@@ -28,6 +28,7 @@ spec:
       value: "challenge-container"
   - name: webos
     image: registry.rydersel.cloud/webos
+    imagePullPolicy: Always
     ports:
     - containerPort: 3000
       name: webos-http
@@ -44,8 +45,13 @@ spec:
       value: "https://terminal-$(POD_NAME).$(INGRESS_URL)"
     - name: NEXT_PUBLIC_CHALLENGE_URL
       value: "https://$(POD_NAME).$(INGRESS_URL)"
+    - name: DATABASE_API_URL
+      value: "http://database-api-service.default.svc.cluster.local"
+    - name: INSTANCE_MANAGER_URL
+      value: "http://instance-manager.default.svc.cluster.local/api"
   - name: terminal
     image: registry.rydersel.cloud/terminal
+    imagePullPolicy: Always
     ports:
     - containerPort: 3001
       name: terminal-http
@@ -85,6 +91,13 @@ metadata:
   name: challenge-ingress
   annotations:
     nginx.ingress.kubernetes.io/use-regex: "true"
+    # WebSocket support annotations
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-buffer-size: "8k"
+    nginx.ingress.kubernetes.io/proxy-buffers-number: "4"
+    nginx.ingress.kubernetes.io/websocket-services: "challenge-service"
   #  cert-manager.io/cluster-issuer: "cert-clusterissuer"  # Use the correct cluster issuer
 spec:
   ingressClassName: nginx

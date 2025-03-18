@@ -18,7 +18,6 @@ import {
   SelectValue
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
@@ -346,7 +345,7 @@ export default function CreateCompetitionPage() {
 
       const data = await response.json();
       setCreatedCompetitionId(data.groupId);
-      
+
       // If generateAccessCode was true, show the dialog with the code
       if (form.generateAccessCode && data.accessCode) {
         setAccessCode(data.accessCode);

@@ -6,25 +6,25 @@
 @layer base {
 
 :root  {
-  --background: 143.8 54% 95%;
-  --foreground: 143.8 5% 7%;
-  --card: 143.8 50% 90%;
-  --card-foreground: 143.8 5% 10%;
-  --popover: 143.8 54% 95%;
-  --popover-foreground: 143.8 95% 7%;
-  --primary: 143.8 61.2% 20.2%;
+  --background: 0 0% 100%;
+  --foreground: 222.2 84% 4.9%;
+  --card: 0 0% 98%;
+  --card-foreground: 222.2 84% 4.9%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 222.2 84% 4.9%;
+  --primary: 143.8 61.2% 25.2%;
   --primary-foreground: 0 0% 100%;
-  --secondary: 143.8 30% 70%;
-  --secondary-foreground: 0 0% 0%;
-  --muted: 105.80000000000001 30% 85%;
-  --muted-foreground: 143.8 5% 35%;
-  --accent: 105.80000000000001 30% 80%;
-  --accent-foreground: 143.8 5% 10%;
-  --destructive: 0 54% 30%;
-  --destructive-foreground: 143.8 5% 90%;
-  --border: 143.8 30% 50%;
-  --input: 143.8 30% 18%;
-  --ring: 143.8 61.2% 20.2%;
+  --secondary: 220 14.3% 95.9%;
+  --secondary-foreground: 222.2 47.4% 11.2%;
+  --muted: 220 14.3% 95.9%;
+  --muted-foreground: 220 8.9% 30%;
+  --accent: 220 14.3% 95.9%;
+  --accent-foreground: 222.2 47.4% 11.2%;
+  --destructive: 0 84.2% 60.2%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 220 13% 91%;
+  --input: 220 13% 91%;
+  --ring: 143.8 61.2% 25.2%;
   --radius: 0.5rem;
 }
 .dark  {
@@ -71,4 +71,41 @@
     height: 100vh; /* Fallback */
     height: 100dvh;
   }
+}
+
+/* Fix for grey text in light mode */
+@media (prefers-color-scheme: light) {
+  .text-gray-300 {
+    color: rgb(55, 65, 81) !important; /* Darker grey for light mode */
+  }
+  .text-gray-400 {
+    color: rgb(31, 41, 55) !important; /* Darker grey for light mode */
+  }
+  
+  /* Specific fix for card text on home page */
+  .group p.text-gray-400 {
+    color: rgb(31, 41, 55) !important; /* Ensure card text is dark in light mode */
+  }
+}
+
+/* Ensure text remains light in dark mode */
+.dark .text-gray-300 {
+  color: rgb(209, 213, 219) !important; /* Light grey for dark mode */
+}
+.dark .text-gray-400 {
+  color: rgb(156, 163, 175) !important; /* Light grey for dark mode */
+}
+.dark .group p.text-gray-400 {
+  color: rgb(156, 163, 175) !important; /* Ensure card text is light in dark mode */
+}
+
+/* Next-themes specific fixes */
+:root[class~="light"] .text-gray-300 {
+  color: rgb(55, 65, 81) !important;
+}
+:root[class~="light"] .text-gray-400 {
+  color: rgb(31, 41, 55) !important;
+}
+:root[class~="light"] .group p.text-gray-400 {
+  color: rgb(31, 41, 55) !important;
 }

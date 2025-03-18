@@ -25,8 +25,13 @@ export async function POST(req: NextRequest) {
     const rateLimitResult = await joinRateLimiter.check(req);
     if (rateLimitResult) return rateLimitResult;
     
+    // Get user session - log session data for debugging
     const session = await getServerSession(authOptions);
-    if (!session?.user) {
+    console.log('Session data for join request:', JSON.stringify(session, null, 2));
+    
+    // Check if user is authenticated
+    if (!session || !session.user || !session.user.id) {
+      console.error('Unauthorized access attempt - missing session or user data');
       return new NextResponse('Unauthorized', { status: 401 });
     }
 
@@ -44,7 +49,8 @@ export async function POST(req: NextRequest) {
     
     const { code } = validationResult.data;
 
-    // Find valid access code
+    // Find valid access code - only check if the code exists and is not expired
+    // No role-based filtering to ensure all users can join with valid codes
     const accessCode = await prisma.competitionAccessCode.findFirst({
       where: {
         code,

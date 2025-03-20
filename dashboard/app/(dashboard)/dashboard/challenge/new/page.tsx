@@ -4,24 +4,30 @@ import { prisma } from '@/lib/prisma';
 import BreadCrumb from '@/components/breadcrumb';
 import NewChallengeForm from '@/components/forms/NewChallengeForm'; // Import the client component
 import authConfig from '@/auth.config';
-import {requireAdminAccess} from "@/lib/auth-utils";
+import { requireAdminAccess } from "@/lib/auth-utils";
+
 const breadcrumbItems = [
   { title: 'Challenges', link: '/dashboard/challenge' },
   { title: 'Create', link: '/dashboard/challenge/new' }
 ];
 
 export default async function NewChallengePage() {
-  const session = await getServerSession(authConfig);
+  // Verify admin access, redirects automatically if not an admin
+  await requireAdminAccess();
 
-  if (!session) {
+  // Get session for user info
+  const session = await getServerSession(authConfig);
+  if (!session?.user) {
     redirect('/'); // Redirect to sign-in page if not authenticated
   }
 
-  // @ts-ignore
-  const user = await prisma.user.findUnique({ where: { email: session.user.email } });
+  // Get user ID to pass to the form
+  const user = await prisma.user.findUnique({ 
+    where: { email: session.user.email as string }
+  });
 
-  if (!user  || !user.role.includes('ADMIN')) {
-    redirect('/invalid-permission'); // Redirect if not admin
+  if (!user) {
+    redirect('/'); // Redirect if user not found
   }
 
   return (

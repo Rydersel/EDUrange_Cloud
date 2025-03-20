@@ -59,3 +59,35 @@ export async function requireAdminAccess() {
 
   return user;
 }
+
+/**
+ * Standardized error response creator
+ * @param message Error message
+ * @param status HTTP status code
+ * @returns NextResponse with error message and status
+ */
+export function createErrorResponse(message: string, status: number = 403) {
+  return NextResponse.json({ error: message }, { status });
+}
+
+/**
+ * Used in API routes to require a valid user session
+ * @returns Object containing session, authorized status, and error response if not authorized
+ */
+export async function requireUser() {
+  const session = await getServerSession(authOptions);
+
+  if (!session?.user) {
+    return {
+      session: null,
+      authorized: false,
+      error: createErrorResponse('Unauthorized', 401)
+    };
+  }
+
+  return {
+    session,
+    authorized: true,
+    error: null
+  };
+}

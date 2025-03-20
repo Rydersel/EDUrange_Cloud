@@ -3,14 +3,17 @@ import { NavItem } from '@/types';
 export type Challenge = {
   id: string;
   user_id: string;
-  user_email?: string;
-  challenge_id: string;
+  userEmail?: string;
+  challenge_id?: string;
   challenge_image: string;
   challenge_url: string;
   status: string;
-  flag: string;
-  app_config: string;
+  flag?: string;
+  flag_secret_name?: string;
+  app_config?: string;
   time_alive: string;
+  challengeType?: string;
+  groupId?: string | null;
 };
 
 

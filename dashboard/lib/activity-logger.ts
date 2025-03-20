@@ -113,7 +113,8 @@ export class ActivityLogger {
       [ActivityEventType.CHALLENGE_STARTED]: LogSeverity.INFO,
       [ActivityEventType.CHALLENGE_COMPLETED]: LogSeverity.INFO,
       [ActivityEventType.CHALLENGE_INSTANCE_CREATED]: LogSeverity.INFO,
-      [ActivityEventType.CHALLENGE_INSTANCE_DELETED]: LogSeverity.INFO
+      [ActivityEventType.CHALLENGE_INSTANCE_DELETED]: LogSeverity.INFO,
+      [ActivityEventType.CHALLENGE_PACK_INSTALLED]: LogSeverity.INFO
     };
 
     return this.logActivity({
@@ -138,7 +139,8 @@ export class ActivityLogger {
       [ActivityEventType.ACCESS_CODE_GENERATED]: LogSeverity.INFO,
       [ActivityEventType.ACCESS_CODE_EXPIRED]: LogSeverity.WARNING,
       [ActivityEventType.ACCESS_CODE_DELETED]: LogSeverity.WARNING,
-      [ActivityEventType.ACCESS_CODE_USED]: LogSeverity.INFO
+      [ActivityEventType.ACCESS_CODE_USED]: LogSeverity.INFO,
+      [ActivityEventType.ACCESS_CODE_INVALID]: LogSeverity.ERROR,
     };
 
     return this.logActivity({
@@ -148,6 +150,22 @@ export class ActivityLogger {
       groupId,
       severity: severityMap[eventType] || LogSeverity.INFO,
       metadata
+    });
+  }
+
+  // Log invalid access code attempt (no access code ID available)
+  static async logInvalidAccessCode(
+    userId: string,
+    metadata: Record<string, any>
+  ) {
+    return this.logActivity({
+      eventType: ActivityEventType.ACCESS_CODE_INVALID,
+      userId,
+      severity: LogSeverity.ERROR,
+      metadata: {
+        attemptTime: new Date().toISOString(),
+        ...metadata
+      }
     });
   }
 
@@ -273,5 +291,21 @@ export class ActivityLogger {
       groupId,
       metadata
     );
+  }
+
+  // Log challenge pack installation
+  static async logChallengePackInstalled(
+    userId: string,
+    metadata: Record<string, any>
+  ) {
+    return this.logActivity({
+      eventType: ActivityEventType.CHALLENGE_PACK_INSTALLED,
+      userId,
+      severity: LogSeverity.INFO,
+      metadata: {
+        installTime: new Date().toISOString(),
+        ...metadata
+      }
+    });
   }
 }

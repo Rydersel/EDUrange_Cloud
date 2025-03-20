@@ -12,7 +12,6 @@ import { Challenge } from '@/constants/data';
 import { Edit, MoreHorizontal, Trash } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useState, MouseEvent } from 'react';
-import { getInstanceManagerUrl } from '@/lib/api-config';
 
 interface CellActionProps {
   data: Challenge;
@@ -23,13 +22,12 @@ export const CellAction: React.FC<CellActionProps> = ({ data, updateChallengeSta
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
   const router = useRouter();
-  const instanceManagerUrl = getInstanceManagerUrl();
 
   const onConfirm = async () => {
     setLoading(true);
     updateChallengeStatus(data.id, 'Completing');
     try {
-      const response = await fetch(`${instanceManagerUrl}/end-challenge`, {
+      const response = await fetch(`/api/instance-manager-proxy?path=end-challenge`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

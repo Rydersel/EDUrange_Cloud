@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import { ActivityLogger, ActivityEventType } from '@/lib/activity-logger';
+import { ActivityLogger, ActivityEventType, LogSeverity } from '@/lib/activity-logger';
 import { z } from 'zod';
 import { validateAndSanitize } from '@/lib/validation';
 import rateLimit from '@/lib/rate-limit';
@@ -65,6 +65,11 @@ export async function POST(req: NextRequest) {
     });
 
     if (!accessCode) {
+      // Log the invalid access code attempt
+      await ActivityLogger.logInvalidAccessCode(session.user.id, {
+        code: code,
+        attemptTimestamp: new Date().toISOString()
+      });
       return new NextResponse('Invalid or expired access code', { status: 400 });
     }
 

@@ -35,6 +35,16 @@ export const getColumns = (
     header: 'CHALLENGE IMAGE'
   },
   {
+    accessorKey: 'challengeType',
+    header: 'CHALLENGE TYPE',
+    cell: ({ row }) => row.original.challengeType || 'Unknown'
+  },
+  {
+    accessorKey: 'groupId',
+    header: 'COMPETITION GROUP',
+    cell: ({ row }) => row.original.groupId || 'N/A'
+  },
+  {
     accessorKey: 'challenge_url',
     header: 'CHALLENGE URL',
     cell: ({ row }) => (

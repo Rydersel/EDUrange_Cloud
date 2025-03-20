@@ -35,9 +35,10 @@ function calcTimeSince(date: Date) {
 }
 interface ChallengesClientProps {
   data: Challenge[];
+  isLoading?: boolean;
 }
 
-export const ChallengesClient: React.FC<ChallengesClientProps> = ({ data }) => {
+export const ChallengesClient: React.FC<ChallengesClientProps> = ({ data, isLoading = false }) => {
   const router = useRouter();
   const [challenges, setChallenges] = useState<Challenge[]>(data);
   const [selectedChallenge, setSelectedChallenge] = useState<Challenge | null>(null);
@@ -179,12 +180,18 @@ export const ChallengesClient: React.FC<ChallengesClientProps> = ({ data }) => {
         </Button>
       </div>
       <Separator />
-      <DataTable
-        searchKey="userEmail"
-        columns={getColumns(updateChallengeStatus)}
-        data={challenges}
-        onRowClick={handleRowClick}
-      />
+      {isLoading ? (
+        <div className="flex items-center justify-center py-10">
+          <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-primary"></div>
+        </div>
+      ) : (
+        <DataTable
+          searchKey="userEmail"
+          columns={getColumns(updateChallengeStatus)}
+          data={challenges}
+          onRowClick={handleRowClick}
+        />
+      )}
       <ChallengeDetailsModal
         challenge={selectedChallenge}
         isOpen={isModalOpen}

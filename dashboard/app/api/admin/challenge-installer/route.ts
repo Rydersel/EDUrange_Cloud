@@ -8,6 +8,7 @@ import { z } from 'zod';
 import { validateAndSanitize, validationSchemas } from '@/lib/validation';
 import { ChallengeDifficulty } from '@prisma/client';
 import { requireAdmin } from '@/lib/auth-utils';
+import { ActivityLogger, ActivityEventType } from '@/lib/activity-logger';
 
 // Create a rate limiter for operations
 const adminRateLimiter = rateLimit({
@@ -185,6 +186,20 @@ export async function POST(req: NextRequest) {
     // Add warning about duplicates if any were found
     if (duplicateChallenges.length > 0) {
       message += `. ${duplicateChallenges.length} challenge(s) were skipped because they already exist.`;
+    }
+
+    // Log the challenge pack installation event
+    if (session?.user?.id && createdChallenges.length > 0) {
+      await ActivityLogger.logChallengePackInstalled(
+        session.user.id,
+        {
+          moduleName: challengeModule.moduleName,
+          challengesInstalled: createdChallenges.map(c => c.name),
+          challengesSkipped: duplicateChallenges.map(c => c.name),
+          totalInstalled: createdChallenges.length,
+          totalSkipped: duplicateChallenges.length
+        }
+      );
     }
 
     return NextResponse.json({

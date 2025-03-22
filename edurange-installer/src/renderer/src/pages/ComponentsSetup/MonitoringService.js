@@ -32,18 +32,317 @@ export const installMonitoringService = async ({
   try {
     addComponentLog('Starting Monitoring Service installation...');
 
-    // Create monitoring namespace if it doesn't exist
-    addComponentLog('Creating monitoring namespace...');
-    await window.api.executeCommand('kubectl', [
-      'create',
+    // Helper function to uninstall any existing Prometheus installations
+    const uninstallExistingPrometheus = async (addComponentLog) => {
+      addComponentLog('Checking for existing Prometheus installations...');
+      
+      // Check for existing Helm releases
+      const listReleasesResult = await window.api.executeCommand('helm', [
+        'list',
+        '-n',
+        'monitoring',
+        '-o',
+        'json'
+      ]).catch(() => ({ code: 1, stdout: '[]' }));
+      
+      if (listReleasesResult.code === 0 && listReleasesResult.stdout) {
+        try {
+          const releases = JSON.parse(listReleasesResult.stdout);
+          const prometheusReleases = releases.filter(release => 
+            release.name.includes('prometheus') || 
+            release.name.includes('kube-prometheus')
+          );
+          
+          if (prometheusReleases.length > 0) {
+            addComponentLog(`Found ${prometheusReleases.length} existing Prometheus installations. Uninstalling...`);
+            
+            for (const release of prometheusReleases) {
+              addComponentLog(`Uninstalling Helm release: ${release.name}`);
+              
+              // Set a timeout for the uninstall operation
+              const timeoutPromise = new Promise((_, reject) => 
+                setTimeout(() => reject(new Error('Helm uninstall timed out after 120 seconds')), 120000)
+              );
+              
+              const uninstallPromise = window.api.executeCommand('helm', [
+                'uninstall',
+                release.name,
+                '-n',
+                'monitoring',
+                '--wait'
+              ]).catch(e => {
+                addComponentLog(`Warning: Uninstall command failed: ${e.message}`);
+                
+                // Try force uninstall if regular uninstall fails
+                return window.api.executeCommand('helm', [
+                  'uninstall',
+                  release.name,
+                  '-n',
+                  'monitoring',
+                  '--no-hooks'
+                ]);
+              });
+              
+              try {
+                await Promise.race([uninstallPromise, timeoutPromise]);
+                addComponentLog(`Successfully uninstalled ${release.name}`);
+              } catch (error) {
+                addComponentLog(`Error uninstalling ${release.name}: ${error.message}`);
+                addComponentLog('Continuing with cleanup anyway...');
+              }
+            }
+          } else {
+            addComponentLog('No existing Prometheus installations found via Helm.');
+          }
+        } catch (error) {
+          addComponentLog(`Error processing Helm releases: ${error.message}`);
+        }
+      }
+      
+      // Also check for any prometheus pods that might exist
+      const prometheusPodsResult = await window.api.executeCommand('kubectl', [
+        'get',
+        'pods',
+        '-n',
+        'monitoring',
+        '-l',
+        'app=prometheus,app=kube-prometheus-stack',
+        '--no-headers'
+      ]).catch(() => ({ code: 1, stdout: '' }));
+      
+      if (prometheusPodsResult.code === 0 && prometheusPodsResult.stdout.trim()) {
+        addComponentLog('Found Prometheus pods. Deleting them...');
+        await window.api.executeCommand('kubectl', [
+          'delete',
+          'pods',
+          '-n',
+          'monitoring',
+          '-l',
+          'app=prometheus,app=kube-prometheus-stack',
+          '--force',
+          '--grace-period=0'
+        ]).catch(e => {
+          addComponentLog(`Warning: Could not delete Prometheus pods: ${e.message}`);
+        });
+      }
+      
+      // Check for any CRDs related to Prometheus
+      addComponentLog('Checking for Prometheus CRDs...');
+      const crdResult = await window.api.executeCommand('kubectl', [
+        'get',
+        'crd',
+        '-o',
+        'name'
+      ]).catch(() => ({ code: 1, stdout: '' }));
+      
+      if (crdResult.code === 0 && crdResult.stdout) {
+        const crdLines = crdResult.stdout.split('\n');
+        const prometheusCRDs = crdLines.filter(crd => 
+          crd.includes('prometheus') || 
+          crd.includes('monitoring.coreos.com')
+        );
+        
+        if (prometheusCRDs.length > 0) {
+          addComponentLog(`Found ${prometheusCRDs.length} Prometheus-related CRDs. Deleting them...`);
+          
+          for (const crd of prometheusCRDs) {
+            if (!crd.trim()) continue;
+            
+            addComponentLog(`Deleting CRD: ${crd}`);
+            await window.api.executeCommand('kubectl', [
+              'delete',
+              crd,
+              '--force',
+              '--grace-period=0'
+            ]).catch(e => {
+              addComponentLog(`Warning: Could not delete CRD ${crd}: ${e.message}`);
+            });
+          }
+        } else {
+          addComponentLog('No Prometheus-related CRDs found.');
+        }
+      }
+      
+      return true;
+    };
+
+    // Before namespace cleanup, uninstall existing Prometheus installations
+    await uninstallExistingPrometheus(addComponentLog);
+
+    // Now continue with namespace cleanup
+    // Check if namespace is in terminating state
+    addComponentLog('Checking if monitoring namespace is in terminating state...');
+    const nsStatusResult = await window.api.executeCommand('kubectl', [
+      'get',
       'namespace',
       'monitoring',
-      '--dry-run=client',
       '-o',
-      'yaml'
-    ]).then(result => {
-      return window.api.applyManifestFromString(result.stdout);
-    });
+      'jsonpath={.status.phase}'
+    ]).catch(() => ({ code: 1, stdout: '' }));
+    
+    if (nsStatusResult.code === 0 && nsStatusResult.stdout === 'Terminating') {
+      addComponentLog('WARNING: Monitoring namespace is in terminating state. Will aggressively clean it up...');
+      
+      // Get all resources in the terminating namespace
+      addComponentLog('Getting all resources in the terminating namespace...');
+      
+      // Use kubectl api-resources to get all resource types
+      const apiResourcesResult = await window.api.executeCommand('kubectl', [
+        'api-resources',
+        '--verbs=list',
+        '--namespaced=true',
+        '-o',
+        'name'
+      ]).catch(() => ({ code: 1, stdout: '' }));
+      
+      if (apiResourcesResult.code === 0 && apiResourcesResult.stdout) {
+        const resourceTypes = apiResourcesResult.stdout.split('\n').filter(rt => 
+          rt && 
+          !rt.includes('events') && 
+          !rt.includes('events.events.k8s.io')
+        );
+        
+        // Get all finalizers in the namespace
+        addComponentLog('Removing finalizers from all resources in the monitoring namespace...');
+        
+        for (const resourceType of resourceTypes) {
+          // Skip resource types that might cause issues
+          if (resourceType.includes('customresourcedefinition') || 
+              resourceType.includes('componentstatuses') ||
+              resourceType.includes('bindings')) {
+            continue;
+          }
+          
+          try {
+            // Get resources of this type
+            const resourcesResult = await window.api.executeCommand('kubectl', [
+              'get',
+              resourceType,
+              '-n',
+              'monitoring',
+              '-o',
+              'json'
+            ]).catch(() => ({ code: 1, stdout: '{}' }));
+            
+            if (resourcesResult.code === 0 && resourcesResult.stdout !== '{}') {
+              try {
+                const resources = JSON.parse(resourcesResult.stdout);
+                
+                if (resources.items && resources.items.length > 0) {
+                  addComponentLog(`Found ${resources.items.length} ${resourceType} resources. Removing finalizers...`);
+                  
+                  for (const resource of resources.items) {
+                    if (resource.metadata && resource.metadata.name) {
+                      const resourceName = resource.metadata.name;
+                      
+                      // Check if it has finalizers
+                      if (resource.metadata.finalizers && resource.metadata.finalizers.length > 0) {
+                        addComponentLog(`Removing finalizers from ${resourceType}/${resourceName}`);
+                        
+                        try {
+                          await window.api.executeCommand('kubectl', [
+                            'patch',
+                            resourceType,
+                            resourceName,
+                            '-n',
+                            'monitoring',
+                            '-p',
+                            '{"metadata":{"finalizers":null}}',
+                            '--type=merge'
+                          ]);
+                        } catch (e) {
+                          addComponentLog(`Note: Could not remove finalizers from ${resourceType}/${resourceName}: ${e.message}`);
+                        }
+                      }
+                      
+                      // Force delete the resource
+                      addComponentLog(`Force deleting ${resourceType}/${resourceName}`);
+                      await window.api.executeCommand('kubectl', [
+                        'delete',
+                        resourceType,
+                        resourceName,
+                        '-n',
+                        'monitoring',
+                        '--force',
+                        '--grace-period=0'
+                      ]).catch(e => {
+                        addComponentLog(`Note: Could not delete ${resourceType}/${resourceName}: ${e.message}`);
+                      });
+                    }
+                  }
+                }
+              } catch (error) {
+                addComponentLog(`Error processing ${resourceType} resources: ${error.message}`);
+              }
+            }
+          } catch (error) {
+            addComponentLog(`Error handling ${resourceType}: ${error.message}`);
+          }
+        }
+      }
+      
+      // Patch to remove finalizers from namespace itself
+      addComponentLog('Removing finalizers from namespace...');
+      await window.api.executeCommand('kubectl', [
+        'patch',
+        'namespace',
+        'monitoring',
+        '-p',
+        '{"metadata":{"finalizers":[]}}',
+        '--type=merge'
+      ]).catch(e => {
+        addComponentLog(`Note: ${e.message}`);
+      });
+      
+      // Try the null approach as well
+      await window.api.executeCommand('kubectl', [
+        'patch',
+        'namespace',
+        'monitoring',
+        '-p',
+        '{"metadata":{"finalizers":null}}',
+        '--type=merge'
+      ]).catch(e => {
+        addComponentLog(`Note: ${e.message}`);
+      });
+      
+      // Wait a bit
+      addComponentLog('Waiting for resources to be cleaned up...');
+      await new Promise(resolve => setTimeout(resolve, 10000));
+      
+      // Check if namespace is still terminating
+      const recheckResult = await window.api.executeCommand('kubectl', [
+        'get',
+        'namespace',
+        'monitoring',
+        '-o',
+        'jsonpath={.status.phase}'
+      ]).catch(() => ({ code: 1, stdout: '' }));
+      
+      if (recheckResult.code === 0 && recheckResult.stdout === 'Terminating') {
+        addComponentLog('WARNING: Namespace is still terminating, but we can continue anyway...');
+        addComponentLog('Will proceed with resource cleanup within the namespace...');
+      } else if (recheckResult.code === 0) {
+        addComponentLog(`Namespace is now in phase: ${recheckResult.stdout}`);
+      } else {
+        addComponentLog('Namespace status check failed, assuming it may be deleted...');
+        
+        // Recreate the namespace if needed
+        addComponentLog('Ensuring monitoring namespace exists...');
+        await window.api.executeCommand('kubectl', [
+          'create', 
+          'namespace', 
+          'monitoring', 
+          '--dry-run=client', 
+          '-o', 
+          'yaml'
+        ]).then(result => {
+          return window.api.applyManifestFromString(result.stdout);
+        }).catch(e => {
+          addComponentLog(`Note: ${e.message}`);
+        });
+      }
+    }
 
     // Check if we're running on a cloud provider with storage limits
     addComponentLog('Checking cloud provider environment...');
@@ -104,6 +403,65 @@ export const installMonitoringService = async ({
     addComponentLog('Checking wildcard certificate...');
     await checkAndUpdateWildcardCertificate();
 
+    // Check for existing PVCs specifically related to prometheus and clean them up first
+    addComponentLog('Checking for existing Prometheus-related PVCs...');
+    const prometheusPvcResult = await window.api.executeCommand('kubectl', [
+      'get',
+      'pvc',
+      '-n',
+      'monitoring',
+      '-o',
+      'json'
+    ]).catch(() => ({ code: 1, stdout: '{}' }));
+
+    if (prometheusPvcResult.code === 0 && prometheusPvcResult.stdout !== '{}') {
+      try {
+        const pvcs = JSON.parse(prometheusPvcResult.stdout).items || [];
+        if (pvcs.length > 0) {
+          addComponentLog(`Found ${pvcs.length} PVCs in monitoring namespace. Cleaning up...`);
+          
+          for (const pvc of pvcs) {
+            const pvcName = pvc.metadata.name;
+            addComponentLog(`Removing finalizers from PVC ${pvcName}...`);
+            
+            // Remove finalizers first
+            await window.api.executeCommand('kubectl', [
+              'patch',
+              'pvc',
+              pvcName,
+              '-n',
+              'monitoring',
+              '-p',
+              '{"metadata":{"finalizers":null}}',
+              '--type=merge'
+            ]).catch(e => {
+              addComponentLog(`Warning: Failed to remove finalizers from PVC ${pvcName}: ${e.message}`);
+            });
+            
+            // Delete the PVC
+            addComponentLog(`Deleting PVC ${pvcName}...`);
+            await window.api.executeCommand('kubectl', [
+              'delete',
+              'pvc',
+              pvcName,
+              '-n',
+              'monitoring',
+              '--force',
+              '--grace-period=0'
+            ]).catch(e => {
+              addComponentLog(`Warning: Failed to delete PVC ${pvcName}: ${e.message}`);
+            });
+          }
+          
+          // Wait for PVCs to be deleted
+          addComponentLog('Waiting for PVCs to be fully deleted...');
+          await new Promise(resolve => setTimeout(resolve, 5000));
+        }
+      } catch (error) {
+        addComponentLog(`Error processing PVCs: ${error.message}`);
+      }
+    }
+
     // Check if Prometheus is already installed and uninstall it
     addComponentLog('Checking for existing Prometheus installation...');
     const helmListResult = await window.api.executeCommand('helm', [
@@ -132,6 +490,8 @@ export const installMonitoringService = async ({
 
     // Check for and delete any Helm release secrets that might be preventing reuse of the name
     addComponentLog('Checking for Helm release secrets...');
+    
+    // First, check if there are any helm release secrets in monitoring namespace
     const helmSecretsResult = await window.api.executeCommand('kubectl', [
       'get',
       'secrets',
@@ -140,20 +500,93 @@ export const installMonitoringService = async ({
       '--field-selector',
       'type=helm.sh/release.v1',
       '-o',
-      'jsonpath={.items[*].metadata.name}'
-    ]);
+      'json'
+    ]).catch(() => ({ code: 1, stdout: '{}' }));
 
-    if (helmSecretsResult.stdout) {
-      const helmSecrets = helmSecretsResult.stdout.split(' ');
+    if (helmSecretsResult.code === 0) {
+      try {
+        const secretsData = JSON.parse(helmSecretsResult.stdout);
+        if (secretsData.items && secretsData.items.length > 0) {
+          const prometheusSecrets = secretsData.items.filter(secret => 
+            secret.metadata.name.includes('prometheus') || 
+            secret.metadata.name.includes('kube-prometheus')
+          );
+          
+          if (prometheusSecrets.length > 0) {
+            addComponentLog(`Found ${prometheusSecrets.length} Helm release secrets. Cleaning up...`);
+            
+            for (const secret of prometheusSecrets) {
+              const secretName = secret.metadata.name;
+              addComponentLog(`Deleting Helm release secret: ${secretName}`);
+              
+              // Patch to remove finalizers first
+              await window.api.executeCommand('kubectl', [
+                'patch',
+                'secret',
+                secretName,
+                '-n',
+                'monitoring',
+                '-p',
+                '{"metadata":{"finalizers":null}}',
+                '--type=merge'
+              ]).catch(e => {
+                addComponentLog(`Warning: Could not remove finalizers from secret ${secretName}: ${e.message}`);
+              });
+              
+              // Now delete the secret
+              await window.api.executeCommand('kubectl', [
+                'delete',
+                'secret',
+                secretName,
+                '-n',
+                'monitoring',
+                '--force',
+                '--grace-period=0'
+              ]).catch(e => {
+                addComponentLog(`Warning: Could not delete secret ${secretName}: ${e.message}`);
+              });
+            }
+            
+            // Wait for secrets to be deleted
+            addComponentLog('Waiting for Helm secrets to be fully deleted...');
+            await new Promise(resolve => setTimeout(resolve, 5000));
+          } else {
+            addComponentLog('No Prometheus-related Helm release secrets found.');
+          }
+        } else {
+          addComponentLog('No Helm release secrets found in monitoring namespace.');
+        }
+      } catch (error) {
+        addComponentLog(`Error processing Helm secrets: ${error.message}`);
+      }
+    }
+    
+    // Check for list.v1 format secrets also
+    const helmSecretsListV1Result = await window.api.executeCommand('kubectl', [
+      'get',
+      'secrets',
+      '-n',
+      'monitoring',
+      '--field-selector',
+      'type=helm.sh/release.v1',
+      '-o',
+      'name'
+    ]).catch(() => ({ code: 1, stdout: '' }));
+    
+    if (helmSecretsListV1Result.code === 0 && helmSecretsListV1Result.stdout) {
+      const helmSecrets = helmSecretsListV1Result.stdout.split(/\s+/).filter(s => s);
       for (const secret of helmSecrets) {
-        if (secret.includes('prometheus')) {
+        if (secret.includes('prometheus') || secret.includes('kube-prometheus')) {
           addComponentLog(`Deleting Helm release secret: ${secret}`);
+          
+          // Force delete without grace period
           await window.api.executeCommand('kubectl', [
             'delete',
-            'secret',
             secret,
             '-n',
-            'monitoring'
+            'monitoring',
+            '--force',
+            '--grace-period=0'
           ]);
         }
       }
@@ -407,30 +840,6 @@ export const installMonitoringService = async ({
       }
     }
 
-    // Install metrics-server
-    addComponentLog('Installing metrics-server...');
-    const metricsServerRepoResult = await window.api.executeCommand('helm', [
-      'repo',
-      'add',
-      'metrics-server',
-      'https://kubernetes-sigs.github.io/metrics-server/'
-    ]);
-
-    if (metricsServerRepoResult.code !== 0) {
-      throw new Error(`Failed to add metrics-server Helm repository: ${metricsServerRepoResult.stderr}`);
-    }
-
-    // Update Helm repositories
-    addComponentLog('Updating Helm repositories...');
-    const helmUpdateForMetricsResult = await window.api.executeCommand('helm', [
-      'repo',
-      'update'
-    ]);
-
-    if (helmUpdateForMetricsResult.code !== 0) {
-      throw new Error(`Failed to update Helm repositories: ${helmUpdateForMetricsResult.stderr}`);
-    }
-
     // Check if metrics-server is already installed
     addComponentLog('Checking if metrics-server is already installed...');
     const metricsServerCheckResult = await window.api.executeCommand('helm', [
@@ -442,33 +851,61 @@ export const installMonitoringService = async ({
       'json'
     ]);
 
-    let metricsServerInstalled = false;
+    // Always uninstall metrics-server to ensure a clean installation
     if (metricsServerCheckResult.stdout && metricsServerCheckResult.stdout.trim() !== '[]') {
-      addComponentLog('metrics-server is already installed.');
-      metricsServerInstalled = true;
-    }
-
-    if (!metricsServerInstalled) {
-      // Install metrics-server
-      addComponentLog('Installing metrics-server...');
-      const metricsServerInstallResult = await window.api.executeCommand('helm', [
-        'install',
+      addComponentLog('Uninstalling existing metrics-server for clean reinstallation...');
+      await window.api.executeCommand('helm', [
+        'uninstall',
         'metrics-server',
-        'metrics-server/metrics-server',
         '--namespace',
-        'kube-system',
-        '--set',
-        'args={--kubelet-insecure-tls}'
-      ]);
-
-      if (metricsServerInstallResult.code !== 0) {
-        throw new Error(`Failed to install metrics-server: ${metricsServerInstallResult.stderr}`);
-      }
-
-      // Wait for metrics-server to be ready
-      addComponentLog('Waiting for metrics-server to be ready...');
-      await new Promise(resolve => setTimeout(resolve, 30000)); // Wait 30 seconds for metrics-server to start
+        'kube-system'
+      ]).catch(e => {
+        addComponentLog(`Warning: Error uninstalling metrics-server: ${e.message}. Will continue anyway.`);
+      });
+      
+      // Wait for uninstallation to complete
+      addComponentLog('Waiting for metrics-server uninstallation to complete...');
+      await new Promise(resolve => setTimeout(resolve, 10000));
     }
+
+    // Always install metrics-server (reinstallation)
+    addComponentLog('Installing metrics-server...');
+    const metricsServerInstallResult = await window.api.executeCommand('helm', [
+      'install',
+      'metrics-server',
+      'metrics-server/metrics-server',
+      '--namespace',
+      'kube-system',
+      '--set',
+      'args={--kubelet-insecure-tls}',
+      '--wait',
+      '--timeout',
+      '180s'
+    ]);
+
+    if (metricsServerInstallResult.code !== 0) {
+      addComponentLog(`Warning: metrics-server installation reported an issue: ${metricsServerInstallResult.stderr}`);
+      addComponentLog('Will continue with installation anyway, but some monitoring features may be limited.');
+    } else {
+      addComponentLog('metrics-server installed successfully.');
+    }
+
+    // Wait for metrics-server to be ready
+    addComponentLog('Waiting for metrics-server deployment to roll out...');
+    await window.api.executeCommand('kubectl', [
+      'rollout',
+      'status',
+      'deployment/metrics-server',
+      '-n',
+      'kube-system',
+      '--timeout=180s'
+    ]).catch(e => {
+      addComponentLog(`Warning: Error waiting for metrics-server rollout: ${e.message}`);
+    });
+
+    // Give metrics-server additional time to initialize and connect to the API
+    addComponentLog('Giving metrics-server time to initialize (30 seconds)...');
+    await new Promise(resolve => setTimeout(resolve, 30000));
 
     // Verify metrics-server is working
     addComponentLog('Verifying metrics-server is working...');
@@ -641,6 +1078,105 @@ export const installMonitoringService = async ({
       }
     }
 
+    // Check one more time if the namespace is in a good state
+    const finalNamespaceCheck = await window.api.executeCommand('kubectl', [
+      'get',
+      'namespace',
+      'monitoring',
+      '-o',
+      'json'
+    ]).catch(() => ({ code: 1, stdout: '{}' }));
+
+    // Instead of deleting the namespace, we'll focus on cleaning up resources within it
+    addComponentLog('Cleaning up resources within the monitoring namespace for clean reinstallation...');
+    
+    // Delete all deployments, statefulsets, daemonsets in the monitoring namespace
+    const namespaceCleanupResourceTypes = [
+      'deployment', 'statefulset', 'daemonset', 'replicaset', 'pod',
+      'configmap', 'secret', 'service', 'serviceaccount', 'rolebinding', 'role'
+    ];
+    
+    for (const resourceType of namespaceCleanupResourceTypes) {
+      addComponentLog(`Removing all ${resourceType}s from monitoring namespace...`);
+      await window.api.executeCommand('kubectl', [
+        'delete',
+        resourceType,
+        '--all',
+        '-n',
+        'monitoring',
+        '--ignore-not-found'
+      ]).catch(e => {
+        addComponentLog(`Note: Could not delete all ${resourceType}s: ${e.message}`);
+      });
+    }
+    
+    // Check for any stuck pods and force delete them
+    addComponentLog('Checking for any stuck pods in monitoring namespace...');
+    const stuckPodsResult = await window.api.executeCommand('kubectl', [
+      'get',
+      'pods',
+      '-n',
+      'monitoring',
+      '-o',
+      'name'
+    ]).catch(() => ({ code: 1, stdout: '' }));
+    
+    if (stuckPodsResult.code === 0 && stuckPodsResult.stdout) {
+      const pods = stuckPodsResult.stdout.split('\n').filter(p => p.trim());
+      
+      if (pods.length > 0) {
+        addComponentLog(`Found ${pods.length} pods still in monitoring namespace. Force deleting...`);
+        
+        for (const pod of pods) {
+          addComponentLog(`Force deleting pod: ${pod}`);
+          await window.api.executeCommand('kubectl', [
+            'delete',
+            pod,
+            '-n',
+            'monitoring',
+            '--force',
+            '--grace-period=0'
+          ]).catch(e => {
+            addComponentLog(`Warning: Could not delete pod ${pod}: ${e.message}`);
+          });
+        }
+      }
+    }
+    
+    // Remove all helm secrets (more reliable than trying to filter by name)
+    addComponentLog('Removing all Helm release secrets from monitoring namespace...');
+    await window.api.executeCommand('kubectl', [
+      'delete',
+      'secret',
+      '--field-selector',
+      'type=helm.sh/release.v1',
+      '-n',
+      'monitoring',
+      '--all',
+      '--ignore-not-found'
+    ]).catch(e => {
+      addComponentLog(`Note: Could not delete Helm secrets: ${e.message}`);
+    });
+    
+    // Wait for resources to be deleted
+    addComponentLog('Waiting for resources to be fully deleted...');
+    await new Promise(resolve => setTimeout(resolve, 5000));
+    
+    // Create the monitoring namespace if it doesn't exist (don't recreate it)
+    addComponentLog('Ensuring monitoring namespace exists...');
+    await window.api.executeCommand('kubectl', [
+      'create', 
+      'namespace', 
+      'monitoring', 
+      '--dry-run=client', 
+      '-o', 
+      'yaml'
+    ]).then(result => {
+      return window.api.applyManifestFromString(result.stdout);
+    }).catch(e => {
+      addComponentLog(`Note: ${e.message}`);
+    });
+
     // Install Prometheus using Helm
     addComponentLog('Installing Prometheus using Helm...');
     const helmAddRepoResult = await window.api.executeCommand('helm', [
@@ -654,6 +1190,7 @@ export const installMonitoringService = async ({
       throw new Error(`Failed to add Prometheus Helm repository: ${helmAddRepoResult.stderr}`);
     }
 
+    addComponentLog('Updating Helm repositories...');
     const helmUpdateResult = await window.api.executeCommand('helm', [
       'repo',
       'update'
@@ -665,6 +1202,12 @@ export const installMonitoringService = async ({
 
     // Create values file for kube-prometheus-stack using a temporary file
     const prometheusValues = `
+global:
+  rbac:
+    create: true
+  securityContext:
+    enabled: false
+
 grafana:
   enabled: true
   adminPassword: edurange
@@ -672,8 +1215,17 @@ grafana:
     type: ClusterIP
   persistence:
     enabled: true${storageClassName ? `\n    storageClassName: ${storageClassName}` : ''}
+  securityContext:
+    runAsUser: 65534
+    runAsGroup: 65534
+    fsGroup: 65534
+
 prometheus:
   prometheusSpec:
+    securityContext:
+      runAsUser: 65534
+      runAsGroup: 65534
+      fsGroup: 65534
     storageSpec:
       volumeClaimTemplate:
         spec:${storageClassName ? `\n          storageClassName: ${storageClassName}` : ''}
@@ -681,8 +1233,13 @@ prometheus:
           resources:
             requests:
               storage: 8Gi
+
 alertmanager:
   alertmanagerSpec:
+    securityContext:
+      runAsUser: 65534
+      runAsGroup: 65534
+      fsGroup: 65534
     storage:
       volumeClaimTemplate:
         spec:${storageClassName ? `\n          storageClassName: ${storageClassName}` : ''}
@@ -690,6 +1247,18 @@ alertmanager:
           resources:
             requests:
               storage: 2Gi
+
+kubeProxy:
+  enabled: false
+
+kubeEtcd:
+  enabled: false
+
+kubeControllerManager:
+  enabled: false
+
+kubeScheduler:
+  enabled: false
 `;
 
     // Create a temporary file with the values
@@ -712,43 +1281,161 @@ EOF`
       throw new Error(`Failed to write Prometheus values to temporary file: ${writeResult.stderr}`);
     }
 
-    // Install kube-prometheus-stack using the temporary values file
-    const helmInstallResult = await window.api.executeCommand('helm', [
-      'upgrade',
-      '--install',
-      'prometheus',
-      'prometheus-community/kube-prometheus-stack',
-      '--namespace',
-      'monitoring',
-      '-f',
-      tempFilePath
-    ]);
+    // Implement retry logic for Helm installation
+    addComponentLog('Installing kube-prometheus-stack with retry mechanism...');
+    let helmInstallSuccess = false;
+    let helmInstallError = null;
+    const helmMaxRetries = 3;
+    
+    for (let attempt = 1; attempt <= helmMaxRetries; attempt++) {
+      addComponentLog(`Helm install attempt ${attempt}/${helmMaxRetries}...`);
+      
+      // Install kube-prometheus-stack using the temporary values file with a longer timeout
+      const helmInstallResult = await window.api.executeCommand('helm', [
+        'upgrade',
+        '--install',
+        'prometheus',
+        'prometheus-community/kube-prometheus-stack',
+        '--namespace',
+        'monitoring',
+        '-f',
+        tempFilePath,
+        '--timeout',
+        '10m', // Increase timeout to 10 minutes
+        '--atomic', // Use atomic to automatically rollback on failure
+        '--wait' // Wait for resources to be ready
+      ]);
+      
+      if (helmInstallResult.code === 0) {
+        addComponentLog('kube-prometheus-stack installed successfully.');
+        helmInstallSuccess = true;
+        break;
+      } else {
+        helmInstallError = helmInstallResult.stderr;
+        addComponentLog(`Helm install attempt ${attempt} failed: ${helmInstallError}`);
+        
+        if (attempt < helmMaxRetries) {
+          // Check if it's a timeout error or PVC-related error
+          if (helmInstallError.includes('timeout') || 
+              helmInstallError.includes('timed out') || 
+              helmInstallError.includes('PVC') || 
+              helmInstallError.includes('persistentvolumeclaim') ||
+              helmInstallError.includes('storage')) {
+            
+            addComponentLog('Detected timeout or storage-related error. Running more aggressive cleanup before retry...');
+            
+            // Try to clean up failed resources
+            await window.api.executeCommand('helm', [
+              'uninstall',
+              'prometheus',
+              '--namespace',
+              'monitoring',
+              '--ignore-not-found'
+            ]).catch(() => {});
+            
+            // Run additional PVC cleanup
+            addComponentLog('Cleaning up any stuck PVCs...');
+            
+            // Get all PVCs in monitoring namespace
+            const stuckPvcsResult = await window.api.executeCommand('kubectl', [
+              'get',
+              'pvc',
+              '-n',
+              'monitoring',
+              '-o',
+              'json'
+            ]).catch(() => ({ code: 1, stdout: '{}' }));
+            
+            if (stuckPvcsResult.code === 0 && stuckPvcsResult.stdout !== '{}') {
+              try {
+                const pvcs = JSON.parse(stuckPvcsResult.stdout).items || [];
+                for (const pvc of pvcs) {
+                  const pvcName = pvc.metadata.name;
+                  addComponentLog(`Force deleting PVC: ${pvcName}`);
+                  
+                  // Remove finalizers
+                  await window.api.executeCommand('kubectl', [
+                    'patch',
+                    'pvc',
+                    pvcName,
+                    '-n',
+                    'monitoring',
+                    '-p',
+                    '{"metadata":{"finalizers":null}}',
+                    '--type=merge'
+                  ]).catch(() => {});
+                  
+                  // Delete PVC
+                  await window.api.executeCommand('kubectl', [
+                    'delete',
+                    'pvc',
+                    pvcName,
+                    '-n',
+                    'monitoring',
+                    '--force',
+                    '--grace-period=0'
+                  ]).catch(() => {});
+                }
+              } catch (error) {
+                addComponentLog(`Error processing stuck PVCs: ${error.message}`);
+              }
+            }
+            
+            // Also run the full storage cleanup utility again
+            addComponentLog('Running global storage cleanup to free up any stuck volumes...');
+            await cleanupUnusedStorage(addComponentLog);
+            
+            // Wait longer before next retry
+            const waitTime = attempt * 30; // 30s, 60s, 90s
+            addComponentLog(`Waiting ${waitTime} seconds before next attempt...`);
+            await new Promise(resolve => setTimeout(resolve, waitTime * 1000));
+          } else {
+            // For other errors, wait a bit less
+            addComponentLog('Waiting 15 seconds before retry...');
+            await new Promise(resolve => setTimeout(resolve, 15000));
+          }
+        }
+      }
+    }
 
     // Clean up the temporary file
     await window.api.executeCommand('rm', [tempFilePath]);
 
-    if (helmInstallResult.code !== 0) {
-      throw new Error(`Failed to install kube-prometheus-stack: ${helmInstallResult.stderr}`);
+    if (!helmInstallSuccess) {
+      throw new Error(`Failed to install kube-prometheus-stack after ${helmMaxRetries} attempts: ${helmInstallError}`);
     }
-
-    addComponentLog('kube-prometheus-stack installed successfully.');
 
     // Wait for Prometheus to be ready
     addComponentLog('Waiting for Prometheus server pod to be ready...');
     
-    // Implement retry mechanism instead of fixed delay
-    addComponentLog('Will retry checking for Prometheus pods every 10 seconds for up to 60 seconds...');
+    // Implement more resilient retry mechanism
+    addComponentLog('Will check for Prometheus pods readiness with exponential backoff...');
     
     let prometheusServerPodFound = false;
     let retryAttempts = 0;
-    const maxRetries = 6; // 6 attempts * 10 seconds = 60 seconds total
+    const maxRetries = 12; // Up to 12 attempts with increasing wait times
+    let waitTime = 5; // Start with 5 seconds, will increase
     
     while (!prometheusServerPodFound && retryAttempts < maxRetries) {
       retryAttempts++;
-      addComponentLog(`Attempt ${retryAttempts}/${maxRetries} to find Prometheus server pod...`);
+      addComponentLog(`Attempt ${retryAttempts}/${maxRetries} to find and verify Prometheus server pod...`);
       
-      // First, get the actual pod name and labels
-      addComponentLog('Getting Prometheus server pod information...');
+      // First, get the overall pod status in the monitoring namespace
+      addComponentLog('Checking pod status in monitoring namespace...');
+      const podStatusResult = await window.api.executeCommand('kubectl', [
+        'get',
+        'pods',
+        '-n',
+        'monitoring',
+        '-o',
+        'wide'
+      ]);
+      
+      if (podStatusResult.code === 0 && podStatusResult.stdout) {
+        addComponentLog(`Current pod status in monitoring namespace:\n${podStatusResult.stdout}`);
+      }
+      
+      // Try to get prometheus server pod specifically
       const podInfoResult = await window.api.executeCommand('kubectl', [
         'get',
         'pods',
@@ -760,115 +1447,151 @@ EOF`
         'name'
       ]);
       
+      // If not found with the first label, try alternative labels
       if (podInfoResult.code !== 0 || !podInfoResult.stdout) {
-        // Try alternative label selector
-        addComponentLog('Trying alternative label selector...');
-        const altPodInfoResult = await window.api.executeCommand('kubectl', [
-          'get',
-          'pods',
-          '-n',
-          'monitoring',
-          '-l',
-          'app=prometheus',
-          '-o',
-          'name'
-        ]);
+        addComponentLog('Prometheus pod not found with primary label. Trying alternative labels...');
         
-        if (altPodInfoResult.code !== 0 || !altPodInfoResult.stdout) {
-          // Try kube-prometheus-stack selector
-          addComponentLog('Trying kube-prometheus-stack selector...');
-          const kubePromPodInfoResult = await window.api.executeCommand('kubectl', [
+        // Try several alternative labels that might be used
+        const labelSelectors = [
+          'app=prometheus',
+          'app.kubernetes.io/component=prometheus',
+          'component=prometheus',
+          'prometheus=kube-prometheus-stack-prometheus'
+        ];
+        
+        let found = false;
+        for (const selector of labelSelectors) {
+          addComponentLog(`Trying label selector: ${selector}`);
+          const altPodInfoResult = await window.api.executeCommand('kubectl', [
             'get',
             'pods',
             '-n',
             'monitoring',
             '-l',
-            'app.kubernetes.io/name=prometheus',
+            selector,
             '-o',
             'name'
           ]);
           
-          if (kubePromPodInfoResult.code !== 0 || !kubePromPodInfoResult.stdout) {
-            // Just list all pods and look for the server pod
-            addComponentLog('Listing all pods in monitoring namespace...');
-            const allPodsResult = await window.api.executeCommand('kubectl', [
-              'get',
-              'pods',
-              '-n',
-              'monitoring',
-              '-o',
-              'wide'
-            ]);
-            
-            addComponentLog(`All pods in monitoring namespace: ${allPodsResult.stdout}`);
-            
-            // Check if prometheus pod exists by name pattern
-            const serverPodExists = await window.api.executeCommand('kubectl', [
-              'get',
-              'pods',
-              '-n',
-              'monitoring',
-              '--field-selector',
-              'status.phase=Running',
-              '-o',
-              'name'
-            ]);
-            
-            const serverPodNames = serverPodExists.stdout.split('\n').filter(name => 
-              name.includes('prometheus') && (name.includes('server') || name.includes('prometheus-prometheus-kube-prometheus-prometheus'))
-            );
-            
-            if (serverPodNames.length > 0) {
-              addComponentLog(`Found server pod by name: ${serverPodNames[0]}`);
-              // Skip the wait since we've verified the pod exists and is running
-              addComponentLog('Prometheus server pod is running. Proceeding with installation.');
-              prometheusServerPodFound = true;
-            } else if (retryAttempts < maxRetries) {
-              addComponentLog(`Prometheus server pod not found on attempt ${retryAttempts}. Waiting 10 seconds before retrying...`);
-              await new Promise(resolve => setTimeout(resolve, 10000)); // Wait 10 seconds before next retry
-            } else {
-              throw new Error('Could not find Prometheus server pod after maximum retry attempts');
+          if (altPodInfoResult.code === 0 && altPodInfoResult.stdout) {
+            const podNames = altPodInfoResult.stdout.split('\n').filter(p => p);
+            if (podNames.length > 0) {
+              addComponentLog(`Found prometheus pod(s) using selector '${selector}': ${podNames.join(', ')}`);
+              
+              // Check if the pod is ready
+              for (const podName of podNames) {
+                const shortPodName = podName.replace('pod/', '');
+                const podStatusResult = await window.api.executeCommand('kubectl', [
+                  'get',
+                  'pod',
+                  shortPodName,
+                  '-n',
+                  'monitoring',
+                  '-o',
+                  'jsonpath={.status.phase},{.status.conditions[?(@.type=="Ready")].status}'
+                ]);
+                
+                if (podStatusResult.code === 0 && podStatusResult.stdout) {
+                  const [phase, readyStatus] = podStatusResult.stdout.split(',');
+                  addComponentLog(`Pod ${shortPodName} - Phase: ${phase}, Ready: ${readyStatus}`);
+                  
+                  if (phase === 'Running' && readyStatus === 'True') {
+                    addComponentLog(`Prometheus pod ${shortPodName} is ready!`);
+                    prometheusServerPodFound = true;
+                    found = true;
+                    break;
+                  } else if (phase === 'Pending') {
+                    // Check if there are any PVC issues
+                    const podDescribeResult = await window.api.executeCommand('kubectl', [
+                      'describe',
+                      'pod',
+                      shortPodName,
+                      '-n',
+                      'monitoring'
+                    ]);
+                    
+                    if (podDescribeResult.stdout.includes('persistentvolumeclaim') && 
+                        (podDescribeResult.stdout.includes('Pending') || 
+                         podDescribeResult.stdout.includes('waiting for volume'))) {
+                      addComponentLog('Pod is waiting for persistent volume. Running additional storage cleanup...');
+                      await cleanupUnusedStorage(addComponentLog);
+                    }
+                  }
+                }
+              }
+              
+              if (found) break;
             }
-          } else {
-            addComponentLog(`Found server pod with app.kubernetes.io/name=prometheus: ${kubePromPodInfoResult.stdout}`);
-            // Wait for this pod to be ready
-            const waitPrometheusResult = await waitForPod('app.kubernetes.io/name=prometheus', 'monitoring');
-            if (!waitPrometheusResult.success) {
-              throw new Error(`Failed to wait for Prometheus server pod: ${waitPrometheusResult.error}`);
-            }
-            prometheusServerPodFound = true;
           }
-        } else {
-          addComponentLog(`Found server pod with app=prometheus: ${altPodInfoResult.stdout}`);
-          // Wait for this pod to be ready
-          const waitPrometheusResult = await waitForPod('app=prometheus', 'monitoring');
-          if (!waitPrometheusResult.success) {
-            throw new Error(`Failed to wait for Prometheus server pod: ${waitPrometheusResult.error}`);
-          }
-          prometheusServerPodFound = true;
         }
       } else {
-        addComponentLog(`Found server pod with app.kubernetes.io/name=prometheus: ${podInfoResult.stdout}`);
-        // Wait for this pod to be ready
-        const waitPrometheusResult = await waitForPod('app.kubernetes.io/name=prometheus', 'monitoring');
-        if (!waitPrometheusResult.success) {
-          throw new Error(`Failed to wait for Prometheus server pod: ${waitPrometheusResult.error}`);
+        const podNames = podInfoResult.stdout.split('\n').filter(p => p);
+        if (podNames.length > 0) {
+          addComponentLog(`Found prometheus pod(s): ${podNames.join(', ')}`);
+          
+          // Check if the pod is ready
+          for (const podName of podNames) {
+            const shortPodName = podName.replace('pod/', '');
+            const podStatusResult = await window.api.executeCommand('kubectl', [
+              'get',
+              'pod',
+              shortPodName,
+              '-n',
+              'monitoring',
+              '-o',
+              'jsonpath={.status.phase},{.status.conditions[?(@.type=="Ready")].status}'
+            ]);
+            
+            if (podStatusResult.code === 0 && podStatusResult.stdout) {
+              const [phase, readyStatus] = podStatusResult.stdout.split(',');
+              addComponentLog(`Pod ${shortPodName} - Phase: ${phase}, Ready: ${readyStatus}`);
+              
+              if (phase === 'Running' && readyStatus === 'True') {
+                addComponentLog(`Prometheus pod ${shortPodName} is ready!`);
+                prometheusServerPodFound = true;
+                break;
+              }
+            }
+          }
         }
-        prometheusServerPodFound = true;
       }
       
-      // If pod not found and we haven't reached max retries, wait before next attempt
       if (!prometheusServerPodFound && retryAttempts < maxRetries) {
-        addComponentLog(`Prometheus server pod not found on attempt ${retryAttempts}. Waiting 10 seconds before retrying...`);
-        await new Promise(resolve => setTimeout(resolve, 10000)); // Wait 10 seconds before next retry
+        // Exponential backoff with capping
+        waitTime = Math.min(waitTime * 1.5, 60); // Increase wait time but cap at 60 seconds
+        addComponentLog(`Prometheus pod not ready yet. Waiting ${waitTime} seconds before next check...`);
+        await new Promise(resolve => setTimeout(resolve, waitTime * 1000));
       }
     }
     
     if (!prometheusServerPodFound) {
-      throw new Error('Could not find Prometheus server pod after maximum retry attempts');
+      // Instead of failing, log a warning and continue since Grafana might still work
+      addComponentLog('WARNING: Prometheus server pod not found or not ready after maximum attempts.');
+      addComponentLog('Will continue with installation anyway - the system may take longer to fully initialize.');
+      
+      // Give a final attempt to diagnose issues
+      addComponentLog('Checking for any issues with PVCs...');
+      const pvcStatusResult = await window.api.executeCommand('kubectl', [
+        'get',
+        'pvc',
+        '-n',
+        'monitoring'
+      ]);
+      
+      if (pvcStatusResult.code === 0) {
+        addComponentLog(`PVC Status:\n${pvcStatusResult.stdout}`);
+      }
+      
+      // Check storage class
+      const scStatusResult = await window.api.executeCommand('kubectl', [
+        'get',
+        'storageclass'
+      ]);
+      
+      if (scStatusResult.code === 0) {
+        addComponentLog(`StorageClass Status:\n${scStatusResult.stdout}`);
+      }
     }
-
-    addComponentLog('Prometheus server pod is ready.');
 
     // Create monitoring service deployment
     addComponentLog('Creating Monitoring Service deployment...');

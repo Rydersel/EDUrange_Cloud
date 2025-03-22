@@ -1,4 +1,4 @@
-import { MainNavigation } from '@/components/MainNavigation'
+import { MainNavigation } from '@/components/navigation/MainNavigation'
 import { BackgroundGradientAnimation } from '@/components/splash/background-gradient-animation'
 import { Button } from '@/components/ui/button'
 import { ArrowRight, Shield, Trophy, Users } from 'lucide-react'

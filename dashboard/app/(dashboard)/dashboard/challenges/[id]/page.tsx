@@ -1,7 +1,7 @@
 import { getServerSession } from 'next-auth/next';
 import { redirect, notFound } from 'next/navigation';
 import { prisma } from '@/lib/prisma';
-import BreadCrumb from '@/components/breadcrumb';
+import BreadCrumb from '@/components/navigation/breadcrumb';
 import { Heading } from '@/components/ui/heading';
 import { Separator } from '@/components/ui/separator';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -13,7 +13,7 @@ import { Button } from '@/components/ui/button';
 import { ArrowLeft, FileQuestion, Server, Info } from 'lucide-react';
 import Link from 'next/link';
 import authConfig from '@/auth.config';
-import { ChallengeActions } from '@/components/challenge-actions';
+import { ChallengeActions } from '@/components/challenges/challenge-actions';
 import {requireAdminAccess} from "@/lib/auth-utils";
 
 interface ChallengeDetailPageProps {

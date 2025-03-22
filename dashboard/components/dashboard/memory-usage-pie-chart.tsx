@@ -41,20 +41,34 @@ export function MemoryUsagePieChart() {
         }
         
         const result = await response.json();
+        console.log('Memory Usage Data:', result);
         
         if (result && typeof result.memory === 'number') {
-          const memoryUsage = Math.min(100, Math.max(0, result.memory));
+          // The monitoring service returns memory usage as a percentage value already
+          // We just need to ensure it's a valid number between 0 and 100
+          let memoryUsage = result.memory;
+          
+          // Ensure it's within valid range and round to 1 decimal place for display
+          memoryUsage = Math.min(100, Math.max(0, Math.round(memoryUsage * 10) / 10));
+          
+          console.log('Processed memory usage for pie chart:', memoryUsage);
+          
           setMemoryData([
             { name: 'Used', value: memoryUsage, color: '#8884d8' },
             { name: 'Free', value: 100 - memoryUsage, color: '#82ca9d' }
           ]);
+        } else if (result.error) {
+          throw new Error(result.error);
         } else {
           throw new Error('Invalid memory usage data format');
         }
       } catch (err) {
         console.error('Error fetching memory usage data:', err);
         setError('Failed to load memory usage data');
-        setMemoryData([]);
+        setMemoryData([
+          { name: 'Used', value: 0, color: '#8884d8' },
+          { name: 'Free', value: 100, color: '#82ca9d' }
+        ]);
       } finally {
         setLoading(false);
       }
@@ -68,11 +82,11 @@ export function MemoryUsagePieChart() {
     return () => clearInterval(intervalId);
   }, []);
 
-  if (loading) {
+  if (loading && memoryData.length === 0) {
     return <div className="flex items-center justify-center h-[250px]">Loading memory usage data...</div>;
   }
 
-  if (error || memoryData.length === 0) {
+  if (error && memoryData.length === 0) {
     return <div className="flex items-center justify-center h-[250px] text-muted-foreground">No data available</div>;
   }
 

@@ -68,17 +68,48 @@ def create_flag_secret(instance_name, flag):
 
 
 def get_secret(secret_name, namespace='default'):
+    """
+    Retrieve a Kubernetes secret by name from the specified namespace.
+    
+    Args:
+        secret_name (str): The name of the secret to retrieve
+        namespace (str, optional): The Kubernetes namespace. Defaults to 'default'.
+        
+    Returns:
+        V1Secret or None: The secret object if found, None otherwise
+    """
     load_config()  # Load Kubernetes configuration
+
+    # Validate the secret_name parameter
+    if not secret_name:
+        logging.error(f"Invalid secret name provided: secret_name is None")
+        return None
+        
+    if not isinstance(secret_name, str):
+        logging.error(f"Invalid secret name type: {type(secret_name).__name__}, expected string")
+        return None
+        
+    if secret_name == "null" or secret_name.strip() == "":
+        logging.error(f"Invalid secret name provided: '{secret_name}'")
+        return None
 
     # Create an API client
     v1 = client.CoreV1Api()
 
     try:
         # Fetch the secret
+        logging.info(f"Attempting to retrieve secret '{secret_name}' from namespace '{namespace}'")
         secret = v1.read_namespaced_secret(name=secret_name, namespace=namespace)
+        logging.info(f"Successfully retrieved secret '{secret_name}'")
         return secret
     except client.ApiException as e:
-        print(f"Exception when reading secret: {e}")
+        if e.status == 404:
+            logging.warning(f"Secret '{secret_name}' not found in namespace '{namespace}'")
+        else:
+            logging.error(f"API exception when reading secret '{secret_name}': {e}")
+        return None
+    except Exception as e:
+        logging.error(f"Unexpected error when reading secret '{secret_name}': {e}")
         return None
 
 
@@ -132,17 +163,6 @@ def create_challenge_pod(user_id, challenge_image, yaml_path, run_as_root, apps_
     for container in pod_spec['spec']['containers']:
         if container['name'] == 'challenge-container':
             container['image'] = challenge_image
-
-    # Add CHALLENGE_POD_NAME environment variable to the bridge container
-    for container in pod_spec['spec']['containers']:
-        if container['name'] == 'bridge':
-            container['env'].append({"name": "CHALLENGE_POD_NAME", "value": instance_name})
-
-    # Add FLAG_SECRET_NAME environment variable to all containers
-    for container in pod_spec['spec']['containers']:
-        if container['name'] == 'bridge':
-            container['env'].append({"name": "flag_secret_name", "value": secret_name})
-            container['env'].append({"name": "NEXT_PUBLIC_APPS_CONFIG", "value": apps_config})
 
     pod = client.V1Pod(
         api_version="v1",

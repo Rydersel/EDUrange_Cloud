@@ -1,4 +1,4 @@
-import BreadCrumb from '@/components/breadcrumb';
+import BreadCrumb from '@/components/navigation/breadcrumb';
 import { columns } from '@/components/tables/user-tables/columns';
 import { UserTable } from '@/components/tables/user-tables/user-table';
 import { Heading } from '@/components/ui/heading';

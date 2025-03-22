@@ -1,6 +1,5 @@
 import { prisma } from '@/lib/prisma';
-import BreadCrumb from '@/components/breadcrumb';
-import { columns } from '@/components/tables/log-tables/columns';
+import BreadCrumb from '@/components/navigation/breadcrumb';
 import { LogTable } from '@/components/tables/log-tables/log-table';
 import { Heading } from '@/components/ui/heading';
 import { Separator } from '@/components/ui/separator';
@@ -10,9 +9,7 @@ import authConfig from '@/auth.config';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Shield } from 'lucide-react';
 import { ActivityEventType, Prisma } from '@prisma/client';
-import { Button } from '@/components/ui/button';
-import Link from 'next/link';
-import { Database, Upload } from 'lucide-react';
+
 
 const breadcrumbItems = [{ title: 'Logs', link: '/dashboard/logs' }];
 
@@ -114,4 +111,4 @@ export default async function Page(props: ParamsProps) {
       </div>
     </>
   );
-} 
+}

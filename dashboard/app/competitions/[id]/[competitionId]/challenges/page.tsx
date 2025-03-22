@@ -2,7 +2,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
-import { ChallengeInstanceManager } from "@/components/ChallengeInstanceManager";
+import { ChallengeInstanceManager } from "@/components/challenges/ChallengeInstanceManager";
 import { Button } from "@/components/ui/button";
 import { Play } from "lucide-react";
 
@@ -116,4 +116,4 @@ export default async function CompetitionChallengesPage(props: Props) {
       </div>
     </div>
   );
-} 
+}

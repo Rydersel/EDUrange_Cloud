@@ -1,7 +1,7 @@
 import { getServerSession } from 'next-auth/next';
 import { redirect } from 'next/navigation';
 import { prisma } from '@/lib/prisma';
-import BreadCrumb from '@/components/breadcrumb';
+import BreadCrumb from '@/components/navigation/breadcrumb';
 import { Heading } from '@/components/ui/heading';
 import { Separator } from '@/components/ui/separator';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -12,7 +12,7 @@ import Link from 'next/link';
 import authConfig from '@/auth.config';
 import { Button } from '@/components/ui/button';
 import { PackagePlus } from 'lucide-react';
-import { ChallengeRowActions } from '@/components/challenge-row-actions';
+import { ChallengeRowActions } from '@/components/challenges/challenge-row-actions';
 import {requireAdminAccess} from "@/lib/auth-utils";
 
 const breadcrumbItems = [{ title: 'Installed Challenges', link: '/dashboard/challenges' }];

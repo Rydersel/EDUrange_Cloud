@@ -12,6 +12,8 @@ interface User {
   lastActive: string
 }
 
+
+// Temp mock data
 const users: User[] = [
   { rank: 1, username: "l33thax0r", score: 9500, solvedChallenges: 42, lastActive: "2025-01-18" },
   { rank: 2, username: "cyber_ninja", score: 9200, solvedChallenges: 40, lastActive: "2025-01-17" },

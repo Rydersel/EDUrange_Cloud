@@ -2,16 +2,14 @@ import { getServerSession } from 'next-auth/next';
 import authConfig from '@/auth.config';
 import { prisma } from '@/lib/prisma';
 import { redirect } from 'next/navigation';
-import { Shield } from 'lucide-react';
 import { Prisma, User } from '@prisma/client';
 import { requireAdminAccess } from '@/lib/auth-utils';
-import BreadCrumb from '@/components/breadcrumb';
+import BreadCrumb from '@/components/navigation/breadcrumb';
 import { columns } from '@/components/tables/user-tables/columns';
 import { UserTable } from '@/components/tables/user-tables/user-table';
 import { Heading } from '@/components/ui/heading';
 import { Separator } from '@/components/ui/separator';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Metadata } from 'next';
+
 
 const breadcrumbItems = [{ title: 'Users', link: '/dashboard/users' }];
 

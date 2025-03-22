@@ -1,7 +1,7 @@
 import { NextResponse, NextRequest } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import { db } from '@/lib/db';
+import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
 import rateLimit from '@/lib/rate-limit';
 import { validateAndSanitize, validationSchemas } from '@/lib/validation';
@@ -90,7 +90,7 @@ export async function POST(req: NextRequest, props: { params: Promise<{ groupId:
     const { userId, points } = validationResult.data;
 
     // Check if user is an instructor of the group
-    const group = await db.$queryRaw<{ id: string }[]>`
+    const group = await prisma.$queryRaw<{ id: string }[]>`
       SELECT id FROM "CompetitionGroup"
       WHERE id = ${params.groupId}
       AND EXISTS (
@@ -108,7 +108,7 @@ export async function POST(req: NextRequest, props: { params: Promise<{ groupId:
     }
 
     // Update or create points record
-    const pointsResult = await db.$queryRaw<GroupPoints[]>`
+    const pointsResult = await prisma.$queryRaw<GroupPoints[]>`
       INSERT INTO "GroupPoints" ("userId", "groupId", points)
       VALUES (${userId}, ${params.groupId}, ${points})
       ON CONFLICT ("userId", "groupId")
@@ -165,7 +165,7 @@ export async function GET(req: NextRequest, props: { params: Promise<{ groupId: 
       }
       
       // Get points for a specific user
-      const points = await db.$queryRaw<GroupPoints[]>`
+      const points = await prisma.$queryRaw<GroupPoints[]>`
         SELECT gp.*, 
                json_build_object(
                  'id', u.id,
@@ -186,7 +186,7 @@ export async function GET(req: NextRequest, props: { params: Promise<{ groupId: 
     }
 
     // Get points for all users in the group
-    const points = await db.$queryRaw<GroupPoints[]>`
+    const points = await prisma.$queryRaw<GroupPoints[]>`
       SELECT gp.*, 
              json_build_object(
                'id', u.id,

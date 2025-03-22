@@ -1,7 +1,7 @@
 import { getServerSession } from 'next-auth/next';
 import { redirect } from 'next/navigation';
 import { prisma } from '@/lib/prisma';
-import BreadCrumb from '@/components/breadcrumb';
+import BreadCrumb from '@/components/navigation/breadcrumb';
 import InstanceComponent from './InstanceComponent'; // Import the client component
 import authConfig from '@/auth.config';
 import type { Metadata } from 'next';

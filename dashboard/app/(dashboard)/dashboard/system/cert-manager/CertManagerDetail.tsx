@@ -1,5 +1,5 @@
 import { CheckCircleIcon, ClockIcon, ExclamationTriangleIcon } from "@heroicons/react/24/outline";
-import MetricCard from "@/components/MetricCard";
+import MetricCard from "@/components/common/MetricCard";
 
 interface CertManagerDetailProps {
   status: "healthy" | "warning" | "error";
@@ -41,4 +41,4 @@ export default function CertManagerDetail({
       />
     </div>
   );
-} 
+}

@@ -21,7 +21,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { format, formatDistanceToNow, addHours, addDays } from 'date-fns';
+import { formatDate, formatRelativeTime } from "@/lib/utils";
 import { useState } from 'react';
 import { useToast } from '@/components/ui/use-toast';
 import {
@@ -39,6 +39,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { CompetitionDetailsProps, ExpiryOption } from '../types';
+import { addHours, addDays } from 'date-fns';
 
 const EXPIRY_OPTIONS: ExpiryOption[] = [
   { id: 'never', label: 'Never expires' },
@@ -168,7 +169,7 @@ export function CompetitionDetails({ competition, isInstructor }: CompetitionDet
             <div>
               <h2 className="text-3xl font-bold tracking-tight">{competition.name}</h2>
               <p className="text-muted-foreground">
-                Started {formatDistanceToNow(new Date(competition.startDate))} ago • {competition._count.members} participants
+                Started {formatRelativeTime(competition.startDate)} ago • {competition._count.members} participants
               </p>
             </div>
           </div>
@@ -198,12 +199,12 @@ export function CompetitionDetails({ competition, isInstructor }: CompetitionDet
               </div>
               <div className="space-y-2">
                 <p className="text-sm text-muted-foreground">Start Date</p>
-                <p className="text-sm font-medium">{format(new Date(competition.startDate), 'PPP')}</p>
+                <p className="text-sm font-medium">{formatDate(competition.startDate, 'PPP')}</p>
               </div>
               <div className="space-y-2">
                 <p className="text-sm text-muted-foreground">End Date</p>
                 <p className="text-sm font-medium">
-                  {competition.endDate ? format(new Date(competition.endDate), 'PPP') : 'No end date'}
+                  {competition.endDate ? formatDate(competition.endDate, 'PPP') : 'No end date'}
                 </p>
               </div>
               <div className="space-y-2">
@@ -394,10 +395,10 @@ export function CompetitionDetails({ competition, isInstructor }: CompetitionDet
                           {competition.accessCodes.map((code: any) => (
                             <TableRow key={code.id}>
                               <TableCell>{code.code}</TableCell>
-                              <TableCell>{formatDistanceToNow(new Date(code.createdAt))} ago</TableCell>
+                              <TableCell>{formatRelativeTime(code.createdAt)} ago</TableCell>
                               <TableCell>
                                 {code.expiresAt 
-                                  ? format(new Date(code.expiresAt), 'PPP')
+                                  ? formatDate(code.expiresAt, 'PPP')
                                   : 'Never'}
                               </TableCell>
                               <TableCell>
@@ -506,7 +507,7 @@ export function CompetitionDetails({ competition, isInstructor }: CompetitionDet
               </div>
               <div className="text-center text-sm text-muted-foreground">
                 {getExpiryDate(expiryOption) ? (
-                  <p>This code will expire on {format(getExpiryDate(expiryOption)!, "PPP")}.</p>
+                  <p>This code will expire on {formatDate(getExpiryDate(expiryOption)!, "PPP")}.</p>
                 ) : (
                   <p>This code will never expire.</p>
                 )}

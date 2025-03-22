@@ -3,11 +3,11 @@
 import { useState, useMemo, useEffect } from "react"
 import { AnimatePresence, motion } from "framer-motion"
 import { ChallengeItem } from "./ChallengeItem"
-import { Navigation } from "./Navigation"
-import { SearchAndFilters } from "./SearchAndFilters"
+import { Navigation } from "../navigation/Navigation"
+import { SearchAndFilters } from "../common/SearchAndFilters"
 import { HideCompletedToggle } from "./HideCompletedToggle"
-import { DancingFrog } from "./DancingFrog"
-import { Confetti } from "./Confetti"
+import { DancingFrog } from "../effects/DancingFrog"
+import { Confetti } from "../effects/Confetti"
 import { useToast } from "@/components/ui/use-toast"
 import { extractChallengeDescription } from "@/lib/utils"
 import { Loader2 } from 'lucide-react'
@@ -184,7 +184,7 @@ export function ChallengeList({ competitionId }: ChallengeListProps) {
 
   return (
     <div>
-      
+
       <SearchAndFilters
         searchQuery={searchQuery}
         setSearchQuery={setSearchQuery}

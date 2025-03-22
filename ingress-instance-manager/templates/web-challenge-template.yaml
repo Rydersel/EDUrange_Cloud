@@ -14,16 +14,6 @@ spec:
     env:
     - name: FLAG
       value: "flag"  # Will be overwritten with the actual flag
-  - name: bridge
-    image: registry.rydersel.cloud/bridge
-    ports:
-      - containerPort: 5000
-        name: http
-    env:
-      - name: CHALLENGE_CONTAINER_NAME
-        value: "web-challenge-container"
-      - name: WEB_CHAL_LINK
-        value: "none"  # Will be overwritten with the actual URL
   - name: webos
     image: registry.rydersel.cloud/webos
     imagePullPolicy: Always

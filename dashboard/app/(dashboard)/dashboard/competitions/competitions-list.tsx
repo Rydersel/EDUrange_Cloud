@@ -12,7 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Plus, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { format } from "date-fns";
+import { formatDate } from "@/lib/utils";
 import {
   Dialog,
   DialogContent,
@@ -192,7 +192,7 @@ const CompetitionCard = ({ competition, isAdmin }: { competition: Competition; i
             <div>
               <CardTitle>{competition.name}</CardTitle>
               <CardDescription>
-                {competition.startDate ? `Started ${format(new Date(competition.startDate), 'PPP')}` : 'Not started'} • 
+                {competition.startDate ? `Started ${formatDate(competition.startDate, 'PPP')}` : 'Not started'} • 
                 {competition._count.members} participants
               </CardDescription>
             </div>
@@ -321,7 +321,7 @@ const CompetitionCard = ({ competition, isAdmin }: { competition: Competition; i
               </div>
               <div className="text-center text-sm text-muted-foreground">
                 {getExpiryDate(expiryOption) ? (
-                  <p>This code will expire on {format(getExpiryDate(expiryOption)!, "PPP")}.</p>
+                  <p>This code will expire on {formatDate(getExpiryDate(expiryOption)!, "PPP")}.</p>
                 ) : (
                   <p>This code will never expire.</p>
                 )}

@@ -26,16 +26,6 @@ spec:
     env:
     - name: FLAG
       value: "flag"
-  - name: bridge
-    image: registry.rydersel.cloud/bridge
-    ports:
-    - containerPort: 5000
-      name: http
-    env:
-    - name: ATTACK_CONTAINER_NAME
-      value: "attack-container"
-    - name: DEFENCE_CONTAINER_NAME
-      value: "defence-container"
   - name: webos
     image: registry.rydersel.cloud/webos
     ports:

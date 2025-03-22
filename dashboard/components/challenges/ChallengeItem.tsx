@@ -2,17 +2,18 @@
 
 import React from 'react'
 import { ChevronDown, ChevronUp, Trophy } from 'lucide-react'
-import { Badge } from "./ui/badge"
+import { Badge } from '@/components/ui/badge'
+import { StatusBadge } from '@/components/ui/status-badge'
 import {
   Accordion,
   AccordionContent,
   AccordionItem,
   AccordionTrigger,
-} from "./ui/accordion"
-import { Button } from "./ui/button"
+} from "@/components/ui/accordion"
+import { Button } from "@/components/ui/button"
 import { motion, AnimatePresence } from "framer-motion"
 import { extractChallengeDescription } from "@/lib/utils"
-import { useToast } from "./ui/use-toast"
+import { useToast } from "@/components/ui/use-toast"
 import { useRouter } from "next/navigation"
 import { devLog } from '@/lib/logger'
 
@@ -204,14 +205,10 @@ export function ChallengeItem({
             </div>
             <div className="flex items-center justify-end gap-2">
               {(challenge.completed || completedChallenges.get(competitionId)?.has(challenge.name)) && (
-                <Badge variant="secondary" className="bg-[#22C55E]/10 text-[#22C55E] hover:bg-[#22C55E]/20">
-                  Completed
-                </Badge>
+                <StatusBadge status="completed" />
               )}
               {startedChallenges.get(competitionId)?.has(challenge.name) && !challenge.completed && (
-                <Badge variant="secondary" className="bg-[#22C55E]/10 text-[#22C55E] hover:bg-[#22C55E]/20">
-                  In Progress
-                </Badge>
+                <StatusBadge status="pending" customText="In Progress" />
               )}
             </div>
           </div>
@@ -227,9 +224,10 @@ export function ChallengeItem({
                 </p>
                 <div className="flex items-center gap-2 ml-4">
                   <span className="text-sm text-gray-400">Questions completed:</span>
-                  <Badge variant="secondary" className="bg-[#22C55E]/10 text-[#22C55E]">
-                    {challenge.completedQuestions}/{challenge.totalQuestions}
-                  </Badge>
+                  <StatusBadge 
+                    status={challenge.completedQuestions === challenge.totalQuestions ? "completed" : "info"} 
+                    customText={`${challenge.completedQuestions}/${challenge.totalQuestions}`}
+                  />
                 </div>
               </div>
 

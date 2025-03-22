@@ -46,6 +46,11 @@ spec:
             secretKeyRef:
               name: database-secrets
               key: database-url
+        - name: DIRECT_DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: database-secrets
+              key: direct-database-url
       - name: database-sync
         image: ${REGISTRY_URL}/database-sync:latest
         imagePullPolicy: Always
@@ -75,6 +80,11 @@ spec:
             secretKeyRef:
               name: database-secrets
               key: database-url
+        - name: DIRECT_DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: database-secrets
+              key: direct-database-url
         - name: INSTANCE_MANAGER_URL
           value: "http://instance-manager.default.svc.cluster.local/api"
 

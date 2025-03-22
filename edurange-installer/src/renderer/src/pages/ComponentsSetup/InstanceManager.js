@@ -96,7 +96,7 @@ spec:
       serviceAccountName: default
       containers:
       - name: instance-manager
-        image: ${registry.url}/instance-manager-ingress
+        image: ${registry.url}/instance-manager
         imagePullPolicy: Always
         ports:
         - containerPort: 8000
@@ -167,10 +167,13 @@ spec:
     ) {
       markStepCompleted('components-setup');
     }
+    
+    return { success: true };
   } catch (error) {
     console.error('Error installing Instance Manager:', error);
     addComponentLog(`Error installing Instance Manager: ${error.message}`);
     setInstallationStatus('instanceManager', 'error');
+    return { success: false, error: error.message };
   } finally {
     setIsInstalling(false);
   }

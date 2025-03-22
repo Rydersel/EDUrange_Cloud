@@ -10,6 +10,7 @@ import { getInstanceManagerUrl } from "@/lib/api-config";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { StatusBadge } from '@/components/ui/status-badge';
 
 // Define types for PostgreSQL data
 type PostgresTable = {
@@ -53,9 +54,12 @@ async function getDatabaseHealth() {
       const dbApiStatus = dbController.api;
       const dbSyncStatus = dbController.sync;
       
+      // Check for PgBouncer status
+      const pgBouncerStatus = detailedHealth.database.pgbouncer?.status || "error";
+      
       // If any component is not ok, set the overall status to warning or error
       let overallStatus = "healthy";
-      if (dbStatus !== "ok" || dbApiStatus !== "ok" || dbSyncStatus !== "ok") {
+      if (dbStatus !== "ok" || dbApiStatus !== "ok" || dbSyncStatus !== "ok" || pgBouncerStatus !== "ok") {
         overallStatus = "warning";
         
         // If the main database is down, it's an error
@@ -95,7 +99,8 @@ async function getDatabaseHealth() {
           components: {
             database: dbStatus === "ok" ? "healthy" : "error",
             api: dbApiStatus === "ok" ? "healthy" : "error",
-            sync: dbSyncStatus === "ok" ? "healthy" : "error"
+            sync: dbSyncStatus === "ok" ? "healthy" : "error",
+            pgbouncer: pgBouncerStatus === "ok" ? "healthy" : "error"
           },
           postgres: postgresData // Include detailed PostgreSQL metrics
         };
@@ -114,7 +119,8 @@ async function getDatabaseHealth() {
         components: {
           database: dbStatus === "ok" ? "healthy" : "error",
           api: dbApiStatus === "ok" ? "healthy" : "error",
-          sync: dbSyncStatus === "ok" ? "healthy" : "error"
+          sync: dbSyncStatus === "ok" ? "healthy" : "error",
+          pgbouncer: pgBouncerStatus === "ok" ? "healthy" : "error"
         },
         postgres: null
       };
@@ -147,7 +153,8 @@ async function getDatabaseHealth() {
       components: {
         database: "error",
         api: "error",
-        sync: "error"
+        sync: "error",
+        pgbouncer: "error"
       },
       postgres: null
     };
@@ -185,6 +192,7 @@ export default async function DatabasePage() {
         <TabsList>
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="tables">Tables</TabsTrigger>
+          <TabsTrigger value="connection-pool">Connection Pool</TabsTrigger>
         </TabsList>
         
         <TabsContent value="overview" className="space-y-4">
@@ -254,27 +262,28 @@ export default async function DatabasePage() {
                       <Activity className="mr-2 h-4 w-4 text-blue-500" />
                       Database Pod
                     </span>
-                    <span className={`font-medium ${databaseHealth.components?.database === "healthy" ? "text-green-500" : "text-red-500"}`}>
-                      {databaseHealth.components?.database === "healthy" ? "Healthy" : "Error"}
-                    </span>
+                    <StatusBadge status={databaseHealth.components?.database || "error"} />
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="flex items-center">
                       <Activity className="mr-2 h-4 w-4 text-blue-500" />
                       Database API
                     </span>
-                    <span className={`font-medium ${databaseHealth.components?.api === "healthy" ? "text-green-500" : "text-red-500"}`}>
-                      {databaseHealth.components?.api === "healthy" ? "Healthy" : "Error"}
-                    </span>
+                    <StatusBadge status={databaseHealth.components?.api || "error"} />
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="flex items-center">
                       <Activity className="mr-2 h-4 w-4 text-blue-500" />
                       Database Sync
                     </span>
-                    <span className={`font-medium ${databaseHealth.components?.sync === "healthy" ? "text-green-500" : "text-red-500"}`}>
-                      {databaseHealth.components?.sync === "healthy" ? "Healthy" : "Error"}
+                    <StatusBadge status={databaseHealth.components?.sync || "error"} />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="flex items-center">
+                      <Activity className="mr-2 h-4 w-4 text-blue-500" />
+                      PgBouncer
                     </span>
+                    <StatusBadge status={databaseHealth.components?.pgbouncer || "error"} />
                   </div>
                 </div>
               </CardContent>
@@ -355,9 +364,10 @@ export default async function DatabasePage() {
                       </div>
                       <div className="flex justify-between">
                         <span className="text-sm text-muted-foreground">Status:</span>
-                        <span className={`text-sm font-medium ${databaseHealth.postgres.status === "ok" ? "text-green-500" : "text-red-500"}`}>
-                          {databaseHealth.postgres.status === "ok" ? "Healthy" : "Error"}
-                        </span>
+                        <StatusBadge 
+                          status={databaseHealth.postgres.status === "ok" ? "healthy" : "error"} 
+                          customText={databaseHealth.postgres.status === "ok" ? "Healthy" : "Error"}
+                        />
                       </div>
                     </div>
                   </CardContent>
@@ -442,6 +452,156 @@ export default async function DatabasePage() {
                         No tables have been created in the database yet. Tables will appear here once they are created.
                       </>
                     )}
+                  </p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+        
+        <TabsContent value="connection-pool" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>PgBouncer Connection Pool</CardTitle>
+              <CardDescription>
+                Connection pooling statistics for the PostgreSQL database via PgBouncer
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {databaseHealth.postgres?.pgbouncer ? (
+                <div className="space-y-6">
+                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                    <Card>
+                      <CardHeader className="py-2">
+                        <CardTitle className="text-sm">Status</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="flex items-center">
+                          {databaseHealth.postgres.pgbouncer.status === "ok" ? (
+                            <CheckCircle className="h-5 w-5 text-green-500 mr-2" />
+                          ) : (
+                            <XCircle className="h-5 w-5 text-red-500 mr-2" />
+                          )}
+                          <span className="text-2xl font-bold capitalize">
+                            {databaseHealth.postgres.pgbouncer.status === "ok" ? "Healthy" : "Error"}
+                          </span>
+                        </div>
+                      </CardContent>
+                    </Card>
+                    
+                    <Card>
+                      <CardHeader className="py-2">
+                        <CardTitle className="text-sm">Version</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="text-xl font-medium">{databaseHealth.postgres.pgbouncer.version}</div>
+                      </CardContent>
+                    </Card>
+                    
+                    <Card>
+                      <CardHeader className="py-2">
+                        <CardTitle className="text-sm">Uptime</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="text-xl font-medium">{databaseHealth.postgres.pgbouncer.uptime}</div>
+                      </CardContent>
+                    </Card>
+                    
+                    <Card>
+                      <CardHeader className="py-2">
+                        <CardTitle className="text-sm">Active Connections</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="text-xl font-medium">{databaseHealth.postgres.pgbouncer.connections.active}</div>
+                        <div className="text-xs text-muted-foreground">
+                          of {databaseHealth.postgres.pgbouncer.connections.max_clients} max connections
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
+                  
+                  <div>
+                    <h3 className="text-lg font-medium mb-4">Connection Details</h3>
+                    <div className="grid gap-4 md:grid-cols-3">
+                      <Card>
+                        <CardHeader className="py-2">
+                          <CardTitle className="text-sm">Active</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="text-2xl font-bold">{databaseHealth.postgres.pgbouncer.connections.active}</div>
+                          <p className="text-xs text-muted-foreground">Client connections in use</p>
+                        </CardContent>
+                      </Card>
+                      
+                      <Card>
+                        <CardHeader className="py-2">
+                          <CardTitle className="text-sm">Waiting</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="text-2xl font-bold">{databaseHealth.postgres.pgbouncer.connections.waiting}</div>
+                          <p className="text-xs text-muted-foreground">Client connections waiting for server</p>
+                        </CardContent>
+                      </Card>
+                      
+                      <Card>
+                        <CardHeader className="py-2">
+                          <CardTitle className="text-sm">Idle</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="text-2xl font-bold">{databaseHealth.postgres.pgbouncer.connections.idle}</div>
+                          <p className="text-xs text-muted-foreground">Client connections idle</p>
+                        </CardContent>
+                      </Card>
+                    </div>
+                  </div>
+                  
+                  {databaseHealth.postgres.pgbouncer.pools && databaseHealth.postgres.pgbouncer.pools.length > 0 && (
+                    <div>
+                      <h3 className="text-lg font-medium mb-4">Database Pools</h3>
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Database</TableHead>
+                            <TableHead className="text-right">Active</TableHead>
+                            <TableHead className="text-right">Waiting</TableHead>
+                            <TableHead className="text-right">Server Active</TableHead>
+                            <TableHead className="text-right">Server Idle</TableHead>
+                            <TableHead className="text-right">Max Wait</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {databaseHealth.postgres.pgbouncer.pools.map((pool: {
+                            name: string;
+                            active: number;
+                            waiting: number;
+                            server_active: number;
+                            server_idle: number;
+                            server_used: number;
+                            server_tested: number;
+                            server_login: number;
+                            max_wait_ms: number;
+                          }, index: number) => (
+                            <TableRow key={index}>
+                              <TableCell className="font-medium">{pool.name}</TableCell>
+                              <TableCell className="text-right">{pool.active}</TableCell>
+                              <TableCell className="text-right">{pool.waiting}</TableCell>
+                              <TableCell className="text-right">{pool.server_active}</TableCell>
+                              <TableCell className="text-right">{pool.server_idle}</TableCell>
+                              <TableCell className="text-right">{pool.max_wait_ms} ms</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center p-6 text-center">
+                  <AlertCircle className="h-12 w-12 text-yellow-500 mb-4" />
+                  <h3 className="text-lg font-medium mb-2">Connection Pool Data Unavailable</h3>
+                  <p className="text-sm text-muted-foreground max-w-md">
+                    PgBouncer connection pool data is not available. This could be because the PgBouncer pod is not accessible
+                    or is not running properly.
                   </p>
                 </div>
               )}

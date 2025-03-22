@@ -14,7 +14,7 @@ import {
   TooltipContent,
   TooltipProvider,
   TooltipTrigger
-} from './ui/tooltip';
+} from '@/components/ui/tooltip';
 
 interface DashboardNavProps {
   items: NavItem[];

@@ -1,5 +1,5 @@
 import CredentialsProvider from "next-auth/providers/credentials";
-import { db } from "@/lib/db";
+import { prisma } from "@/lib/prisma";
 
 /**
  * Development-only authentication provider
@@ -42,7 +42,7 @@ export const getDevAuthProvider = () => {
         try {
           // For existing user login
           if (credentials.existingUser === 'true') {
-            const existingUser = await db.user.findUnique({
+            const existingUser = await prisma.user.findUnique({
               where: { email: credentials.email }
             });
             
@@ -65,13 +65,13 @@ export const getDevAuthProvider = () => {
           }
           
           // Check if user already exists
-          let user = await db.user.findUnique({
+          let user = await prisma.user.findUnique({
             where: { email: credentials.email }
           });
 
           // Create user if it doesn't exist - always with STUDENT role
           if (!user) {
-            user = await db.user.create({
+            user = await prisma.user.create({
               data: {
                 name: credentials.name,
                 email: credentials.email,

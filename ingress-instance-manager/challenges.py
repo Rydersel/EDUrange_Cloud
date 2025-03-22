@@ -179,10 +179,25 @@ class FullOsChallenge:
                 logging.info(f"Using instance manager URL for WebOS container: {instance_manager_url}")
                 logging.info(f"Using database URL for WebOS container: {database_url}")
                 
-                # Pass through the apps config without transformation
+                # Update the apps config with the correct flag secret name if provided
+                if self.apps_config:
+                    try:
+                        updated_apps_config = json.loads(self.apps_config)
+                        for app in updated_apps_config:
+                            if app.get("id") == "challenge-prompt" and "challenge" in app:
+                                app["challenge"]["flagSecretName"] = secret_name
+                                logging.info(f"Updated flagSecretName in apps_config: {secret_name}")
+                        updated_apps_config_str = json.dumps(updated_apps_config)
+                    except Exception as e:
+                        logging.error(f"Failed to update apps_config with flagSecretName: {e}")
+                        updated_apps_config_str = self.apps_config
+                else:
+                    updated_apps_config_str = self.apps_config or "{}"
+                
+                # Pass through the apps config with updated flag secret name
                 container['env'] = [
                     {"name": "NEXT_PUBLIC_POD_NAME", "value": instance_name},
-                    {"name": "NEXT_PUBLIC_APPS_CONFIG", "value": self.apps_config},  # Pass through directly
+                    {"name": "NEXT_PUBLIC_APPS_CONFIG", "value": updated_apps_config_str},  # Use updated apps config
                     {"name": "NEXT_PUBLIC_CHALLENGE_POD_NAME", "value": instance_name},
                     {"name": "NEXT_PUBLIC_CHALLENGE_API_URL", "value": "http://localhost:5000/execute"},
                     {"name": "NEXT_PUBLIC_TERMINAL_URL", "value": f"https://terminal-{instance_name}.{url}"},
@@ -191,16 +206,12 @@ class FullOsChallenge:
                     {"name": "INSTANCE_MANAGER_URL", "value": instance_manager_url},
                     {"name": "HOSTNAME", "value": instance_name},
                     {"name": "DOMAIN_NAME", "value": url},
-                    {"name": "NODE_ENV", "value": "production"}
+                    {"name": "NODE_ENV", "value": "production"},
+                    {"name": "FLAG_SECRET_NAME", "value": secret_name}  # Add the flag secret name as an env var for fallback
                 ]
                 # Set imagePullPolicy to Always to ensure we get the latest image
                 if 'imagePullPolicy' not in container:
                     container['imagePullPolicy'] = 'Always'
-
-            elif container['name'] == 'bridge':
-                container['env'].append({"name": "flag_secret_name", "value": secret_name})
-                container['env'].append({"name": "NEXT_PUBLIC_APPS_CONFIG", "value": self.apps_config})
-                container['env'].append({"name": "CHALLENGE_POD_NAME", "value": instance_name})
 
             if container['name'] == 'terminal':
                 container['env'] = [
@@ -362,21 +373,6 @@ class WebChallenge:
                 container['image'] = self.challenge_image
                 container['env'].append({"name": "FLAG", "value": flag})
 
-            elif container['name'] == 'bridge':
-                container['env'].append({"name": "flag_secret_name", "value": secret_name})
-                container['env'].append({"name": "WEB_CHAL_LINK", "value": web_challenge_url})
-
-                # Update the NEXT_PUBLIC_APPS_CONFIG with the correct flag secret name and web challenge URL
-                updated_apps_config = json.loads(self.apps_config)
-                for app in updated_apps_config:
-                    if app["id"] == "challenge-prompt" and "challenge" in app:
-                        app["challenge"]["flagSecretName"] = secret_name
-                    if app["id"] == "web_chal":
-                        app["url"] = web_challenge_url
-                updated_apps_config_str = json.dumps(updated_apps_config)
-
-                container['env'].append({"name": "NEXT_PUBLIC_APPS_CONFIG", "value": updated_apps_config_str})
-
             elif container['name'] == 'webos':
                 # Get the instance manager subdomain from environment variable or use default
                 instance_manager_subdomain = os.getenv("INSTANCE_MANAGER_SUBDOMAIN", "instance-manager")
@@ -389,10 +385,25 @@ class WebChallenge:
                 logging.info(f"Using instance manager URL for WebOS container: {instance_manager_url}")
                 logging.info(f"Using database URL for WebOS container: {database_url}")
                 
-                # Pass through the apps config without transformation
+                # Update the apps config with the correct flag secret name if provided
+                if self.apps_config:
+                    try:
+                        updated_apps_config = json.loads(self.apps_config)
+                        for app in updated_apps_config:
+                            if app.get("id") == "challenge-prompt" and "challenge" in app:
+                                app["challenge"]["flagSecretName"] = secret_name
+                                logging.info(f"Updated flagSecretName in apps_config: {secret_name}")
+                        updated_apps_config_str = json.dumps(updated_apps_config)
+                    except Exception as e:
+                        logging.error(f"Failed to update apps_config with flagSecretName: {e}")
+                        updated_apps_config_str = self.apps_config
+                else:
+                    updated_apps_config_str = self.apps_config or "{}"
+                
+                # Pass through the apps config with updated flag secret name
                 container['env'] = [
                     {"name": "NEXT_PUBLIC_POD_NAME", "value": instance_name},
-                    {"name": "NEXT_PUBLIC_APPS_CONFIG", "value": self.apps_config},  # Pass through directly
+                    {"name": "NEXT_PUBLIC_APPS_CONFIG", "value": updated_apps_config_str},  # Use updated apps config
                     {"name": "NEXT_PUBLIC_CHALLENGE_POD_NAME", "value": instance_name},
                     {"name": "NEXT_PUBLIC_CHALLENGE_API_URL", "value": "http://localhost:5000/execute"},
                     {"name": "NEXT_PUBLIC_TERMINAL_URL", "value": f"https://terminal-{instance_name}.{url}"},
@@ -402,12 +413,21 @@ class WebChallenge:
                     {"name": "HOSTNAME", "value": instance_name},
                     {"name": "DOMAIN_NAME", "value": url},
                     {"name": "NODE_ENV", "value": "production"},
-                    {"name": "NEXT_PUBLIC_APPS_CONFIG", "value": updated_apps_config_str}
+                    {"name": "FLAG_SECRET_NAME", "value": secret_name}  # Add the flag secret name as an env var for fallback
                 ]
 
                 # Set imagePullPolicy to Always to ensure we get the latest image
                 if 'imagePullPolicy' not in container:
                     container['imagePullPolicy'] = 'Always'
+
+            if container['name'] == 'terminal':
+                container['env'] = [
+                    {"name": "CONTAINER_NAME", "value": "challenge-container"},
+                    {"name": "POD_NAME", "value": instance_name},
+                    {"name": "KUBERNETES_HOST", "value": self.KUBERNETES_HOST},
+                    {"name": "KUBERNETES_NAMESPACE", "value": "default"},
+                    {"name": "KUBERNETES_SERVICE_ACCOUNT_TOKEN", "value": self.KUBERNETES_SERVICE_ACCOUNT_TOKEN},
+                ]
 
         pod = client.V1Pod(
             api_version="v1",
@@ -549,20 +569,6 @@ class MetasploitChallenge:
             elif container['name'] == 'defence-container':
                 container['image'] = self.defence_image
                 container['env'].append({"name": "FLAG", "value": flag})
-            elif container['name'] == 'bridge':
-                container['env'].append({"name": "flag_secret_name", "value": secret_name})
-                container['env'].append({"name": "ATTACK_CONTAINER_NAME", "value": "attack-container"})
-                container['env'].append({"name": "DEFENCE_CONTAINER_NAME", "value": "defence-container"})
-
-                updated_apps_config = json.loads(self.apps_config)
-                for app in updated_apps_config:
-                    if app["id"] == "challenge-prompt" and "challenge" in app:
-                        app["challenge"]["flagSecretName"] = secret_name
-                updated_apps_config_str = json.dumps(updated_apps_config)
-
-                container['env'].append({"name": "NEXT_PUBLIC_APPS_CONFIG", "value": updated_apps_config_str})
-                container['env'].append({"name": "CHALLENGE_POD_NAME", "value": instance_name})
-
             elif container['name'] == 'webos':
                 # Get the instance manager subdomain from environment variable or use default
                 instance_manager_subdomain = os.getenv("INSTANCE_MANAGER_SUBDOMAIN", "instance-manager")
@@ -575,10 +581,25 @@ class MetasploitChallenge:
                 logging.info(f"Using instance manager URL for WebOS container: {instance_manager_url}")
                 logging.info(f"Using database URL for WebOS container: {database_url}")
                 
-                # Pass through the apps config without transformation
+                # Update the apps config with the correct flag secret name if provided
+                if self.apps_config:
+                    try:
+                        updated_apps_config = json.loads(self.apps_config)
+                        for app in updated_apps_config:
+                            if app.get("id") == "challenge-prompt" and "challenge" in app:
+                                app["challenge"]["flagSecretName"] = secret_name
+                                logging.info(f"Updated flagSecretName in apps_config: {secret_name}")
+                        updated_apps_config_str = json.dumps(updated_apps_config)
+                    except Exception as e:
+                        logging.error(f"Failed to update apps_config with flagSecretName: {e}")
+                        updated_apps_config_str = self.apps_config
+                else:
+                    updated_apps_config_str = self.apps_config or "{}"
+                
+                # Pass through the apps config with updated flag secret name
                 container['env'] = [
                     {"name": "NEXT_PUBLIC_POD_NAME", "value": instance_name},
-                    {"name": "NEXT_PUBLIC_APPS_CONFIG", "value": self.apps_config},  # Pass through directly
+                    {"name": "NEXT_PUBLIC_APPS_CONFIG", "value": updated_apps_config_str},  # Use updated apps config
                     {"name": "NEXT_PUBLIC_CHALLENGE_POD_NAME", "value": instance_name},
                     {"name": "NEXT_PUBLIC_CHALLENGE_API_URL", "value": "http://localhost:5000/execute"},
                     {"name": "NEXT_PUBLIC_TERMINAL_URL", "value": f"https://terminal-{instance_name}.{url}"},
@@ -588,7 +609,7 @@ class MetasploitChallenge:
                     {"name": "HOSTNAME", "value": instance_name},
                     {"name": "DOMAIN_NAME", "value": url},
                     {"name": "NODE_ENV", "value": "production"},
-                    {"name": "NEXT_PUBLIC_APPS_CONFIG", "value": updated_apps_config_str}
+                    {"name": "FLAG_SECRET_NAME", "value": secret_name}  # Add the flag secret name as an env var for fallback
                 ]
 
                 # Set imagePullPolicy to Always to ensure we get the latest image

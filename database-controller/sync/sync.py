@@ -20,8 +20,48 @@ logging.basicConfig(
 # Load environment variables
 load_dotenv()
 
-# Initialize Prisma client
-prisma = Prisma()
+# Use DIRECT_DATABASE_URL if available, otherwise fall back to DATABASE_URL
+direct_database_url = os.environ.get('DIRECT_DATABASE_URL')
+pooled_database_url = os.environ.get('DATABASE_URL')
+database_url = direct_database_url or pooled_database_url
+
+if database_url:
+    logging.info("Using database URL from environment variables")
+    
+    # Check if we're using PgBouncer and log warning if it's the primary URL
+    if 'pgbouncer:6432' in database_url:
+        if direct_database_url:
+            logging.info("Using direct PostgreSQL connection")
+        else:
+            logging.warning("Using PgBouncer connection pool in the DATABASE_URL. This may cause issues with Prisma schema operations.")
+            logging.warning("Consider setting DIRECT_DATABASE_URL to point directly to PostgreSQL.")
+else:
+    logging.warning("No database URL found in environment variables")
+
+# Initialize Prisma client with the appropriate URL
+prisma = None
+try:
+    # First try with direct connection if available
+    if direct_database_url:
+        logging.info("Attempting to connect with direct PostgreSQL URL")
+        prisma = Prisma(datasource={'url': direct_database_url})
+    else:
+        # If no direct URL available, use the pooled URL
+        logging.info("No direct URL available, using pooled connection")
+        prisma = Prisma(datasource={'url': database_url})
+except Exception as e:
+    # If direct connection fails and we have a pooled URL that's different, try that as fallback
+    if direct_database_url and pooled_database_url and direct_database_url != pooled_database_url:
+        logging.warning(f"Direct database connection failed: {str(e)}")
+        logging.info("Falling back to pooled connection via PgBouncer")
+        try:
+            prisma = Prisma(datasource={'url': pooled_database_url})
+        except Exception as fallback_error:
+            logging.error(f"Fallback connection also failed: {str(fallback_error)}")
+            raise
+    else:
+        logging.error(f"Database connection failed: {str(e)}")
+        raise
 
 # Get the instance manager URL from environment variable or use default
 INSTANCE_MANAGER_URL = os.environ.get('INSTANCE_MANAGER_URL', '')
@@ -96,17 +136,61 @@ async def get_challenge_instances():
     return await prisma.challengeinstance.find_many()
 
 
-def get_flag(secret_name):
+def get_flag(secret_name, pod_name=None):
+    """
+    Get flag from a Kubernetes secret
+    
+    Args:
+        secret_name (str): Name of the secret containing the flag (can be None)
+        pod_name (str, optional): Name of the pod, used as fallback if secret_name fails
+        
+    Returns:
+        str: The flag value or "null" if not found
+    """
     try:
+        # Validate the secret_name parameter - handle None, "null", empty string, or whitespace
+        if secret_name is None or secret_name == "null" or not secret_name or not secret_name.strip():
+            logging.warning(f"Invalid secret name provided: '{secret_name}'")
+            
+            # If we have a pod_name, try to use the predictable pattern instead
+            if pod_name and pod_name.startswith('ctfchal-'):
+                derived_secret_name = f"flag-secret-{pod_name}"
+                logging.info(f"Using derived secret name based on pod name: {derived_secret_name}")
+                # Try again with the derived name
+                return get_flag(derived_secret_name)
+            
+            # If no pod_name or derived secret fails
+            return "null"
+            
         logging.info(f"Fetching flag for secret name: {secret_name}")
         response = requests.post(f"{INSTANCE_MANAGER_URL}/get-secret",
-                                 json={"secret_name": secret_name})
+                                 json={"secret_name": secret_name},
+                                 timeout=10)  # Add timeout to prevent hanging requests
+        
+        if not response.ok and pod_name and pod_name.startswith('ctfchal-'):
+            # If getting the flag by secret name failed, try using the pod name directly
+            logging.info(f"Secret {secret_name} not found, trying pod name directly: {pod_name}")
+            response = requests.post(f"{INSTANCE_MANAGER_URL}/get-secret",
+                                    json={"secret_name": pod_name},
+                                    timeout=10)
+        
         logging.info(f"Response status code: {response.status_code}")
-        logging.info(f"Response content: {response.content}")
-        response.raise_for_status()
-        flag = response.json().get("secret_value", "null")
-        logging.info(f"Retrieved flag for {secret_name}: {flag}")
-        return flag
+        
+        # Even if the request failed, try to parse the response
+        # as the modified API now returns a "secret_value": "null" even for errors
+        try:
+            data = response.json()
+            flag = data.get("secret_value", "null")
+            if flag is None:
+                flag = "null"  # Convert None to string "null" for consistency
+            logging.info(f"Retrieved flag for {secret_name}: {flag}")
+            return flag
+        except Exception as json_error:
+            logging.error(f"Error parsing flag response JSON: {json_error}")
+            if not response.ok:
+                response.raise_for_status()  # This will raise an exception if the request failed
+            return "null"
+            
     except Exception as e:
         logging.error(f"Error fetching flag for {secret_name}: {e}")
         return "null"
@@ -115,7 +199,7 @@ def get_flag(secret_name):
 # Add a new challenge instance to the Prisma database
 async def add_challenge_instance(instance):
     logging.info(f"Adding new instance: {instance['challenge_url']}")
-    flag = get_flag(instance.get('flag_secret_name', None))
+    flag = get_flag(instance.get('flag_secret_name', None), instance.get('pod_name'))
 
     # Get challenge ID directly from instance data
     challenge_id = instance.get('challenge_id', None)
@@ -226,7 +310,24 @@ async def remove_challenge_instance(instance_id):
 async def update_challenge_instance(instance):
     logging.info(f"Updating instance: {instance['challenge_url']}")
     current_flag = instance.get('flag', 'null')
-    new_flag = get_flag(instance.get('flag_secret_name', 'null'))
+    pod_name = instance.get('pod_name')
+    new_flag = "null"  # Initialize with default value
+    
+    # Prepare flag secret name with default value if missing
+    flag_secret_name = instance.get('flag_secret_name')
+    if flag_secret_name is None or flag_secret_name.strip() == "" or flag_secret_name == "null":
+        # Use the predictable pattern if flag_secret_name is missing
+        if pod_name and pod_name.startswith('ctfchal-'):
+            flag_secret_name = f"flag-secret-{pod_name}"
+            logging.info(f"Auto-deriving flag_secret_name for pod {pod_name}: {flag_secret_name}")
+            # Get flag using the derived secret name
+            new_flag = get_flag(flag_secret_name, pod_name)
+        else:
+            flag_secret_name = ""
+            logging.warning(f"Flag secret name is missing and pod name is invalid for pod {pod_name}, using empty string")
+    else:
+        # Get flag using the provided secret name
+        new_flag = get_flag(flag_secret_name, pod_name)
 
     if current_flag != new_flag:
         logging.info(f"Updating flag from {current_flag} to {new_flag}")
@@ -236,17 +337,17 @@ async def update_challenge_instance(instance):
         where={'id': instance['pod_name']}
     )
 
-    # Update the instance
+    # Update the instance - make sure field names match the Prisma schema
     updated_instance = await prisma.challengeinstance.update(
         where={
             'id': instance['pod_name']
         },
         data={
-            'userId': instance['user_id'],
+            # Field names must match the Prisma schema
             'challengeImage': instance['challenge_image'],
             'challengeUrl': instance['challenge_url'],
             'status': instance['status'],
-            'flagSecretName': instance['flag_secret_name'],
+            'flagSecretName': flag_secret_name,
             'flag': new_flag
         }
     )
@@ -389,7 +490,7 @@ async def sync_challenges():
                 else:
                     # Update existing instance if necessary
                     db_instance = db_instance_dict[pod_id]
-                    new_flag = get_flag(pod.get('flag_secret_name', ''))
+                    new_flag = get_flag(pod.get('flag_secret_name', ''), pod.get('pod_name'))
 
                     # Check if status transition is valid
                     status_changed = db_instance.status != current_status

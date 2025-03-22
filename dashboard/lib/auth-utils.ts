@@ -3,6 +3,7 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { NextRequest, NextResponse } from 'next/server';
 import { redirect } from 'next/navigation';
+import { createErrorResponse } from '@/lib/utils';
 
 /**
  * Checks if the current user is an admin
@@ -58,16 +59,6 @@ export async function requireAdminAccess() {
   }
 
   return user;
-}
-
-/**
- * Standardized error response creator
- * @param message Error message
- * @param status HTTP status code
- * @returns NextResponse with error message and status
- */
-export function createErrorResponse(message: string, status: number = 403) {
-  return NextResponse.json({ error: message }, { status });
 }
 
 /**

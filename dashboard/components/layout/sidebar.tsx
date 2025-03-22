@@ -1,6 +1,6 @@
 'use client';
 import React, { useState } from 'react';
-import { DashboardNav } from '@/components/dashboard-nav';
+import { DashboardNav } from '@/components/navigation/dashboard-nav';
 import { navItems } from '@/constants/data';
 import { cn } from '@/lib/utils';
 import { ChevronLeft, ArrowLeft } from 'lucide-react';

@@ -61,6 +61,15 @@ export const installDashboard = async ({
     const { databaseUrl, postgresPassword } = await verifyDatabaseCredentials({
       componentLog
     });
+    
+    // Create a direct database URL based on the databaseUrl
+    // If it contains pgbouncer:6432, replace with postgres:5432
+    let directDatabaseUrl = '';
+    if (databaseUrl.includes('pgbouncer:6432')) {
+      directDatabaseUrl = databaseUrl.replace(/pgbouncer:6432/, 'postgres:5432');
+    } else {
+      directDatabaseUrl = databaseUrl; // Just use the same URL
+    }
 
     // Create or update dashboard-secrets
     componentLog('Creating or updating dashboard-secrets...');
@@ -89,6 +98,7 @@ type: Opaque
 data:
   nextauth-secret: "${safeBase64Encode(nextAuthSecret)}"
   database-url: "${safeBase64Encode(databaseUrl)}"
+  direct-database-url: "${safeBase64Encode(directDatabaseUrl)}"
   github-client-id: "${safeBase64Encode('placeholder')}"
   github-client-secret: "${safeBase64Encode('placeholder')}"
 `;
@@ -99,7 +109,7 @@ data:
       }
     } else {
       // Update existing secret with database URL
-      componentLog('Updating existing dashboard-secrets with database URL...');
+      componentLog('Updating existing dashboard-secrets with database URLs...');
 
       // Get existing nextauth-secret
       const getNextAuthSecretCmd = await window.api.executeCommand('kubectl', [
@@ -147,6 +157,7 @@ type: Opaque
 data:
   nextauth-secret: "${encodedNextAuthSecret}"
   database-url: "${safeBase64Encode(databaseUrl)}"
+  direct-database-url: "${safeBase64Encode(directDatabaseUrl)}"
   github-client-id: "${encodedGithubClientId}"
   github-client-secret: "${encodedGithubClientSecret}"
 `;
@@ -197,6 +208,12 @@ spec:
             secretKeyRef:
               name: dashboard-secrets
               key: database-url
+        - name: DIRECT_DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: dashboard-secrets
+              key: direct-database-url
+              optional: true
         - name: AUTH_GITHUB_ID
           valueFrom:
             secretKeyRef:

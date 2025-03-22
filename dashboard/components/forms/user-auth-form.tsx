@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import GitHubAuthButton from '../github-auth-button';
+import GitHubAuthButton from '../ui/github-auth-button';
 import DevAuthForm from './dev-auth-form';
 
 // Server-side environment check
@@ -16,7 +16,7 @@ export default function UserAuthForm() {
   const { data: session, status } = useSession();
   const searchParams = useSearchParams();
   const callbackUrl = searchParams.get('callbackUrl') || '/home';
-  
+
   // Redirect to home if already authenticated
   useEffect(() => {
     if (status === 'authenticated' && session) {
@@ -32,7 +32,7 @@ export default function UserAuthForm() {
       </div>
     );
   }
-  
+
   // If already authenticated, don't show the form
   if (status === 'authenticated') {
     return null;
@@ -55,11 +55,11 @@ export default function UserAuthForm() {
             <TabsTrigger value="github">GitHub</TabsTrigger>
             <TabsTrigger value="dev">Development</TabsTrigger>
           </TabsList>
-          
+
           <TabsContent value="github">
             <GitHubAuthButton callbackUrl={callbackUrl} />
           </TabsContent>
-          
+
           <TabsContent value="dev">
             <DevAuthForm callbackUrl={callbackUrl} />
           </TabsContent>

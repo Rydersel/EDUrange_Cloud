@@ -29,7 +29,49 @@ DB_CONNECTION_LIMIT = int(os.environ.get('DATABASE_CONNECTION_LIMIT', '5'))
 DB_CONNECTION_RETRY_INTERVAL = int(os.environ.get('DATABASE_CONNECTION_RETRY_INTERVAL', '5'))
 DB_CONNECTION_MAX_RETRIES = int(os.environ.get('DATABASE_CONNECTION_MAX_RETRIES', '10'))
 
-prisma = Prisma()
+# Use DIRECT_DATABASE_URL if available, otherwise fall back to DATABASE_URL
+direct_database_url = os.environ.get('DIRECT_DATABASE_URL')
+pooled_database_url = os.environ.get('DATABASE_URL')
+database_url = direct_database_url or pooled_database_url
+
+if database_url:
+    logger.info("Using database URL from environment variables")
+    
+    # Check if we're using PgBouncer and log warning if it's the primary URL
+    if 'pgbouncer:6432' in database_url:
+        if direct_database_url:
+            logger.info("Using direct PostgreSQL connection")
+        else:
+            logger.warning("Using PgBouncer connection pool in the DATABASE_URL. This may cause issues with Prisma schema operations.")
+            logger.warning("Consider setting DIRECT_DATABASE_URL to point directly to PostgreSQL.")
+else:
+    logger.warning("No database URL found in environment variables")
+
+# Initialize Prisma with database_url
+prisma = None
+try:
+    # First try with direct connection if available
+    if direct_database_url:
+        logger.info("Attempting to connect with direct PostgreSQL URL")
+        prisma = Prisma(datasource={'url': direct_database_url})
+    else:
+        # If no direct URL available, use the pooled URL
+        logger.info("No direct URL available, using pooled connection")
+        prisma = Prisma(datasource={'url': database_url})
+except Exception as e:
+    # If direct connection fails and we have a pooled URL that's different, try that as fallback
+    if direct_database_url and pooled_database_url and direct_database_url != pooled_database_url:
+        logger.warning(f"Direct database connection failed: {str(e)}")
+        logger.info("Falling back to pooled connection via PgBouncer")
+        try:
+            prisma = Prisma(datasource={'url': pooled_database_url})
+        except Exception as fallback_error:
+            logger.error(f"Fallback connection also failed: {str(fallback_error)}")
+            raise
+    else:
+        logger.error(f"Database connection failed: {str(e)}")
+        raise
+
 # Track connection state
 connection_state = {
     "is_connected": False,
@@ -529,9 +571,12 @@ class ActivityEventType(str, Enum):
     USER_DELETED = "USER_DELETED"
     CHALLENGE_INSTANCE_CREATED = "CHALLENGE_INSTANCE_CREATED"
     CHALLENGE_INSTANCE_DELETED = "CHALLENGE_INSTANCE_DELETED"
+    CHALLENGE_INSTANCE_UPDATED = "CHALLENGE_INSTANCE_UPDATED"
     QUESTION_ATTEMPTED = "QUESTION_ATTEMPTED"
     QUESTION_COMPLETED = "QUESTION_COMPLETED"
     SYSTEM_ERROR = "SYSTEM_ERROR"
+    CHALLENGE_PACK_INSTALLED = "CHALLENGE_PACK_INSTALLED"
+    ACCESS_CODE_INVALID = "ACCESS_CODE_INVALID"
 
     @classmethod
     def get_all_values(cls):
@@ -1300,6 +1345,80 @@ def get_challenge_details():
     except Exception as e:
         logger.error(f"Error fetching challenge details: {str(e)}")
         return jsonify({'error': str(e)}), 500
+
+
+# Add a new endpoint to update a challenge instance
+@app.route('/api/challenge-instances/<instance_id>', methods=['PATCH'])
+def update_challenge_instance(instance_id):
+    """
+    Update a challenge instance by ID
+    Only allows updating specific fields like flagSecretName and flag
+    """
+    if not ensure_database_connection():
+        return jsonify({"error": "Database connection unavailable"}), 500
+    
+    try:
+        # Get the update data from request
+        data = request.json
+        logger.info(f"Updating challenge instance {instance_id} with data: {data}")
+        
+        # Create the update data dictionary with only allowed fields
+        update_data = {}
+        
+        # Only allow updating specific fields
+        if 'flagSecretName' in data:
+            update_data['flagSecretName'] = data['flagSecretName']
+            logger.info(f"Updating flagSecretName to: {data['flagSecretName']}")
+        
+        if 'flag' in data:
+            update_data['flag'] = data['flag']
+            logger.info(f"Updating flag to: {data['flag']}")
+            
+        if 'status' in data:
+            update_data['status'] = data['status']
+            logger.info(f"Updating status to: {data['status']}")
+        
+        if not update_data:
+            return jsonify({"error": "No valid fields to update"}), 400
+        
+        # Perform the update
+        updated_instance = loop.run_until_complete(
+            prisma.challengeinstance.update(
+                where={
+                    'id': instance_id
+                },
+                data=update_data
+            )
+        )
+        
+        # Log the update
+        safe_log_activity({
+            'eventType': 'CHALLENGE_INSTANCE_UPDATED',
+            'challengeInstanceId': instance_id,
+            'severity': 'INFO',
+            'metadata': {
+                'updated_fields': list(update_data.keys()),
+                'instance_id': instance_id
+            }
+        })
+        
+        return jsonify({
+            "success": True,
+            "message": f"Challenge instance {instance_id} updated successfully",
+            "data": {
+                "id": updated_instance.id,
+                "flagSecretName": updated_instance.flagSecretName,
+                "flag": updated_instance.flag,
+                "status": updated_instance.status
+            }
+        })
+        
+    except Exception as e:
+        logger.error(f"Error updating challenge instance {instance_id}: {str(e)}")
+        return jsonify({
+            "success": False,
+            "error": f"Error updating challenge instance: {str(e)}"
+        }), 500
 
 
 # For Dev

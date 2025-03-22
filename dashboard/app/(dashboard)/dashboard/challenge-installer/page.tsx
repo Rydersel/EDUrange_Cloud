@@ -1,7 +1,7 @@
 import { getServerSession } from 'next-auth/next';
 import { redirect } from 'next/navigation';
 import { prisma } from '@/lib/prisma';
-import BreadCrumb from '@/components/breadcrumb';
+import BreadCrumb from '@/components/navigation/breadcrumb';
 import { Heading } from '@/components/ui/heading';
 import { Separator } from '@/components/ui/separator';
 import authConfig from '@/auth.config';

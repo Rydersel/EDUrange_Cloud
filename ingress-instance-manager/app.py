@@ -1,5 +1,6 @@
 import logging
 import os
+import json
 
 from dotenv import load_dotenv
 
@@ -102,8 +103,95 @@ def end_challenge():
         logging.error(f"Missing key in JSON payload: {e}")
         return jsonify({"error": f"Missing key in JSON payload: {e}"}), 400
 
-    delete_challenge_pod(pod_name)
-    return jsonify({"message": "Challenge ended"})
+    success = delete_challenge_pod(pod_name)
+    return jsonify({
+        "success": success,
+        "message": f"Challenge pod {pod_name} deleted successfully" if success else f"Failed to delete challenge pod {pod_name}"
+    }), 200 if success else 500
+
+
+@app.route('/api/update-challenge', methods=['POST'])
+def update_challenge():
+    try:
+        pod_name = request.json['pod_name']
+        apps_config = request.json['apps_config']
+        
+        logging.info(f"Updating apps_config for pod {pod_name}")
+        
+        # Get the pod to check if it exists
+        v1 = client.CoreV1Api()
+        try:
+            pod = v1.read_namespaced_pod(name=pod_name, namespace="default")
+        except client.exceptions.ApiException as e:
+            if e.status == 404:
+                logging.error(f"Pod {pod_name} not found")
+                return jsonify({"error": f"Pod {pod_name} not found"}), 404
+            else:
+                logging.error(f"Error getting pod {pod_name}: {e}")
+                return jsonify({"error": f"Error getting pod {pod_name}: {e}"}), 500
+        
+        # Extract the flagSecretName from the apps_config
+        flag_secret_name = None
+        try:
+            parsed_apps_config = json.loads(apps_config)
+            for app in parsed_apps_config:
+                if app.get("id") == "challenge-prompt" and "challenge" in app:
+                    flag_secret_name = app["challenge"].get("flagSecretName")
+                    break
+        except Exception as e:
+            logging.warning(f"Failed to extract flagSecretName from apps_config: {e}")
+        
+        # Create a ConfigMap to store the apps_config
+        config_map_name = f"{pod_name}-apps-config"
+        try:
+            # Try to get existing ConfigMap
+            try:
+                v1.read_namespaced_config_map(name=config_map_name, namespace="default")
+                # If it exists, delete it first
+                v1.delete_namespaced_config_map(name=config_map_name, namespace="default")
+                logging.info(f"Deleted existing ConfigMap {config_map_name}")
+            except client.exceptions.ApiException as e:
+                if e.status != 404:  # Ignore if it doesn't exist
+                    logging.warning(f"Error deleting ConfigMap {config_map_name}: {e}")
+            
+            # Create new ConfigMap
+            config_map = client.V1ConfigMap(
+                metadata=client.V1ObjectMeta(name=config_map_name),
+                data={"apps_config.json": apps_config}
+            )
+            v1.create_namespaced_config_map(namespace="default", body=config_map)
+            logging.info(f"Created ConfigMap {config_map_name} with updated apps_config")
+        except Exception as e:
+            logging.error(f"Error creating ConfigMap for {pod_name}: {e}")
+            return jsonify({
+                "success": False,
+                "error": f"Error creating ConfigMap: {str(e)}"
+            }), 500
+        
+        # Now update the flag secret name in the database
+        if flag_secret_name:
+            try:
+                # Send update to the database API to update the flagSecretName
+                database_api_url = os.getenv("DATABASE_API_URL", "http://database-api-service.default.svc.cluster.local")
+                update_response = requests.patch(
+                    f"{database_api_url}/api/challenge-instances/{pod_name}",
+                    json={"flagSecretName": flag_secret_name}
+                )
+                if not update_response.ok:
+                    logging.warning(f"Failed to update flagSecretName in database: {update_response.text}")
+            except Exception as e:
+                logging.warning(f"Error updating flagSecretName in database: {e}")
+        
+        return jsonify({
+            "success": True,
+            "message": f"Updated apps_config for {pod_name}",
+            "config_map": config_map_name,
+            "flag_secret_name": flag_secret_name
+        })
+            
+    except KeyError as e:
+        logging.error(f"Missing key in JSON payload: {e}")
+        return jsonify({"error": f"Missing key in JSON payload: {e}"}), 400
 
 
 @app.route('/api/list-challenge-pods', methods=['GET'])
@@ -112,7 +200,7 @@ def list_challenge_pods():
         v1 = client.CoreV1Api()
         pods = v1.list_pod_for_all_namespaces(watch=False)
         challenge_pods = []
-        
+
         # Get the domain from the environment variable
         domain = os.getenv("INGRESS_URL")
         if not domain:
@@ -120,21 +208,20 @@ def list_challenge_pods():
             domain = ""  # Empty string as fallback, but this should be caught by the installer
         logging.info(f"Using domain for challenge URLs: {domain}")
 
-        for pod in pods.items:  # Probally fine
+        for pod in pods.items:
             if pod.metadata.name.startswith('ctfchal-'):
                 user_id = pod.metadata.labels.get('user', 'unknown')
                 challenge_image = 'unknown'
-                flag_secret_name = None
                 competition_id = pod.metadata.labels.get('competition_id', 'unknown')
                 
+                # Derive flag_secret_name using the predictable pattern
+                pod_name = pod.metadata.name
+                flag_secret_name = f"flag-secret-{pod_name}"
+                logging.info(f"Using derived flag_secret_name: {flag_secret_name} for pod {pod_name}")
+
                 for container in pod.spec.containers:
                     if container.name == 'challenge-container':
                         challenge_image = container.image
-                    if container.name == "bridge":
-                        for env_var in container.env:
-                            if env_var.name == 'flag_secret_name':
-                                flag_secret_name = env_var.value
-                                break
 
                 challenge_url = f"https://{pod.metadata.name}.{domain}"
                 creation_time = pod.metadata.creation_timestamp
@@ -160,23 +247,95 @@ def list_challenge_pods():
 @app.route('/api/get-secret', methods=['POST'])  # Will add auth later
 def get_secret_value(): # Evil ah endpoint
     try:
-        secret_name = request.json['secret_name']
-        namespace = request.json.get('namespace', 'default')
-    except KeyError as e:
-        logging.error(f"Missing key in JSON payload: {e}")
-        return jsonify({"error": f"Missing key in JSON payload: {e}"}), 400
+        # Get the secret_name from request JSON
+        data = request.json
+        if not data:
+            logging.error("No JSON data provided in request")
+            return jsonify({"error": "No JSON data provided", "secret_value": "null"}), 400
+        
+        secret_name = data.get('secret_name')
+        namespace = data.get('namespace', 'default')
+        
+        # Validate secret_name
+        if secret_name is None:
+            logging.error("Missing 'secret_name' in JSON payload")
+            return jsonify({"error": "Missing required parameter 'secret_name'", "secret_value": "null"}), 400
+        
+        # Check if secret_name is empty or whitespace
+        if not secret_name or not secret_name.strip():
+            logging.warning(f"Empty or whitespace-only secret_name provided: '{secret_name}'")
+            return jsonify({"error": "Invalid secret name (empty or whitespace)", "secret_value": "null"}), 400
+        
+        # Trim whitespace to prevent API errors
+        secret_name = secret_name.strip()
+        
+        logging.info(f"Getting secret: '{secret_name}' in namespace '{namespace}'")
+        
+    except Exception as e:
+        logging.error(f"Error processing request: {str(e)}")
+        return jsonify({"error": f"Error processing request: {str(e)}", "secret_value": "null"}), 400
 
+    # Try to get the secret directly first
     secret = get_secret(secret_name, namespace)
     if secret:
         decoded_data = decode_secret_data(secret)
         secret_value = decoded_data.get('flag', 'Flag not found in secret')
+        return jsonify({"secret_value": secret_value})
     else:
-        # Handle the case when secret is None
-        secret_value = "Secret not found"
-        logging.warning(f"Secret {secret_name} not found in namespace {namespace}")
-        return jsonify({"error": f"Secret {secret_name} not found in namespace {namespace}"}), 404
-
-    return jsonify({"secret_value": secret_value})
+        logging.warning(f"Secret {secret_name} not found in namespace {namespace}, trying alternatives")
+        
+        # Check if this is a flag-secret-* that doesn't exist
+        if secret_name.startswith('flag-secret-'):
+            # If this is "flag-secret-<pod_name>" but doesn't exist, try to get the FLAG directly from the pod
+            pod_name = secret_name[len('flag-secret-'):]
+            logging.info(f"Extracting pod name from secret name: {pod_name}")
+            
+            # Try to get the FLAG from the challenge container in the pod
+            try:
+                v1 = client.CoreV1Api()
+                pod = v1.read_namespaced_pod(name=pod_name, namespace=namespace)
+                for container in pod.spec.containers:
+                    if container.name == 'challenge-container':
+                        for env in container.env:
+                            if env.name == 'FLAG':
+                                logging.info(f"Found FLAG env var in challenge-container for pod {pod_name}")
+                                return jsonify({"secret_value": env.value})
+                
+                logging.warning(f"FLAG env var not found in challenge-container for pod {pod_name}")
+            except Exception as pod_error:
+                logging.error(f"Error checking pod {pod_name} for FLAG env var: {pod_error}")
+        
+        # If the secret_name is not a flag-secret, check if it's a pod name itself
+        elif secret_name.startswith('ctfchal-'):
+            try:
+                # Try the predictable flag secret name pattern
+                derived_secret_name = f"flag-secret-{secret_name}"
+                logging.info(f"Trying derived secret name: {derived_secret_name}")
+                
+                derived_secret = get_secret(derived_secret_name, namespace)
+                if derived_secret:
+                    decoded_data = decode_secret_data(derived_secret)
+                    secret_value = decoded_data.get('flag', 'Flag not found in secret')
+                    logging.info(f"Found flag in derived secret {derived_secret_name}")
+                    return jsonify({"secret_value": secret_value})
+                
+                # If derived secret doesn't exist, try to get the FLAG from the pod directly
+                v1 = client.CoreV1Api()
+                pod = v1.read_namespaced_pod(name=secret_name, namespace=namespace)
+                for container in pod.spec.containers:
+                    if container.name == 'challenge-container':
+                        for env in container.env:
+                            if env.name == 'FLAG':
+                                logging.info(f"Found FLAG env var in challenge-container for pod {secret_name}")
+                                return jsonify({"secret_value": env.value})
+                
+                logging.warning(f"FLAG env var not found in challenge-container for pod {secret_name}")
+            except Exception as pod_error:
+                logging.error(f"Error checking pod {secret_name} for FLAG or derived secret: {pod_error}")
+        
+        # Secret not found and fallbacks failed
+        logging.warning(f"Secret {secret_name} not found and all fallbacks failed")
+        return jsonify({"error": f"Secret {secret_name} not found in namespace {namespace}", "secret_value": "null"}), 404
 
 
 @app.route('/api/get-pod-status', methods=['GET'])
@@ -365,44 +524,215 @@ def check_pod_health(pod_name_prefix):
                                 connection_count = 0
 
                                 if postgres_pods.items:
-                                    # Execute a command to get connection count
-                                    exec_command = [
-                                        "/bin/sh",
-                                        "-c",
-                                        "PGPASSWORD=$POSTGRES_PASSWORD psql -U $POSTGRES_USER -d $POSTGRES_DB -c 'SELECT count(*) FROM pg_stat_activity;' | grep -v count | grep -v -- -- | tr -d ' '"
-                                    ]
+                                    logging.info(f"Found {len(postgres_pods.items)} PostgreSQL pods, using: {postgres_pods.items[0].metadata.name}")
 
+                                    # DIAGNOSTIC STEP 1: Log the Postgres pod details and environment variables
                                     try:
-                                        result = stream(
+                                        logging.info(f"===== DIAGNOSTIC: PostgreSQL Pod Environment Variables =====")
+                                        env_command = [
+                                            "/bin/sh",
+                                            "-c",
+                                            "printenv | sort"
+                                        ]
+                                        env_result = stream(
                                             v1.connect_get_namespaced_pod_exec,
                                             postgres_pods.items[0].metadata.name,
                                             'default',
-                                            command=exec_command,
-                                            stderr=True, stdin=False,
-                                            stdout=True, tty=False,
-                                            _preload_content=False
+                                            command=env_command,
+                                            stderr=True, stdin=False, stdout=True, tty=False
                                         )
+                                        logging.info(f"PostgreSQL Pod Environment:\n{env_result}")
 
-                                        # Read the output
-                                        while result.is_open():
-                                            result.update(timeout=1)
-                                            if result.peek_stdout():
-                                                output = result.read_stdout().strip()
-                                                # Clean the output to handle format like "34\n(1row)"
-                                                connection_count_str = output.split('\n')[0].strip()
-                                                try:
-                                                    connection_count = int(connection_count_str)
-                                                except ValueError:
-                                                    logging.error(f"Error parsing connection count from: {output}")
-                                                    connection_count = -1
-                                            if result.peek_stderr():
-                                                logging.error(f"Error getting connection count: {result.read_stderr()}")
+                                        # Check if PostgreSQL is running and accessible
+                                        check_command = [
+                                            "/bin/sh",
+                                            "-c",
+                                            "ps aux | grep postgres"
+                                        ]
+                                        ps_result = stream(
+                                            v1.connect_get_namespaced_pod_exec,
+                                            postgres_pods.items[0].metadata.name,
+                                            'default',
+                                            command=check_command,
+                                            stderr=True, stdin=False, stdout=True, tty=False
+                                        )
+                                        logging.info(f"PostgreSQL Process Check:\n{ps_result}")
 
-                                        result.close()
-                                    except Exception as e:
-                                        logging.error(f"Error executing command in postgres pod: {e}")
-                                        connection_count = -1
+                                        # Check PostgreSQL version
+                                        version_command = [
+                                            "/bin/sh",
+                                            "-c",
+                                            "psql --version"
+                                        ]
+                                        version_result = stream(
+                                            v1.connect_get_namespaced_pod_exec,
+                                            postgres_pods.items[0].metadata.name,
+                                            'default',
+                                            command=version_command,
+                                            stderr=True, stdin=False, stdout=True, tty=False
+                                        )
+                                        logging.info(f"PostgreSQL Version:\n{version_result}")
+                                    except Exception as diag_e:
+                                        logging.error(f"Error during PostgreSQL diagnostics: {diag_e}")
+
+                                    # DIAGNOSTIC STEP 2: Try to get ALL available credentials
+                                    logging.info(f"===== DIAGNOSTIC: Checking All Available Credentials =====")
+                                    all_secrets = {}
+                                    available_secrets = []
+
+                                    # Try to fetch all secrets in the namespace related to database
+                                    try:
+                                        secrets_list = v1.list_namespaced_secret('default')
+                                        for secret in secrets_list.items:
+                                            if 'database' in secret.metadata.name.lower() or 'postgres' in secret.metadata.name.lower() or 'pgbouncer' in secret.metadata.name.lower():
+                                                available_secrets.append(secret.metadata.name)
+                                                data = decode_secret_data(secret)
+                                                # Mask passwords in logs for security
+                                                masked_data = {}
+                                                for k, v in data.items():
+                                                    if 'password' in k.lower():
+                                                        masked_data[k] = f"{v[:2]}****{v[-2:]}" if len(v) > 4 else "****"
+                                                    else:
+                                                        masked_data[k] = v
+                                                all_secrets[secret.metadata.name] = masked_data
+
+                                        logging.info(f"Available database-related secrets: {available_secrets}")
+                                        logging.info(f"Secret contents (passwords masked): {all_secrets}")
+                                    except Exception as secrets_e:
+                                        logging.error(f"Error fetching database secrets: {secrets_e}")
+
+                                    # Try to get admin credentials from the secret
+                                    try:
+                                        # First try pgbouncer-admin-credentials
+                                        logging.info("Attempting to use pgbouncer-admin-credentials")
+                                        secret = v1.read_namespaced_secret("pgbouncer-admin-credentials", "default")
+                                        db_username = decode_secret_data(secret).get('username', 'postgres')
+                                        db_password = decode_secret_data(secret).get('password', '')
+                                        logging.info(f"Using pgbouncer-admin-credentials: username={db_username}, password_length={len(db_password)}")
+                                    except Exception as secret_error:
+                                        logging.warning(f"Could not read pgbouncer admin credentials: {secret_error}")
+                                        # Fall back to database-secrets
+                                        try:
+                                            logging.info("Attempting to use database-secrets")
+                                            secret = v1.read_namespaced_secret("database-secrets", "default")
+                                            all_keys = list(decode_secret_data(secret).keys())
+                                            logging.info(f"Available keys in database-secrets: {all_keys}")
+
+                                            db_username = decode_secret_data(secret).get('postgres-user', 'postgres')
+                                            db_password = decode_secret_data(secret).get('postgres-password', '')
+                                            logging.info(f"Using database-secrets: username={db_username}, password_length={len(db_password)}")
+                                        except Exception as db_secret_error:
+                                            logging.error(f"Could not read database secrets: {db_secret_error}")
+                                            db_username = 'postgres'
+                                            db_password = ''
+                                            logging.info("Falling back to default postgres:postgres credentials")
+
+                                    # DIAGNOSTIC STEP 3: Try connection using the most basic command first
+                                    logging.info(f"===== DIAGNOSTIC: Testing Basic PostgreSQL Connection =====")
+                                    auth_command = [
+                                        "/bin/sh",
+                                        "-c",
+                                        f"psql -V && echo 'Testing auth users:' && psql -l"
+                                    ]
+                                    try:
+                                        logging.info(f"Executing basic auth command...")
+                                        auth_result = stream(
+                                            v1.connect_get_namespaced_pod_exec,
+                                            postgres_pods.items[0].metadata.name,
+                                            'default',
+                                            command=auth_command,
+                                            stderr=True, stdin=False, stdout=True, tty=False
+                                        )
+                                        logging.info(f"Basic auth test result: {auth_result}")
+                                    except Exception as auth_error:
+                                        logging.error(f"Basic auth test failed: {auth_error}")
+
+                                    # Execute a command to get connection count - using the explicit credentials
+                                    logging.info(f"===== DIAGNOSTIC: Attempting Connection Count Query =====")
+                                    logging.info(f"Attempting connection with user '{db_username}'...")
+                                    exec_command = [
+                                        "/bin/sh",
+                                        "-c",
+                                        f"PGPASSWORD='{db_password}' psql -U {db_username} -h localhost -d postgres -c 'SELECT count(*) FROM pg_stat_activity;' | grep -v count | grep -v -- -- | tr -d ' '"
+                                    ]
+
+                                    # Try a sequence of different connection methods
+                                    all_methods = [
+                                        {
+                                            "name": "Method 1: With USER from secrets, explicit host",
+                                            "command": f"PGPASSWORD='{db_password}' psql -U {db_username} -h localhost -d postgres -c 'SELECT count(*) FROM pg_stat_activity;' | grep -v count | grep -v -- -- | tr -d ' '"
+                                        },
+                                        {
+                                            "name": "Method 2: With postgres user and password from secrets, explicit host",
+                                            "command": f"PGPASSWORD='{db_password}' psql -U postgres -h localhost -d postgres -c 'SELECT count(*) FROM pg_stat_activity;' | grep -v count | grep -v -- -- | tr -d ' '"
+                                        },
+                                        {
+                                            "name": "Method 3: With postgres user, explicit host",
+                                            "command": f"PGPASSWORD='postgres' psql -U postgres -h localhost -d postgres -c 'SELECT count(*) FROM pg_stat_activity;' | grep -v count | grep -v -- -- | tr -d ' '"
+                                        },
+                                        {
+                                            "name": "Method 4: With environment variables",
+                                            "command": f"PGPASSWORD=$POSTGRES_PASSWORD psql -U $POSTGRES_USER -d $POSTGRES_DB -c 'SELECT count(*) FROM pg_stat_activity;' | grep -v count | grep -v -- -- | tr -d ' '"
+                                        },
+                                        {
+                                            "name": "Method 5: Local socket without explicit auth",
+                                            "command": "psql -c 'SELECT count(*) FROM pg_stat_activity;' | grep -v count | grep -v -- -- | tr -d ' '"
+                                        },
+                                        {
+                                            "name": "Method 6: Alternative approach - list processes",
+                                            "command": "ps aux | grep -v grep | grep 'postgres' | wc -l"
+                                        }
+                                    ]
+
+                                    # Try all methods and use the first successful one
+                                    for method in all_methods:
+                                        try:
+                                            logging.info(f"Trying {method['name']}")
+                                            cmd = [
+                                                "/bin/sh",
+                                                "-c",
+                                                method['command']
+                                            ]
+
+                                            test_result = stream(
+                                            v1.connect_get_namespaced_pod_exec,
+                                            postgres_pods.items[0].metadata.name,
+                                            'default',
+                                                command=cmd,
+                                                stderr=True, stdin=False, stdout=True, tty=False
+                                            )
+
+                                            logging.info(f"Result for {method['name']}: {test_result}")
+
+                                            # Process the output to extract a number
+                                            # The output might be in formats like:
+                                            # "11\n(1row)" or just "11"
+                                            if test_result.strip():
+                                                # First, split by lines and take the first line
+                                                lines = test_result.strip().split('\n')
+                                                first_line = lines[0].strip()
+
+                                                # Try to extract a number from this line
+                                                import re
+                                                numbers = re.findall(r'\d+', first_line)
+                                                if numbers:
+                                                    try:
+                                                        conn_count = int(numbers[0])
+                                                        logging.info(f"SUCCESS! {method['name']} gave us connection count: {conn_count}")
+                                                        connection_count = conn_count
+                                                        # We found a working method, break the loop
+                                                        break
+                                                    except ValueError:
+                                                        logging.error(f"Could not convert extracted number '{numbers[0]}' to integer")
+                                                else:
+                                                    logging.warning(f"No numbers found in output: {first_line}")
+                                            else:
+                                                logging.warning(f"Output is empty or whitespace")
+                                        except Exception as method_error:
+                                            logging.error(f"Error with {method['name']}: {method_error}")
+
                                 else:
+                                    logging.warning("No PostgreSQL pods found with label app=postgres")
                                     connection_count = -1
                             except Exception as e:
                                 logging.error(f"Error getting database connection count: {e}")
@@ -623,3 +953,288 @@ def restart_deployment():
     except Exception as e:
         logging.error(f"Error restarting deployment: {e}")
         return jsonify({"error": f"Error restarting deployment: {e}"}), 500
+
+
+@app.route('/api/pgbouncer/stats', methods=['GET'])
+def pgbouncer_stats():
+    """
+    Get PgBouncer connection pool statistics.
+    Returns information about the PgBouncer service and its current connection pools.
+    """
+    try:
+        # Get the PgBouncer pods
+        v1 = client.CoreV1Api()
+        pods = v1.list_namespaced_pod(namespace='default', label_selector='app=pgbouncer')
+
+        if not pods.items:
+            logging.warning("No PgBouncer pods found")
+            return jsonify({
+                "status": "error",
+                "message": "No PgBouncer pods found"
+            }), 404
+
+        # Get the first pod (there should be only one PgBouncer pod)
+        pod = pods.items[0]
+        pod_status = pod.status.phase
+
+        # Get pod uptime
+        creation_time = pod.metadata.creation_timestamp
+        import datetime
+        now = datetime.datetime.now(datetime.timezone.utc)
+        uptime_delta = now - creation_time
+
+        # Format uptime string
+        days = uptime_delta.days
+        hours, remainder = divmod(uptime_delta.seconds, 3600)
+        minutes, seconds = divmod(remainder, 60)
+
+        if days > 0:
+            uptime_str = f"{days} days, {hours} hours, {minutes} minutes"
+        elif hours > 0:
+            uptime_str = f"{hours} hours, {minutes} minutes"
+        else:
+            uptime_str = f"{minutes} minutes"
+
+        # Get PgBouncer version
+        try:
+            exec_command = ["/bin/sh", "-c", "pgbouncer --version"]
+            version_resp = stream(
+                v1.connect_get_namespaced_pod_exec,
+                pod.metadata.name,
+                'default',
+                command=exec_command,
+                stderr=True, stdin=False, stdout=True, tty=False
+            )
+            version = version_resp.strip()
+        except Exception as e:
+            logging.error(f"Error getting PgBouncer version: {e}")
+            version = "PgBouncer"
+
+        # Try to get PgBouncer admin credentials from secret
+        try:
+            # First try to get credentials from secret
+            try:
+                secret = v1.read_namespaced_secret("pgbouncer-admin-credentials", "default")
+                pgbouncer_username = "postgres"  # Always use postgres user for PgBouncer admin console
+                pgbouncer_password = decode_secret_data(secret).get('password', '')
+                logging.info(f"Found PgBouncer admin credentials in secret")
+            except Exception as e:
+                logging.warning(f"Could not read PgBouncer admin credentials from secret: {e}")
+                # Fall back to default credentials or environment variable lookups
+                pgbouncer_username = "postgres"
+                pgbouncer_password = ""
+
+                # Try to get credentials from PgBouncer pod environment
+                try:
+                    exec_command = [
+                        "/bin/sh",
+                        "-c",
+                        "printenv | grep POSTGRESQL_"
+                    ]
+                    env_vars = stream(
+                        v1.connect_get_namespaced_pod_exec,
+                        pod.metadata.name,
+                        'default',
+                        command=exec_command,
+                        stderr=True, stdin=False, stdout=True, tty=False
+                    )
+
+                    # Parse environment variables for password only
+                    for line in env_vars.strip().split('\n'):
+                        if "POSTGRESQL_PASSWORD=" in line:
+                            pgbouncer_password = line.split('=')[1].strip()
+
+                    logging.info(f"Using PgBouncer credentials from environment")
+                except Exception as env_error:
+                    logging.warning(f"Could not read PgBouncer environment variables: {env_error}")
+
+            # Try to connect to PgBouncer admin console using psql
+            # Create a temporary script that handles authentication
+            script_content = f"""#!/bin/bash
+# Create a temporary password file for psql
+echo "localhost:6432:pgbouncer:{pgbouncer_username}:{pgbouncer_password}" > ~/.pgpass
+chmod 600 ~/.pgpass
+
+# Query PgBouncer stats
+echo "\\\\x off" > /tmp/pgb_queries.sql
+echo "SHOW POOLS;" >> /tmp/pgb_queries.sql
+echo "SHOW STATS;" >> /tmp/pgb_queries.sql
+echo "SHOW CONFIG;" >> /tmp/pgb_queries.sql
+
+# Run the queries
+PGPASSFILE=~/.pgpass psql -h localhost -p 6432 -U {pgbouncer_username} -d pgbouncer -f /tmp/pgb_queries.sql
+
+# Clean up temp files 
+rm -f ~/.pgpass /tmp/pgb_queries.sql
+"""
+
+            # Write and execute the script
+            exec_command = [
+                "/bin/sh",
+                "-c",
+                f"cat << 'EOF' > /tmp/get_pgbouncer_stats.sh\n{script_content}\nEOF\nchmod +x /tmp/get_pgbouncer_stats.sh\n/tmp/get_pgbouncer_stats.sh"
+            ]
+
+            try:
+                stats_resp = stream(
+                    v1.connect_get_namespaced_pod_exec,
+                    pod.metadata.name,
+                    'default',
+                    command=exec_command,
+                    stderr=True, stdin=False, stdout=True, tty=False
+                )
+
+                logging.info(f"PgBouncer stats response length: {len(stats_resp)}")
+
+                # Parse the response
+                pools = []
+                active_connections = 0
+                waiting_connections = 0
+                idle_connections = 0
+                max_clients = 1000  # Default value
+
+                # Simple parsing of the stats response
+                if "database" in stats_resp and "cl_active" in stats_resp:
+                    current_section = None
+                    lines = stats_resp.strip().split('\n')
+
+                    for line in lines:
+                        # Detect section headers
+                        if line.startswith("SHOW POOLS"):
+                            current_section = "pools"
+                            continue
+                        elif line.startswith("SHOW STATS"):
+                            current_section = "stats"
+                            continue
+                        elif line.startswith("SHOW CONFIG"):
+                            current_section = "config"
+                            continue
+
+                        # Process based on current section
+                        if current_section == "pools" and "|" in line:
+                            parts = line.strip().split('|')
+                            if len(parts) >= 5 and not parts[0].strip() == "database":  # Skip header
+                                try:
+                                    pool_name = parts[0].strip()
+                                    cl_active = int(parts[1].strip() or 0)
+                                    cl_waiting = int(parts[2].strip() or 0)
+                                    sv_active = int(parts[3].strip() or 0)
+                                    sv_idle = int(parts[4].strip() or 0)
+
+                                    pools.append({
+                                        "name": pool_name,
+                                        "active": cl_active,
+                                        "waiting": cl_waiting,
+                                        "server_active": sv_active,
+                                        "server_idle": sv_idle
+                                    })
+
+                                    active_connections += cl_active
+                                    waiting_connections += cl_waiting
+                                    idle_connections += sv_idle
+                                except Exception as parse_error:
+                                    logging.error(f"Error parsing pool line: {line}, error: {parse_error}")
+
+                        elif current_section == "config" and "max_client_conn" in line and "=" in line:
+                            try:
+                                value_part = line.split('=')[1].strip()
+                                max_clients = int(value_part.split()[0])  # Get first number after equals
+                            except Exception as config_error:
+                                logging.error(f"Error parsing config line: {line}, error: {config_error}")
+
+                # Return the parsed stats
+                return jsonify({
+                    "status": "ok",
+                    "version": version,
+                    "uptime": uptime_str,
+                    "connections": {
+                        "active": active_connections,
+                        "waiting": waiting_connections,
+                        "idle": idle_connections,
+                        "max_clients": max_clients
+                    },
+                    "pools": pools
+                }), 200
+
+            except Exception as psql_error:
+                logging.error(f"Error executing psql for PgBouncer stats: {psql_error}")
+                # Try alternative approach with socat
+                try:
+                    exec_command = [
+                        "/bin/sh",
+                        "-c",
+                        """
+                        # Try to use socat to communicate with the admin console using Unix socket
+                        echo "SHOW POOLS;" | socat - UNIX-CONNECT:/tmp/.s.PGSQL.6432 || echo "Socket connection failed"
+                        """
+                    ]
+
+                    socket_test = stream(
+                        v1.connect_get_namespaced_pod_exec,
+                        pod.metadata.name,
+                        'default',
+                        command=exec_command,
+                        stderr=True, stdin=False, stdout=True, tty=False
+                    )
+
+                    logging.info(f"Socket test result: {socket_test}")
+
+                    # Check if PgBouncer is responding via TCP
+                    exec_command = [
+                        "/bin/sh",
+                        "-c",
+                        "nc -z localhost 6432 && echo 'PgBouncer is responding on TCP port 6432' || echo 'PgBouncer is not responding on TCP'"
+                    ]
+
+                    tcp_test = stream(
+                        v1.connect_get_namespaced_pod_exec,
+                        pod.metadata.name,
+                        'default',
+                        command=exec_command,
+                        stderr=True, stdin=False, stdout=True, tty=False
+                    )
+
+                    logging.info(f"TCP test result: {tcp_test}")
+                except Exception as socket_error:
+                    logging.error(f"Error testing socket connection: {socket_error}")
+
+                # Return basic info with connection test results
+                return jsonify({
+                    "status": "ok" if pod_status == "Running" else "error",
+                    "version": version,
+                    "uptime": uptime_str,
+                    "pod_status": pod_status,
+                    "message": "Unable to retrieve detailed PgBouncer stats. Authentication failed. Make sure the pgbouncer-admin-credentials secret exists and contains valid credentials. If missing, reinstall PgBouncer using the edurange-installer.",
+                    "connections": {
+                        "active": 0,
+                        "waiting": 0,
+                        "idle": 0,
+                        "max_clients": 1000
+                    },
+                    "pools": []
+                }), 200
+
+        except Exception as e:
+            logging.error(f"Error in main PgBouncer stats logic: {e}")
+            # Return basic pod info as fallback
+            return jsonify({
+                "status": "ok" if pod_status == "Running" else "error",
+                "version": version,
+                "uptime": uptime_str,
+                "pod_status": pod_status,
+                "connections": {
+                    "active": 0,
+                    "waiting": 0,
+                    "idle": 0,
+                    "max_clients": 1000
+                },
+                "message": f"Basic PgBouncer information available. Pod is {pod_status}.",
+                "pools": []
+            }), 200
+
+    except Exception as e:
+        logging.error(f"Error fetching PgBouncer stats: {e}")
+        return jsonify({
+            "status": "error",
+            "message": f"Error fetching PgBouncer stats: {str(e)}"
+        }), 500

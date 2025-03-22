@@ -5,6 +5,9 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
+# Install build dependencies for node-pty
+RUN apk add --no-cache python3 make g++ git
+
 # Copy package files
 COPY package*.json ./
 
@@ -21,6 +24,12 @@ RUN npm run build
 FROM node:20-alpine
 
 WORKDIR /app
+
+# Install runtime dependencies for node-pty and kubectl
+RUN apk add --no-cache python3 make g++ git procps curl \
+    && curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl" \
+    && chmod +x kubectl \
+    && mv kubectl /usr/local/bin/
 
 # Copy package files
 COPY package*.json ./

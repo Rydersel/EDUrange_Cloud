@@ -1,5 +1,3 @@
-// /components/ChallengesComponent.tsx
-
 'use client';
 
 import React, { useState, useEffect } from 'react';
@@ -22,6 +20,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
+import { StatusBadge } from "@/components/ui/status-badge";
 import {
   Table,
   TableBody,
@@ -62,7 +61,7 @@ export default function InstanceComponent({ isAdmin = false }: { isAdmin?: boole
     // Check if the pathname matches /dashboard/challenge exactly
     return pathname === '/dashboard/challenge';
   };
-  
+
   // Modified toast function that only shows toast on the challenge page
   const showToastIfOnChallengePage = (title: string, description: string, variant: "default" | "destructive" = "default") => {
     if (isChallengePage()) {
@@ -81,14 +80,14 @@ export default function InstanceComponent({ isAdmin = false }: { isAdmin?: boole
   useEffect(() => {
     // Fetch immediately on mount
     fetchInstances();
-    
+
     // Set up polling every 5 seconds
     const interval = setInterval(() => {
       fetchInstances();
     }, 5000);
-    
+
     setPollInterval(interval);
-    
+
     // Clean up on unmount
     return () => {
       if (pollInterval) {
@@ -107,7 +106,7 @@ export default function InstanceComponent({ isAdmin = false }: { isAdmin?: boole
     try {
       // First try to get instances from database API
       const dbResponse = await fetch('/api/database-proxy?path=challenge-instances');
-      
+
       if (!dbResponse.ok) {
         // Show a toast when falling back from DB API
         showToastIfOnChallengePage(
@@ -116,40 +115,40 @@ export default function InstanceComponent({ isAdmin = false }: { isAdmin?: boole
         );
         throw new Error('Failed to fetch challenge instances from database');
       }
-      
+
       const dbData = await dbResponse.json();
-      
+
       if (!dbData.instances || !Array.isArray(dbData.instances)) {
         throw new Error('Unexpected response format from database API');
       }
-      
+
       // Fix the type error for the map iterator by properly typing the dbInstances Map
       const dbInstances = new Map<string, ChallengeInstance>(
         dbData.instances.map((instance: ChallengeInstance) => [instance.id, instance])
       );
-      
+
       // Now fetch real-time status from instance manager to get the most up-to-date information
       try {
         const imResponse = await fetch('/api/instance-manager-proxy?path=list-challenge-pods');
-        
+
         if (imResponse.ok) {
           const imData = await imResponse.json();
-          
+
           if (imData.challenge_pods && Array.isArray(imData.challenge_pods)) {
             // Merge data from both sources
             const mergedInstances = [];
-            
+
             // First add all pods from instance manager with most up-to-date status
             for (const pod of imData.challenge_pods as ChallengePod[]) {
               const dbInstance = dbInstances.get(pod.pod_name);
-              
+
               if (dbInstance) {
                 // Update status with real-time data from instance manager
                 mergedInstances.push({
                   ...dbInstance,
                   status: pod.status // Use real-time status from instance manager
                 });
-                
+
                 // Remove from map to track which ones we've processed
                 dbInstances.delete(pod.pod_name);
               } else {
@@ -169,7 +168,7 @@ export default function InstanceComponent({ isAdmin = false }: { isAdmin?: boole
                 });
               }
             }
-            
+
             // Add any remaining instances from database that weren't in instance manager
             // (these might be instances that failed to create or are being terminated)
             Array.from(dbInstances.entries()).forEach(([id, instance]) => {
@@ -180,7 +179,7 @@ export default function InstanceComponent({ isAdmin = false }: { isAdmin?: boole
               };
               mergedInstances.push(updatedInstance);
             });
-            
+
             setInstances(mergedInstances);
           } else {
             // Show toast for falling back to database only
@@ -212,34 +211,34 @@ export default function InstanceComponent({ isAdmin = false }: { isAdmin?: boole
       }
     } catch (error) {
       console.error('Error fetching instances:', error);
-      
+
       // Show toast for complete database failure
       showToastIfOnChallengePage(
         "Database API Failure",
         "All database connections failed, trying instance manager directly",
         "destructive"
       );
-      
+
       // Try direct query to instance manager as last resort
       try {
         const imResponse = await fetch('/api/instance-manager-proxy?path=list-challenge-pods');
-        
+
         if (!imResponse.ok) {
           throw new Error('Failed to fetch challenge pods from instance manager');
         }
-        
+
         const imData = await imResponse.json();
-        
+
         if (!imData.challenge_pods || !Array.isArray(imData.challenge_pods)) {
           throw new Error('Unexpected response format from instance manager');
         }
-        
+
         // Show toast for successful fallback to instance manager
         showToastIfOnChallengePage(
           "Using Instance Manager Data",
           "Successfully retrieved data from instance manager (limited user information available)"
         );
-        
+
         // Fix the pod parameter type in the map function
         const instancesFromIM = imData.challenge_pods.map((pod: ChallengePod) => ({
           id: pod.pod_name,
@@ -254,18 +253,18 @@ export default function InstanceComponent({ isAdmin = false }: { isAdmin?: boole
           groupId: pod.competition_id,
           groupName: pod.competition_id === 'standalone' ? 'Standalone' : pod.competition_id
         }));
-        
+
         setInstances(instancesFromIM);
       } catch (fallbackError) {
         console.error('Error with fallback to instance manager:', fallbackError);
-        
+
         // Show toast for complete failure
         showToastIfOnChallengePage(
           "All Services Unavailable",
           "Unable to connect to any backend services. Please try again later.",
           "destructive"
         );
-        
+
         setError('Unable to connect to any backend services. Please try again later.');
         setInstances([]);
       }
@@ -291,7 +290,7 @@ export default function InstanceComponent({ isAdmin = false }: { isAdmin?: boole
           'Success',
           'Instance deletion initiated successfully'
         );
-        
+
         // Refresh the instances list after a short delay to allow the deletion to process
         setTimeout(() => {
           fetchInstances();
@@ -302,16 +301,16 @@ export default function InstanceComponent({ isAdmin = false }: { isAdmin?: boole
       // For JSON responses
       try {
         const data = await response.json();
-        
+
         if (!response.ok) {
           throw new Error(data.message || 'Failed to delete instance');
         }
-        
+
         showToastIfOnChallengePage(
           'Success',
           data.message || 'Instance deletion initiated successfully'
         );
-        
+
         // Refresh the instances list after a short delay
         setTimeout(() => {
           fetchInstances();
@@ -323,7 +322,7 @@ export default function InstanceComponent({ isAdmin = false }: { isAdmin?: boole
             'Success',
             'Instance deletion initiated successfully'
           );
-          
+
           // Refresh the instances list after a short delay
           setTimeout(() => {
             fetchInstances();
@@ -355,56 +354,20 @@ export default function InstanceComponent({ isAdmin = false }: { isAdmin?: boole
   // Extract challenge type from image name
   function extractChallengeTypeFromImage(imageName: string): string {
     if (!imageName) return 'Unknown';
-    
+
     // Try to extract based on known patterns
     if (imageName.includes('bandit')) return 'Bandit';
     if (imageName.includes('juice')) return 'Juice Shop';
     if (imageName.includes('web')) return 'Web Challenge';
-    
+
     // Split by common delimiters and take the first part
     const parts = imageName.split(/[:/-]/);
     if (parts.length > 0 && parts[0]) {
       return parts[0].charAt(0).toUpperCase() + parts[0].slice(1);
     }
-    
+
     return 'Unknown';
   }
-
-  // Update the getStatusBadgeVariant function to follow application patterns
-  const getStatusBadgeVariant = (status: string): { variant: "default" | "secondary" | "destructive" | "outline"; className?: string } => {
-    const lowerStatus = status?.toLowerCase() || 'unknown';
-    
-    if (lowerStatus === 'running') {
-      return { 
-        variant: "secondary", 
-        className: "bg-green-500/10 text-green-500 hover:bg-green-500/20 border-green-500/10" 
-      };
-    } 
-    else if (lowerStatus === 'pending' || lowerStatus === 'containercreating') {
-      return { 
-        variant: "secondary", 
-        className: "bg-yellow-500/10 text-yellow-500 hover:bg-yellow-500/20 border-yellow-500/10" 
-      };
-    } 
-    else if (lowerStatus === 'error' || lowerStatus === 'failed' || lowerStatus === 'crashloopbackoff') {
-      return { 
-        variant: "secondary", 
-        className: "bg-red-500/10 text-red-500 hover:bg-red-500/20 border-red-500/10" 
-      };
-    } 
-    else if (lowerStatus === 'terminating') {
-      return { 
-        variant: "secondary", 
-        className: "bg-orange-500/10 text-orange-500 hover:bg-orange-500/20 border-orange-500/10" 
-      };
-    } 
-    else {
-      return { 
-        variant: "outline", 
-        className: "bg-gray-500/10 text-gray-500 hover:bg-gray-500/20 border-gray-500/10" 
-      };
-    }
-  };
 
   // Render instance details in a nicely formatted way
   const renderInstanceDetails = (instance: ChallengeInstance) => {
@@ -417,12 +380,7 @@ export default function InstanceComponent({ isAdmin = false }: { isAdmin?: boole
           </div>
           <div>
             <h4 className="text-sm font-medium text-muted-foreground">Status</h4>
-            <Badge
-              variant={getStatusBadgeVariant(instance.status || 'Unknown').variant}
-              className={getStatusBadgeVariant(instance.status || 'Unknown').className}
-            >
-              {instance.status || 'Unknown'}
-            </Badge>
+            <StatusBadge status={instance.status || 'Unknown'} />
           </div>
           <div>
             <h4 className="text-sm font-medium text-muted-foreground">Challenge Type</h4>
@@ -490,7 +448,7 @@ export default function InstanceComponent({ isAdmin = false }: { isAdmin?: boole
           <Skeleton className="h-8 w-64" />
           <Skeleton className="h-10 w-36" />
         </div>
-        
+
         <div className="overflow-x-auto border rounded-md">
           <Table>
             <TableHeader>
@@ -534,8 +492,8 @@ export default function InstanceComponent({ isAdmin = false }: { isAdmin?: boole
           <AlertDescription>{error}</AlertDescription>
         </div>
         <div className="ml-auto flex items-center">
-          <Button 
-            variant="outline" 
+          <Button
+            variant="outline"
             onClick={() => {
               setRetryCount(prev => prev + 1);
             }}
@@ -582,12 +540,7 @@ export default function InstanceComponent({ isAdmin = false }: { isAdmin?: boole
                 <TableRow key={instance.id}>
                   <TableCell className="font-medium">{getScenarioName(instance)}</TableCell>
                   <TableCell>
-                    <Badge
-                      variant={getStatusBadgeVariant(instance.status || 'Unknown').variant}
-                      className={getStatusBadgeVariant(instance.status || 'Unknown').className}
-                    >
-                      {instance.status || 'Unknown'}
-                    </Badge>
+                    <StatusBadge status={instance.status || 'Unknown'} />
                   </TableCell>
                   <TableCell>{new Date(instance.creationTime).toLocaleString()}</TableCell>
                   {isAdmin && (
@@ -606,11 +559,11 @@ export default function InstanceComponent({ isAdmin = false }: { isAdmin?: boole
                           </Button>
                         </a>
                       )}
-                      
+
                       <Dialog>
                         <DialogTrigger asChild>
-                          <Button 
-                            variant="outline" 
+                          <Button
+                            variant="outline"
                             size="sm"
                             onClick={() => setSelectedInstance(instance)}
                           >
@@ -625,9 +578,9 @@ export default function InstanceComponent({ isAdmin = false }: { isAdmin?: boole
                               Complete information about this challenge instance.
                             </DialogDescription>
                           </DialogHeader>
-                          
+
                           {renderInstanceDetails(instance)}
-                          
+
                           <DialogFooter className="mt-6 flex justify-between items-center">
                             {instance.status?.toLowerCase() === 'running' && instance.challengeUrl && (
                               <a href={instance.challengeUrl} target="_blank" rel="noopener noreferrer" className="flex items-center">
@@ -637,8 +590,8 @@ export default function InstanceComponent({ isAdmin = false }: { isAdmin?: boole
                                 </Button>
                               </a>
                             )}
-                            <Button 
-                              variant="outline" 
+                            <Button
+                              variant="outline"
                               onClick={() => {
                                 showToastIfOnChallengePage(
                                   'Refreshing instance status',
@@ -652,9 +605,9 @@ export default function InstanceComponent({ isAdmin = false }: { isAdmin?: boole
                           </DialogFooter>
                         </DialogContent>
                       </Dialog>
-                      
-                      <Button 
-                        variant="destructive" 
+
+                      <Button
+                        variant="destructive"
                         size="sm"
                         disabled={deleteLoading[instance.id]}
                         onClick={() => handleDeleteInstance(instance.id)}

@@ -18,14 +18,6 @@ spec:
     env:
     - name: FLAG
       value: "flag"
-  - name: bridge
-    image: registry.rydersel.cloud/bridge
-    ports:
-    - containerPort: 5000
-      name: http
-    env:
-    - name: CHALLENGE_CONTAINER_NAME
-      value: "challenge-container"
   - name: webos
     image: registry.rydersel.cloud/webos
     imagePullPolicy: Always

@@ -1,8 +1,8 @@
 'use client';
 
-import { ChallengeList } from '@/components/ChallengeList';
+import { ChallengeList } from '@/components/challenges/ChallengeList';
 import { CompetitionNav } from '@/components/competition/CompetitionNav';
-import { ChallengeInstanceManager } from "@/components/ChallengeInstanceManager";
+import { ChallengeInstanceManager } from "@/components/challenges/ChallengeInstanceManager";
 import { terminateChallenge } from './actions';
 
 interface ChallengeInstance {
@@ -17,7 +17,7 @@ interface ChallengesClientProps {
   activeInstances: ChallengeInstance[];
 }
 
-export function ChallengesClient({ 
+export function ChallengesClient({
   competitionId,
   activeInstances
 }: ChallengesClientProps) {
@@ -35,4 +35,4 @@ export function ChallengesClient({
       </div>
     </>
   );
-} 
+}

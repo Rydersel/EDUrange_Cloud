@@ -1,4 +1,4 @@
-import { MainNavigation } from '@/components/MainNavigation'
+import { MainNavigation } from '@/components/navigation/MainNavigation'
 import { getServerSession } from "next-auth/next";
 import authConfig from "@/auth.config";
 import { redirect } from "next/navigation";

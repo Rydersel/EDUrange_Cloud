@@ -27,6 +27,8 @@ const DatabaseSetup = () => {
   const [existingInstallation, setExistingInstallation] = useState(false);
   const [forceCancelling, setForceCancelling] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [isLinodeEnvironment, setIsLinodeEnvironment] = useState(false);
+  const [cleanupOrphanedVolumes, setCleanupOrphanedVolumes] = useState(false);
 
   useEffect(() => {
     const checkDatabase = async () => {
@@ -48,6 +50,29 @@ const DatabaseSetup = () => {
 
     checkDatabase();
   }, [addLog, setInstallationStatus, markStepCompleted, removeStepCompleted]);
+
+  // Check if we're running on Linode
+  useEffect(() => {
+    const checkLinodeEnvironment = async () => {
+      try {
+        const storageClassResult = await window.api.executeCommand('kubectl', [
+          'get',
+          'storageclass',
+          'linode-block-storage',
+          '--no-headers',
+          '--ignore-not-found'
+        ]);
+        
+        if (storageClassResult.code === 0 && storageClassResult.stdout.trim()) {
+          setIsLinodeEnvironment(true);
+        }
+      } catch (error) {
+        console.error('Error checking for Linode environment:', error);
+      }
+    };
+    
+    checkLinodeEnvironment();
+  }, []);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -98,10 +123,75 @@ const DatabaseSetup = () => {
   };
 
   const handleInstallDatabase = async () => {
+    // Run the Linode volume cleanup if enabled
+    if (isLinodeEnvironment && cleanupOrphanedVolumes) {
+      addLog('Running Linode volume cleanup to remove orphaned volumes...');
+      
+      try {
+        // Run the command to clean up orphaned volumes
+        addLog('Listing orphaned Linode volumes...');
+        const listVolumesResult = await window.api.executeCommand('linode-cli', [
+          'volumes', 
+          'list', 
+          '--json'
+        ]);
+        
+        if (listVolumesResult.code !== 0) {
+          addLog(`Warning: Failed to list Linode volumes: ${listVolumesResult.stderr}`);
+        } else {
+          // Parse the JSON output and extract orphaned volume IDs
+          try {
+            addLog('Identifying orphaned volumes (not attached to any Linode)...');
+            const volumesOutput = await window.api.executeCommand('bash', [
+              '-c',
+              'linode-cli volumes list --json | jq -r \'.[] | select(.linode_id == null) | .id\''
+            ]);
+            
+            if (volumesOutput.code === 0 && volumesOutput.stdout.trim()) {
+              const orphanedVolumeIds = volumesOutput.stdout.trim().split('\n');
+              
+              if (orphanedVolumeIds.length > 0 && orphanedVolumeIds[0] !== '') {
+                addLog(`Found ${orphanedVolumeIds.length} orphaned volumes to clean up.`);
+                
+                // Delete each orphaned volume
+                for (const volumeId of orphanedVolumeIds) {
+                  addLog(`Deleting orphaned volume ID: ${volumeId}`);
+                  const deleteResult = await window.api.executeCommand('linode-cli', [
+                    'volumes',
+                    'delete',
+                    volumeId
+                  ]);
+                  
+                  if (deleteResult.code === 0) {
+                    addLog(`Successfully deleted volume ${volumeId}`);
+                  } else {
+                    addLog(`Warning: Failed to delete volume ${volumeId}: ${deleteResult.stderr}`);
+                  }
+                }
+                
+                addLog('Orphaned volume cleanup completed.');
+              } else {
+                addLog('No orphaned volumes found. Continuing with installation.');
+              }
+            } else {
+              addLog('No orphaned volumes found or error processing volumes. Continuing with installation.');
+            }
+          } catch (error) {
+            addLog(`Warning: Error processing volume list: ${error.message}`);
+          }
+        }
+      } catch (error) {
+        addLog(`Warning: Error during Linode volume cleanup: ${error.message}`);
+        addLog('Continuing with installation anyway...');
+      }
+    }
+    
+    // Validate form before proceeding with installation
     if (!validateForm()) {
       return;
     }
-
+    
+    // Continue with regular database installation
     await installDatabase({
       database,
       setDatabase,
@@ -330,6 +420,29 @@ const DatabaseSetup = () => {
                   </p>
                 </div>
               </div>
+
+              {isLinodeEnvironment && (
+                <div className="flex items-start">
+                  <div className="flex items-center h-5">
+                    <input
+                      id="cleanupOrphanedVolumes"
+                      name="cleanupOrphanedVolumes"
+                      type="checkbox"
+                      checked={cleanupOrphanedVolumes}
+                      onChange={(e) => setCleanupOrphanedVolumes(e.target.checked)}
+                      className="focus:ring-primary-500 h-4 w-4 text-primary-600 border-gray-300 rounded"
+                    />
+                  </div>
+                  <div className="ml-3 text-sm">
+                    <label htmlFor="cleanupOrphanedVolumes" className="font-medium text-gray-700">
+                      Clean up orphaned Linode volumes
+                    </label>
+                    <p className="text-gray-500">
+                      Automatically deletes orphaned Linode volumes (not attached to any Linode) before installation. Requires linode-cli to be installed.
+                    </p>
+                  </div>
+                </div>
+              )}
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <TextField

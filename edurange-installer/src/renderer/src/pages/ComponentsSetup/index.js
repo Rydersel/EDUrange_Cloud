@@ -389,7 +389,7 @@ spec:
       addLog(`Retrieved domain name from certificate: ${useInstallStore.getState().domain.name}`);
     }
 
-    await installInstanceManager({
+    const result = await installInstanceManager({
       setActiveComponent,
       setInstallationStatus,
       setIsCancelling: () => {}, // Empty function as placeholder
@@ -406,6 +406,12 @@ spec:
       registry,
       setIsInstalling
     });
+
+    // If instance manager installation was successful, setup terminal RBAC
+    if (result && result.success) {
+      addLog('Instance Manager installed successfully. Setting up terminal RBAC permissions...');
+      await setupTerminalRBAC();
+    }
   };
 
   const handleInstallMonitoringService = async () => {
@@ -491,7 +497,50 @@ spec:
       await checkAndDeleteExistingService('instance-manager');
       await checkAndDeleteExistingDeployment('instance-manager');
 
-      addLog('Instance Manager uninstalled successfully.');
+      // Also clean up terminal-account RBAC resources
+      addLog('Cleaning up terminal-account RBAC resources...');
+      
+      // Delete the terminal-exec-rolebinding
+      await window.api.executeCommand('kubectl', [
+        'delete',
+        'rolebinding',
+        'terminal-exec-rolebinding',
+        '--ignore-not-found'
+      ]);
+      
+      // Delete the terminal-exec-role
+      await window.api.executeCommand('kubectl', [
+        'delete',
+        'role',
+        'terminal-exec-role',
+        '--ignore-not-found'
+      ]);
+      
+      // Delete the terminal-account-token secret
+      await window.api.executeCommand('kubectl', [
+        'delete',
+        'secret',
+        'terminal-account-token',
+        '--ignore-not-found'
+      ]);
+      
+      // Delete the terminal-credentials ConfigMap
+      await window.api.executeCommand('kubectl', [
+        'delete',
+        'configmap',
+        'terminal-credentials',
+        '--ignore-not-found'
+      ]);
+      
+      // Delete the terminal-account service account
+      await window.api.executeCommand('kubectl', [
+        'delete',
+        'serviceaccount',
+        'terminal-account',
+        '--ignore-not-found'
+      ]);
+
+      addLog('Instance Manager and terminal RBAC resources uninstalled successfully.');
       setInstallationStatus('instanceManager', 'not-started');
 
       // Check if all components are uninstalled and remove the step from completedSteps if needed
@@ -604,6 +653,162 @@ spec:
 
     if (allComponentsUninstalled) {
       removeStepCompleted('components-setup');
+    }
+  };
+
+  // Function to setup terminal-account RBAC permissions
+  const setupTerminalRBAC = async () => {
+    addLog('Setting up terminal-account RBAC permissions...');
+    
+    try {
+      // Create the terminal-account service account if it doesn't exist
+      addLog('Creating terminal-account service account...');
+      await window.api.executeCommand('kubectl', [
+        'create',
+        'serviceaccount',
+        'terminal-account',
+        '-n',
+        'default',
+        '--dry-run=client',
+        '-o',
+        'yaml'
+      ]).then(result => {
+        if (result.code === 0) {
+          return window.api.applyManifestFromString(result.stdout);
+        }
+        throw new Error(`Failed to create terminal-account: ${result.stderr}`);
+      });
+
+      // Apply the terminal RBAC yaml
+      const terminalRbacYaml = `
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: terminal-account
+  namespace: default
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: terminal-exec-role
+  namespace: default
+rules:
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: [""]
+  resources: ["pods/exec"]
+  verbs: ["create", "get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: terminal-exec-rolebinding
+  namespace: default
+subjects:
+- kind: ServiceAccount
+  name: terminal-account
+  namespace: default
+roleRef:
+  kind: Role
+  name: terminal-exec-role
+  apiGroup: rbac.authorization.k8s.io
+`;
+
+      addLog('Applying terminal RBAC configuration...');
+      const applyResult = await window.api.applyManifestFromString(terminalRbacYaml);
+      if (applyResult.code !== 0) {
+        throw new Error(`Failed to apply terminal RBAC: ${applyResult.stderr}`);
+      }
+
+      // Create a Secret for the service account token
+      addLog('Creating service account token secret...');
+      const secretYaml = `
+apiVersion: v1
+kind: Secret
+metadata:
+  name: terminal-account-token
+  annotations:
+    kubernetes.io/service-account.name: terminal-account
+type: kubernetes.io/service-account-token
+`;
+      
+      const secretResult = await window.api.applyManifestFromString(secretYaml);
+      if (secretResult.code !== 0) {
+        throw new Error(`Failed to create token secret: ${secretResult.stderr}`);
+      }
+
+      // Wait for the token to be created
+      addLog('Waiting for token to be generated...');
+      await new Promise(resolve => setTimeout(resolve, 5000));
+
+      // Get the Kubernetes host
+      addLog('Getting Kubernetes host...');
+      const kubeHostResult = await window.api.executeCommand('kubectl', [
+        'config',
+        'view',
+        '--minify',
+        '-o',
+        'jsonpath={.clusters[0].cluster.server}'
+      ]);
+      
+      if (kubeHostResult.code !== 0) {
+        throw new Error(`Failed to get Kubernetes host: ${kubeHostResult.stderr}`);
+      }
+      
+      const kubernetesHost = kubeHostResult.stdout.replace('https://', '');
+
+      // Get the service account token
+      addLog('Getting service account token...');
+      const tokenResult = await window.api.executeCommand('kubectl', [
+        'get',
+        'secret',
+        'terminal-account-token',
+        '-o',
+        'jsonpath={.data.token}'
+      ]);
+      
+      if (tokenResult.code !== 0 || !tokenResult.stdout) {
+        throw new Error(`Failed to get token: ${tokenResult.stderr || 'Token not found'}`);
+      }
+      
+      // Decode the base64 token
+      addLog('Decoding service account token...');
+      const base64Token = tokenResult.stdout;
+      const decodeResult = await window.api.executeCommand('bash', [
+        '-c',
+        `echo "${base64Token}" | base64 -d`
+      ]);
+      
+      if (decodeResult.code !== 0) {
+        throw new Error(`Failed to decode token: ${decodeResult.stderr}`);
+      }
+      
+      const kubernetesToken = decodeResult.stdout;
+
+      // Create a ConfigMap to store credentials
+      addLog('Creating terminal-credentials ConfigMap...');
+      const configMapYaml = `
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: terminal-credentials
+data:
+  KUBERNETES_HOST: "${kubernetesHost}"
+  KUBERNETES_SERVICE_ACCOUNT_TOKEN: "${kubernetesToken}"
+`;
+      
+      const configMapResult = await window.api.applyManifestFromString(configMapYaml);
+      if (configMapResult.code !== 0) {
+        throw new Error(`Failed to create terminal-credentials ConfigMap: ${configMapResult.stderr}`);
+      }
+
+      addLog('Successfully set up terminal-account RBAC permissions');
+      return true;
+    } catch (error) {
+      console.error('Error setting up terminal RBAC:', error);
+      addLog(`Error setting up terminal RBAC: ${error.message}`);
+      return false;
     }
   };
 

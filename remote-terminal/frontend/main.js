@@ -20,17 +20,19 @@ const terminalSize = document.getElementById('terminal-size');
 
 // Terminal Configuration
 const TERMINAL_CONFIG = {
+  DIMENSIONS: {
+    DEFAULT_COLS: 100,
+    DEFAULT_ROWS: 24,
+    MIN_COLS: 40,
+    MIN_ROWS: 10
+  },
   FONT: {
     DEFAULT_SIZE: 14,
-    MIN_SIZE: 8,
+    MIN_SIZE: 10,
     MAX_SIZE: 24,
-    FAMILY: 'Menlo, Monaco, "Courier New", monospace'
+    FAMILY: 'monospace, courier-new, courier, monospace'
   },
-  DIMENSIONS: {
-    DEFAULT_COLS: 150,
-    DEFAULT_ROWS: 40
-  },
-  SCROLLBACK: 10000
+  SCROLLBACK: 5000
 };
 
 const DEFAULT_THEME = {
@@ -57,7 +59,7 @@ const TERMINAL_OPTIONS = {
 
 // Connection Configuration
 const CONNECTION_CONFIG = {
-  MAX_RECONNECT_ATTEMPTS: 5,
+  RECONNECT_ATTEMPTS: 5,
   RECONNECT_INTERVAL_MS: 2000,
   INITIAL_COMMAND_DELAY_MS: 500
 };
@@ -111,7 +113,7 @@ const STATUS_MESSAGES = {
     REFRESH: '\x1b[31m[!] Please refresh the page to try again.\x1b[0m'
   },
   ERROR: {
-    WEBSOCKET: '\x1b[31m[!] WebSocket error: {message}\x1b[0m',
+    WEBSOCKET: '\x1b[31m[!] Connection error: {message}\x1b[0m',
     CONNECTION: '\x1b[31m[!] Failed to connect: {message}\x1b[0m',
     ENV_VARS: '\x1b[31m[!] Failed to fetch environment variables: {message}\x1b[0m'
   }
@@ -119,7 +121,6 @@ const STATUS_MESSAGES = {
 
 
 // Global State Variables
-let socket = null;
 let term = null;
 let fitAddon = null;
 let webglAddon = null;
@@ -129,6 +130,8 @@ let reconnectTimeout = null;
 let lastPod = null;
 let lastContainer = null;
 let currentFontSize = TERMINAL_CONFIG.FONT.DEFAULT_SIZE;
+let sessionId = null;
+let eventSource = null;
 
 const updateConnectionStatusDisplay = (message, type = 'info') => {
   connectionStatus.textContent = message;
@@ -242,30 +245,41 @@ const initializeTerminal = () => {
 };
 
 const handleVisibilityChange = () => {
-  if (document.visibilityState === 'visible' && socket?.readyState !== WebSocket.OPEN) {
-    reconnectAttempts = 0; // Reset attempts when manually triggering reconnect
-    if (lastPod && lastContainer) {
-      connectToTerminalSession(lastPod, lastContainer);
-    }
+  if (document.visibilityState === 'visible' && !eventSource && sessionId) {
+    // Try to reconnect to the existing session
+    fetch(`/terminal/status/${sessionId}`)
+      .then(response => {
+        if (response.ok) {
+          // Session still exists, reconnect
+          connectToTerminalSession(lastPod, lastContainer);
+        } else {
+          // Session doesn't exist, create a new one
+          sessionId = null;
+          connectToTerminalSession(lastPod, lastContainer);
+        }
+      })
+      .catch(() => {
+        // Error checking session, try to create a new one
+        sessionId = null;
+        connectToTerminalSession(lastPod, lastContainer);
+      });
   }
 };
 
 const handleReconnectionAttempt = () => {
-  if (reconnectAttempts < CONNECTION_CONFIG.MAX_RECONNECT_ATTEMPTS && lastPod && lastContainer) {
-    reconnectAttempts++;
-    term.writeln('\r\n');
-    term.writeln(NO_CONNECTION_ASCII);
-    term.writeln('\r\n' + STATUS_MESSAGES.DISCONNECTED.LOST);
-    term.writeln(STATUS_MESSAGES.DISCONNECTED.ATTEMPT
-      .replace('{current}', reconnectAttempts)
-      .replace('{max}', CONNECTION_CONFIG.MAX_RECONNECT_ATTEMPTS));
+  reconnectAttempts++;
+
+  if (reconnectAttempts <= CONNECTION_CONFIG.RECONNECT_ATTEMPTS) {
+    term.writeln(
+      STATUS_MESSAGES.DISCONNECTED.ATTEMPT
+        .replace('{current}', reconnectAttempts)
+        .replace('{max}', CONNECTION_CONFIG.RECONNECT_ATTEMPTS)
+    );
     connectToTerminalSession(lastPod, lastContainer);
-  } else if (reconnectAttempts >= CONNECTION_CONFIG.MAX_RECONNECT_ATTEMPTS) {
-    term.writeln('\r\n');
-    term.writeln(NO_CONNECTION_ASCII);
-    term.writeln('\r\n' + STATUS_MESSAGES.DISCONNECTED.MAX_ATTEMPTS);
+  } else {
+    term.writeln(STATUS_MESSAGES.DISCONNECTED.MAX_ATTEMPTS);
     term.writeln(STATUS_MESSAGES.DISCONNECTED.REFRESH);
-    updateConnectionStatusDisplay('Reconnection failed', 'error');
+    updateConnectionStatusDisplay('Connection lost', 'error');
   }
 };
 
@@ -274,12 +288,10 @@ const connectToTerminalSession = async (pod, container) => {
   lastPod = pod;
   lastContainer = container;
 
-  if (socket !== null) {
-    terminalComponent.innerHTML = "";
-    socket.close();
-    socket = null;
-    await new Promise(resolve => setTimeout(resolve, 1200));
-    return connectToTerminalSession(pod, container);
+  // Close existing EventSource if it exists
+  if (eventSource) {
+    eventSource.close();
+    eventSource = null;
   }
 
   // Initialize terminal if not already done
@@ -298,66 +310,106 @@ const connectToTerminalSession = async (pod, container) => {
     term.clear();
     term.writeln(EDURANGE_LOGO);
     term.writeln('');
-    term.writeln(NO_CONNECTION_ASCII);
     term.writeln('\r\n' + STATUS_MESSAGES.CONNECTING.INITIAL);
     term.writeln(STATUS_MESSAGES.CONNECTING.ATTEMPT + '\r\n');
   }
 
   updateConnectionStatusDisplay('Connecting...', 'info');
-  const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
-  const wsUrl = `${protocol}://${window.location.host}/ws?pod=${pod}&container=${container}`;
-  
+
   try {
-    socket = new WebSocket(wsUrl);
-    
-    socket.addEventListener("open", () => {
-      reconnectAttempts = 0; // Reset attempts on successful connection
-      const attachAddon = new AttachAddon(socket);
-      term.loadAddon(attachAddon);
-      updateConnectionStatusDisplay('Connected', 'success');
-      
-      // Clear terminal and show appropriate message based on connection type
-      term.clear();
-      
-      // Show reconnection success message if this was a reconnection
-      if (reconnectAttempts > 0) {
-        term.writeln(NO_CONNECTION_ASCII);
-        term.writeln('\r\n' + STATUS_MESSAGES.CONNECTED.RECONNECTED);
-        term.writeln(STATUS_MESSAGES.CONNECTED.READY + '\r\n');
-      } else {
-        // Show connection established message for first connection
-        term.writeln(STATUS_MESSAGES.CONNECTED.SUCCESS + '\r\n');
-      }
-      
-      // Send initial command after connection
-      setTimeout(() => {
-        socket.send("hostname\n");
-      }, CONNECTION_CONFIG.INITIAL_COMMAND_DELAY_MS);
+    // Create a new terminal session
+    const createResponse = await fetch('/terminal/create', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        pod,
+        container,
+        cols: term.cols,
+        rows: term.rows
+      })
     });
 
-    socket.addEventListener("close", (event) => {
-      term.writeln("");
-      term.writeln("  \x1b[31m[!] Lost connection\x1b[0m");
+    if (!createResponse.ok) {
+      const errorData = await createResponse.json();
+      throw new Error(errorData.error || `HTTP error! status: ${createResponse.status}`);
+    }
+
+    const sessionData = await createResponse.json();
+    sessionId = sessionData.sessionId;
+
+    // Set up event source for terminal output
+    eventSource = new EventSource(`/terminal/output/${sessionId}`);
+    
+    eventSource.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      if (data.data) {
+        term.write(data.data);
+      }
+    };
+
+    eventSource.onopen = () => {
+      reconnectAttempts = 0; // Reset attempts on successful connection
+      updateConnectionStatusDisplay('Connected', 'success');
+      
+      if (reconnectAttempts > 0) {
+        term.writeln(STATUS_MESSAGES.CONNECTED.RECONNECTED);
+        term.writeln(STATUS_MESSAGES.CONNECTED.READY + '\r\n');
+      } else {
+        term.writeln(STATUS_MESSAGES.CONNECTED.SUCCESS + '\r\n');
+        
+        // Clear the terminal after connection is established
+        setTimeout(() => {
+          term.clear();
+          term.write('\r\n# ');
+        }, 1000); // Wait 1 second before clearing
+      }
+    };
+
+    eventSource.onerror = (error) => {
+      console.error('EventSource error:', error);
+      eventSource.close();
+      eventSource = null;
+      
+      term.writeln('\r\n' + STATUS_MESSAGES.DISCONNECTED.LOST);
       updateConnectionStatusDisplay('Disconnected', 'error');
       
       // Attempt to reconnect after delay
       reconnectTimeout = setTimeout(handleReconnectionAttempt, CONNECTION_CONFIG.RECONNECT_INTERVAL_MS);
+    };
+
+    // Set up terminal input handling
+    term.onData((data) => {
+      if (sessionId) {
+        fetch(`/terminal/input/${sessionId}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ data })
+        }).catch(error => {
+          console.error('Error sending terminal input:', error);
+        });
+        
+        // Increment command counter if Enter key is pressed
+        if (data === '\r' || data === '\n') {
+          commandCounter++;
+          updateCommandCount();
+        }
+      }
     });
 
-    socket.addEventListener("error", (error) => {
-      term.writeln("");
-      term.writeln(NO_CONNECTION_ASCII);
-      term.writeln("");
-      term.writeln(STATUS_MESSAGES.ERROR.WEBSOCKET.replace('{message}', error.message));
-      updateConnectionStatusDisplay('Connection error', 'error');
-    });
+    // Initial terminal resize
+    handleResize();
 
   } catch (error) {
+    console.error('Error connecting to terminal session:', error);
     term.writeln("");
-    term.writeln(NO_CONNECTION_ASCII);
     term.writeln("");
-    term.writeln(`  \x1b[31m[!] Failed to connect: ${error.message}\x1b[0m`);
+    term.writeln(STATUS_MESSAGES.ERROR.CONNECTION.replace('{message}', error.message));
     updateConnectionStatusDisplay('Connection failed', 'error');
+    
     // Attempt to reconnect after error
     reconnectTimeout = setTimeout(handleReconnectionAttempt, CONNECTION_CONFIG.RECONNECT_INTERVAL_MS);
   }
@@ -365,29 +417,84 @@ const connectToTerminalSession = async (pod, container) => {
 
 // Update handleResize to include terminal size update
 const handleResize = () => {
-  if (fitAddon) {
+  if (fitAddon && term) {
     fitAddon.fit();
     updateTerminalSize();
-  }
-};
 
-window.addEventListener('resize', handleResize);
-
-// Initialize on load
-window.onload = async () => {
-  try {
-    const response = await fetch('/env');
-    const envData = await response.json();
-    const { POD_NAME, CONTAINER_NAME } = envData;
-    connectToTerminalSession(POD_NAME, CONTAINER_NAME);
-  } catch (error) {
-    console.error('Error fetching environment variables:', error);
-    if (term) {
-      term.writeln(`  \x1b[31m[!] Failed to fetch environment variables: ${error.message}\x1b[0m`);
-      updateConnectionStatusDisplay('Failed to fetch environment', 'error');
+    // Send new terminal dimensions to server
+    if (sessionId) {
+      fetch(`/terminal/resize/${sessionId}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          cols: term.cols,
+          rows: term.rows
+        })
+      }).catch(error => {
+        console.error('Error resizing terminal:', error);
+      });
     }
   }
 };
 
-// Add visibility change listener
-document.addEventListener('visibilitychange', handleVisibilityChange);
+// Load environment variables
+const loadEnvironmentVariables = async () => {
+  try {
+    const response = await fetch('/env');
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    const data = await response.json();
+    return {
+      pod: data.POD_NAME,
+      container: data.CONTAINER_NAME
+    };
+  } catch (error) {
+    console.error('Error fetching environment variables:', error);
+    term.writeln(STATUS_MESSAGES.ERROR.ENV_VARS.replace('{message}', error.message));
+    throw error;
+  }
+};
+
+// Main initialization function
+const initializeApplication = async () => {
+  try {
+    // Load environment variables
+    const env = await loadEnvironmentVariables();
+    
+    // Initialize terminal and connect to session
+    await connectToTerminalSession(env.pod, env.container);
+    
+    // Set up event listeners
+    window.addEventListener('resize', handleResize);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    // Set up font size controls
+    // ... existing code for font size controls ...
+    
+  } catch (error) {
+    console.error('Error initializing application:', error);
+    if (term) {
+      term.writeln(`\r\n\x1b[31m[!] Initialization error: ${error.message}\x1b[0m`);
+    }
+  }
+};
+
+// Clean up function for page unload
+const cleanupSession = () => {
+  if (sessionId) {
+    // Use the sendBeacon API for reliable delivery during page unload
+    navigator.sendBeacon(`/terminal/close/${sessionId}`);
+  }
+  
+  if (eventSource) {
+    eventSource.close();
+  }
+};
+
+// Initialize on page load
+window.addEventListener('load', initializeApplication);
+window.addEventListener('beforeunload', cleanupSession);
+

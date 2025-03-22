@@ -48,12 +48,15 @@ export async function POST(req: NextRequest) {
     }
     
     const { code } = validationResult.data;
+    
+    // Convert the access code to uppercase to make it case-insensitive
+    const normalizedCode = code.toUpperCase();
 
     // Find valid access code - only check if the code exists and is not expired
     // No role-based filtering to ensure all users can join with valid codes
     const accessCode = await prisma.competitionAccessCode.findFirst({
       where: {
-        code,
+        code: normalizedCode,
         OR: [
           { expiresAt: null },
           { expiresAt: { gt: new Date() } }

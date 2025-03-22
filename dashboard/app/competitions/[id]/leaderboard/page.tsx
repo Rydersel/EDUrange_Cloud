@@ -3,7 +3,7 @@
 import { Loader2 } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
 import { useState, useEffect, use } from 'react';
-import { Leaderboard } from '@/components/Leaderboard';
+import { Leaderboard } from '@/components/competition/Leaderboard';
 import { CompetitionNav } from '@/components/competition/CompetitionNav';
 
 interface Competition {
@@ -78,11 +78,11 @@ export default function CompetitionLeaderboardPage(props: CompetitionLeaderboard
             <p className="mt-2 text-muted-foreground">{competition.description}</p>
           )}
         </div>
-        
+
         <div className="w-full">
           <Leaderboard />
         </div>
       </main>
     </div>
   );
-} 
+}

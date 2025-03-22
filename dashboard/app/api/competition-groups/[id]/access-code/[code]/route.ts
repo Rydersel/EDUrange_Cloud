@@ -30,11 +30,14 @@ export async function DELETE(req: Request, props: { params: Promise<{ id: string
     if (!competition || competition.length === 0) {
       return new NextResponse('Forbidden', { status: 403 });
     }
+    
+    // Convert the access code to uppercase for case-insensitive matching
+    const normalizedCode = params.code.toUpperCase();
 
     // Get the access code before deleting it
     const accessCode = await prisma.competitionAccessCode.findUnique({
       where: {
-        code: params.code,
+        code: normalizedCode,
         groupId: params.id
       }
     });
@@ -46,7 +49,7 @@ export async function DELETE(req: Request, props: { params: Promise<{ id: string
     // Delete the access code
     await prisma.competitionAccessCode.delete({
       where: {
-        code: params.code,
+        code: normalizedCode,
         groupId: params.id
       }
     });

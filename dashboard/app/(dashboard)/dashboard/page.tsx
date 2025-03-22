@@ -13,13 +13,15 @@ async function getSystemHealth() {
     const baseUrl = process.env.NEXT_PUBLIC_API_URL ||
                    (typeof window === 'undefined' ? process.env.NEXTAUTH_URL : window.location.origin);
 
+    console.log('Using base URL for system health API:', baseUrl);
+    
     // For server components, we'll pass a session token instead of using credentials
     const response = await fetch(`${baseUrl}/api/system-health?sessionToken=server-component`, {
       cache: 'no-store',
     });
 
     if (!response.ok) {
-      throw new Error('Failed to fetch system health data');
+      throw new Error(`Failed to fetch system health data: ${response.status} ${response.statusText}`);
     }
 
     return await response.json();
@@ -49,6 +51,21 @@ async function getSystemHealth() {
           valid: 0,
           expiringSoon: 0,
           expired: 0
+        }
+      },
+      monitoring: {
+        status: "error",
+        uptime: "N/A",
+        lastRestart: "N/A",
+        version: "N/A",
+        components: {
+          prometheus: "error",
+          nodeExporter: "error"
+        },
+        metrics: {
+          totalSeries: 0,
+          scrapeTargets: 0,
+          activeTargets: 0
         }
       },
       challenges: {

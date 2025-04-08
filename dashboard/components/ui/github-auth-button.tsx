@@ -11,7 +11,7 @@ interface GitHubAuthButtonProps {
 
 export default function GoogleSignInButton({ callbackUrl }: GitHubAuthButtonProps) {
   const searchParams = useSearchParams();
-  const defaultCallbackUrl = searchParams.get('callbackUrl');
+  const defaultCallbackUrl = searchParams ? searchParams.get('callbackUrl') : null;
 
   // Use the prop if provided, otherwise use the URL param, or fall back to home
   const finalCallbackUrl = callbackUrl || defaultCallbackUrl || '/home';

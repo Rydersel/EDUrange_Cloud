@@ -1,196 +1,175 @@
-import { NextResponse, NextRequest } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
-import { User } from "@prisma/client";
-import { transformToWebOSFormat, transformQuestionsToPromptApp } from "@/lib/webos/transform";
+import { NextRequest, NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth/next';
+import authConfig from '@/auth.config';
+import { prisma } from '@/lib/prisma';
+import { getUserChallengeInstances } from '@/lib/challenges-service';
+import { v4 as uuidv4 } from 'uuid';
 import { ActivityLogger, ActivityEventType } from '@/lib/activity-logger';
 import { getInstanceManagerUrl } from '@/lib/api-config';
+import fetch from 'node-fetch';
+
+// Function to generate a random flag for challenges
+const generateFlag = (challengeId: string): string => {
+  return `flag{${uuidv4().substring(0, 8)}${challengeId.substring(0, 4)}}`;
+};
 
 export async function POST(req: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const session = await getServerSession(authConfig);
+    if (!session || !session.user) {
+      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
     }
 
     const body = await req.json();
     const { challengeId, competitionId } = body;
 
-    // Validate required fields
     if (!challengeId || !competitionId) {
+      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+    }
+
+    // Check if user already has too many active instances
+    const userInstances = await getUserChallengeInstances(session.user.id);
+    const activeInstances = userInstances.filter(
+      (instance: any) => instance.status === "RUNNING" || instance.status === "STARTING"
+    );
+
+    // Limit active instances to 3 per user
+    const MAX_ACTIVE_INSTANCES = 3;
+    if (activeInstances.length >= MAX_ACTIVE_INSTANCES) {
       return NextResponse.json(
-        { error: "Challenge ID and Competition ID are required" },
+        { 
+          error: `You have reached the maximum limit of ${MAX_ACTIVE_INSTANCES} active challenges. Please terminate some before starting new ones.`,
+          activeInstances 
+        },
         { status: 400 }
       );
     }
 
-    // Validate competition membership
-    const competition = await prisma.competitionGroup.findFirst({
-      where: {
-        id: competitionId,
-        OR: [
-          { members: { some: { id: session.user.id } } },
-          { instructors: { some: { id: session.user.id } } },
-        ],
-      },
-      include: {
-        instructors: true,
-      },
-    });
-
-    if (!competition) {
-      return NextResponse.json(
-        { error: "Not a member of this competition" },
-        { status: 403 }
-      );
-    }
-
-    // Get challenge details
-    const challenge = await prisma.challenges.findUnique({
+    // Get challenge details, including CDF content
+    const challenge = await prisma.challenge.findUnique({
       where: { id: challengeId },
       include: {
-        appConfigs: true,
-        questions: {
-          orderBy: { order: 'asc' }
-        },
-        challengeType: true
+        pack: true
       }
     });
 
     if (!challenge) {
-      return NextResponse.json(
-        { error: "Challenge not found" },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: 'Challenge not found' }, { status: 404 });
     }
 
-    // Check instance limit (skip for instructors)
-    const isInstructor = competition.instructors?.some(
-      (instructor: User) => instructor.id === session.user.id
-    ) || false;
-
-    if (!isInstructor) {
-      const activeInstances = await prisma.challengeInstance.count({
-        where: {
-          userId: session.user.id,
-          status: {
-            in: ["running", "creating"]
-          },
-          competitionId: competitionId
-        },
-      });
-
-      if (activeInstances >= 3) {
-        return NextResponse.json(
-          { error: "Maximum number of active instances reached" },
-          { status: 400 }
-        );
-      }
+    // Ensure CDF content exists
+    if (!challenge.cdf_content) {
+      console.error(`Challenge ${challengeId} is missing CDF content.`);
+      return NextResponse.json({ error: 'Challenge definition (CDF) is missing or invalid.' }, { status: 500 });
     }
 
-    // Transform app configs to WebOS format
-    const transformedAppConfigs = transformToWebOSFormat(challenge.appConfigs);
-
-    // Create and add challenge prompt app
-    const promptApp = transformQuestionsToPromptApp(
-      challenge.questions,
-      challenge.name,
-      challenge.description || undefined
-    );
-    transformedAppConfigs.push(promptApp);
-
-    // Get the instance manager URL using the centralized function
-    const instanceManagerUrl = getInstanceManagerUrl();
+    // Debug logs to check CDF content
+    console.log(`Challenge ${challengeId} CDF content type: ${typeof challenge.cdf_content}`);
+    console.log(`Challenge ${challengeId} CDF content keys: ${Object.keys(challenge.cdf_content)}`);
     
-    if (!instanceManagerUrl) {
-      console.error('Instance manager URL is undefined');
-      return NextResponse.json(
-        { error: 'Instance manager URL is undefined' },
-        { status: 500 }
-      );
-    }
+    // Parse CDF content if needed
+    let cdfContentObj = typeof challenge.cdf_content === 'string' 
+      ? JSON.parse(challenge.cdf_content) 
+      : challenge.cdf_content;
     
-    console.log("Instance manager URL:", instanceManagerUrl);
-    
-    // Call instance manager to create challenge
-    const instanceManagerPayload = {
-      user_id: session.user.id,
-      challenge_id: challengeId, // Add challenge ID for database-sync
-      challenge_image: challenge.challengeImage,
-      apps_config: JSON.stringify(transformedAppConfigs),
-      chal_type: challenge.challengeType?.name?.toLowerCase() || "fullos", // Make this dynamic based on challenge type
-      competition_id: competitionId,
-    };
-
-    console.log("Calling instance manager with payload:", instanceManagerPayload);
-
-    try {
-      const fullUrl = `${instanceManagerUrl}/start-challenge`;
-      console.log("Full URL for API call:", fullUrl);
+    // Get or create typeConfig if not present
+    if (!cdfContentObj.typeConfig) {
+      console.log(`Challenge ${challengeId} does not have typeConfig, attempting to create a default one.`);
+      // Default typeConfig based on challenge type
+      const challengeType = challenge.challengeTypeId?.toLowerCase() || '';
       
-      const response = await fetch(
-        fullUrl,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(instanceManagerPayload),
-        }
-      );
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error("Instance manager error:", {
-          status: response.status,
-          statusText: response.statusText,
-          error: errorText
-        });
-        throw new Error(`Failed to create challenge instance: ${errorText}`);
-      }
-
-      const instanceData = await response.json();
-      console.log("Instance manager response:", instanceData);
-
-      // Add flag secret name to challenge prompt app
-      if (promptApp.challenge) {
-        promptApp.challenge.flagSecretName = instanceData.flag_secret_name;
-      }
-
-      // Update instance manager with transformed configs including flag secret
-      const updatePayload = {
-        pod_name: instanceData.deployment_name,
-        apps_config: JSON.stringify(transformedAppConfigs),
+      // Add default typeConfig
+      cdfContentObj.typeConfig = {
+        challengeImage: `registry.rydersel.cloud/${challengeId}`
       };
-
-      await fetch(
-        `${instanceManagerUrl}/update-challenge`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(updatePayload),
-        }
-      );
-
+      
+      // Add type-specific configuration based on challenge type
+      if (challengeType === 'metasploit') {
+        cdfContentObj.typeConfig.attackImage = `registry.rydersel.cloud/${challengeId}-attack`;
+        cdfContentObj.typeConfig.defenseImage = `registry.rydersel.cloud/${challengeId}-defense`;
+      }
+    }
+    
+    let challengeInstance;
+    try {
       // Create initial challenge instance record
-      const challengeInstance = await prisma.challengeInstance.create({
+      challengeInstance = await prisma.challengeInstance.create({
         data: {
-          id: instanceData.deployment_name,
           challengeId: challengeId,
           userId: session.user.id,
           competitionId: competitionId,
-          challengeImage: challenge.challengeImage,
-          challengeUrl: instanceData.challenge_url,
-          status: "creating",
-          flagSecretName: instanceData.flag_secret_name || "null",
-          flag: "null", // Let sync service update this
+          challengeUrl: 'pending...',
+          status: "STARTING",
+          flagSecretName: null,
+          flag: generateFlag(challengeId),
         },
       });
 
-      // Log challenge start
+      // Call Instance Manager
+      const instanceManagerUrl = getInstanceManagerUrl();
+      // Ensure cdf_content is a string as expected by the Instance Manager
+      const cdfContent = typeof cdfContentObj === 'object' 
+        ? JSON.stringify(cdfContentObj) 
+        : challenge.cdf_content;
+        
+      const imPayload = {
+        deployment_name: challengeInstance.id,
+        user_id: session.user.id,
+        cdf_content: cdfContent,
+        competition_id: competitionId
+      };
+
+      console.log(`Sending payload to instance manager: ${JSON.stringify({
+        deployment_name: challengeInstance.id,
+        user_id: session.user.id,
+        cdf_content_length: String(cdfContent).length,
+        competition_id: competitionId
+      })}`);
+
+      const imResponse = await fetch(`${instanceManagerUrl}/start-challenge`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(imPayload),
+      });
+
+      if (!imResponse.ok) {
+        const errorText = await imResponse.text();
+        console.error(`Instance Manager failed for ${challengeInstance.id}: ${imResponse.status} ${errorText}`);
+        await prisma.challengeInstance.update({
+            where: { id: challengeInstance.id },
+            data: { status: 'ERROR' },
+        });
+        throw new Error(`Instance Manager failed: ${errorText}`);
+      }
+
+      const imResult = await imResponse.json();
+      console.log(`Instance Manager response for ${challengeInstance.id}:`, imResult);
+      
+      // Extract flag information from Instance Manager response
+      const flagSecretName = imResult.flag_secret_name || null;
+      
+      // Handle flags from Instance Manager
+      let flag = challengeInstance.flag; // Keep existing flag as default
+      
+      // Check if we have flags in the response
+      if (imResult.flags && Object.keys(imResult.flags).length > 0) {
+        const flags = imResult.flags;
+        // Try to get FLAG_1 first, then fall back to the first flag value
+        flag = flags.FLAG_1 || Object.values(flags)[0] || flag;
+        console.log(`Using flag from Instance Manager for ${challengeInstance.id}: ${flag}`);
+      }
+      
+      // Update the challenge instance with the actual URL and flag information
+      await prisma.challengeInstance.update({
+        where: { id: challengeInstance.id },
+        data: {
+          challengeUrl: imResult.webosUrl || imResult.challengeUrl || "pending...",
+          flagSecretName: flagSecretName,
+          flag: flag
+        },
+      });
+      
+      // Log successful initiation
       try {
         await ActivityLogger.logChallengeEvent(
           ActivityEventType.CHALLENGE_INSTANCE_CREATED,
@@ -199,25 +178,45 @@ export async function POST(req: NextRequest) {
           challengeInstance.id,
           {
             challengeName: challenge.name,
-            challengeType: challenge.challengeType.name,
+            challengeTypeId: challenge.challengeTypeId,
+            packName: challenge.pack?.name,
             startTime: new Date().toISOString()
           }
         );
       } catch (logError) {
         console.error("Error logging challenge start:", logError);
-        // Continue even if logging fails
       }
 
       return NextResponse.json(challengeInstance);
-    } catch (instanceError) {
-      console.error("Error with instance manager:", instanceError);
+
+    } catch (error) {
+      console.error("Error processing challenge start:", error);
+      if (challengeInstance?.id) {
+         try {
+           // Check if the instance still exists before trying to update it
+           const instanceExists = await prisma.challengeInstance.findUnique({
+             where: { id: challengeInstance.id }
+           });
+           
+           if (instanceExists && instanceExists.status !== 'ERROR') {
+             await prisma.challengeInstance.update({
+               where: { id: challengeInstance.id },
+               data: { status: 'ERROR' },
+             });
+           } else {
+             console.log(`Instance ${challengeInstance.id} not found or already in ERROR state, skipping update`);
+           }
+         } catch (updateError) {
+            console.error(`Failed to update instance ${challengeInstance.id} status to ERROR:`, updateError);
+         }
+      }
       return NextResponse.json(
-        { error: instanceError instanceof Error ? instanceError.message : "Failed to start challenge" },
+        { error: error instanceof Error ? error.message : "Failed to start challenge instance" },
         { status: 500 }
       );
     }
   } catch (error) {
-    console.error("Error starting challenge:", error);
+    console.error("Error in start challenge route:", error);
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Failed to start challenge" },
       { status: 500 }

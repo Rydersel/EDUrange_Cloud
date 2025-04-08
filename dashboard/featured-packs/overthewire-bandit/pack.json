@@ -1,0 +1,17 @@
+{
+  "$schema": "https://raw.githubusercontent.com/EDURange/schema/main/schemas/pack.schema.json",
+  "id": "overthewire-bandit",
+  "name": "OverTheWire Bandit",
+  "version": "1.0.0",
+  "description": "A series of beginner-friendly Linux challenges from the popular OverTheWire Bandit wargame. Learn essential command line skills and file manipulation techniques.",
+  "author": "EDURange Team",
+  "license": "MIT",
+  "challenges": [
+    "challenges/bandit-level-1.cdf.json",
+    "challenges/bandit-level-2.cdf.json",
+    "challenges/bandit-level-3.cdf.json",
+    "challenges/bandit-level-4.cdf.json",
+    "challenges/bandit-level-5.cdf.json",
+    "challenges/bandit-level-6.cdf.json"
+  ]
+} 

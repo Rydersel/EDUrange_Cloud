@@ -58,39 +58,46 @@ export const users: User[] = [
 export const navItems: NavItem[] = [
   {
     title: 'Dashboard',
-    href: '/dashboard',
+    href: '/admin',
     icon: 'dashboard',
     label: 'Dashboard'
   },
   {
     title: 'Challenge Instances',
-    href: '/dashboard/challenge',
+    href: '/admin/challenge',
     icon: 'laptop',
     label: 'challenge-instances'
   },
   {
     title: 'Installed Challenges',
-    href: '/dashboard/challenges',
+    href: '/admin/challenges',
     icon: 'settings',
     label: 'installed-challenges',
     adminOnly: true
   },
   {
+    title: 'Installed Types',
+    href: '/admin/types',
+    icon: 'kanban',
+    label: 'installed-types',
+    adminOnly: true
+  },
+  {
     title: 'Competitions',
-    href: '/dashboard/competitions',
+    href: '/admin/competitions',
     icon: 'trophy',
     label: 'competitions'
   },
   {
     title: 'Users',
-    href: '/dashboard/users',
+    href: '/admin/users',
     icon: 'user',
     label: 'users',
     adminOnly: true
   },
   {
     title: 'Logs',
-    href: '/dashboard/logs',
+    href: '/admin/logs',
     icon: 'circuit',
     label: 'logs',
     adminOnly: true

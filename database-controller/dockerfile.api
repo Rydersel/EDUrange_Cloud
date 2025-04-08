@@ -1,27 +1,70 @@
 # docker buildx build -f dockerfile.api --platform linux/amd64 -t registry.rydersel.cloud/database-api . --push
 
-# Use an official Python runtime as a parent image
-FROM python:3.10-slim
+# Stage 1: Builder/Dependencies
+FROM python:3.10-slim AS builder
 
-# Set the working directory in the container
+# Set environment variables for Python best practices
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
 WORKDIR /app
 
-# Copy the api directory contents into the container at /app
-COPY api/ .
+# Install build essentials if needed by any dependency (unlikely for slim, but safe)
+# RUN apt-get update && apt-get install -y --no-install-recommends build-essential && rm -rf /var/lib/apt/lists/*
 
-# Copy shared files into the container
-COPY .env .env
-COPY schema.prisma schema.prisma
+# Copy only requirements first to leverage Docker layer caching
 COPY requirements.txt requirements.txt
 
-# Install required packages specified in requirements.txt
+# Install Python dependencies (including prisma cli)
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Generate Python Prisma client
+# Copy schema *after* prisma package is installed
+COPY schema.prisma schema.prisma
+
+# Generate Prisma client - files will be in site-packages
 RUN prisma generate --generator client_py
 
-# Expose the port for the Flask API
-EXPOSE 5000
+# Ensure generated files are accessible (might be redundant if copied correctly, but safe)
+RUN chmod -R a+rX /usr/local/lib/python3.10/site-packages/prisma/
 
-# Run the Flask API
-CMD ["gunicorn", "-b", "0.0.0.0:8000", "app:app", "--worker-class", "eventlet", "--workers", "1"]
+
+# Stage 2: Final Runtime Image
+FROM python:3.10-slim
+
+# Set environment variables for Python best practices
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
+WORKDIR /app
+
+# Install procps and other dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends procps && \
+    rm -rf /var/lib/apt/lists/*
+
+# Copy Python dependencies and Prisma files from builder
+COPY --from=builder /usr/local/lib/python3.10/site-packages/ /usr/local/lib/python3.10/site-packages/
+COPY --from=builder /root/.cache/prisma-python/ /root/.cache/prisma-python/
+
+# Copy application files
+COPY api/ /app/
+COPY schema.prisma /app/schema.prisma
+COPY requirements.txt /app/requirements.txt
+
+# Install gunicorn for production-grade WSGI server
+RUN pip install --no-cache-dir gunicorn && \
+    which gunicorn || echo "gunicorn not found in PATH" && \
+    python -c "import site; print('Python site-packages:', site.getsitepackages())" && \
+    python -m pip list && \
+    echo "PATH=$PATH"
+
+# Make directories for file uploads if needed
+RUN mkdir -p /tmp/pack_uploads && chmod 777 /tmp/pack_uploads
+
+# Expose the API port
+EXPOSE 8000
+
+# Start the Flask application with Python directly
+CMD ["python", "-m", "gunicorn", "--bind", "0.0.0.0:8000", "--workers", "2", "--timeout", "120", "app:app"]
+
+# TODO: Re-enable non-root user later. Temporarily running as root due to Prisma permission issues.
+

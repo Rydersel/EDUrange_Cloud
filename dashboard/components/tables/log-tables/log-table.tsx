@@ -46,15 +46,22 @@ const timeFrames = [
   { value: 'all', label: 'All Time', getFn: () => null }
 ];
 
+// Helper function to safely get search params
+const useSafeSearchParams = () => {
+  const params = useSearchParams();
+  return params ?? new URLSearchParams(); // Return empty params if null
+}
+
 export function LogTable({
   data,
   pageCount,
   pageNo,
   totalLogs,
 }: LogTableProps) {
-  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const router = useRouter();
-  const searchParams = useSearchParams();
+  // Use the safe hook
+  const searchParams = useSafeSearchParams();
+  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
 
   const table = useReactTable({
     data,
@@ -69,6 +76,7 @@ export function LogTable({
   });
 
   const handleTimeFrameChange = (value: string) => {
+    // No need to check searchParams here, it's guaranteed to be non-null
     const params = new URLSearchParams(searchParams.toString());
     const timeFrame = timeFrames.find(tf => tf.value === value);
     
@@ -85,7 +93,7 @@ export function LogTable({
       // Reset to first page when changing time frame
       params.set('page', '1');
       
-      router.push(`/dashboard/logs?${params.toString()}`);
+      router.push(`/admin/logs?${params.toString()}`);
     }
   };
 
@@ -94,7 +102,7 @@ export function LogTable({
     const actualValue = value === 'all' ? '' : value;
     table.getColumn('eventType')?.setFilterValue(actualValue);
     
-    // Update URL params
+    // No need to check searchParams here
     const params = new URLSearchParams(searchParams.toString());
     if (value === 'all') {
       params.delete('eventType');
@@ -102,7 +110,7 @@ export function LogTable({
       params.set('eventType', value);
     }
     params.set('page', '1'); // Reset to first page
-    router.push(`/dashboard/logs?${params.toString()}`);
+    router.push(`/admin/logs?${params.toString()}`);
   };
 
   return (
@@ -206,9 +214,10 @@ export function LogTable({
           variant="outline"
           size="sm"
           onClick={() => {
+            // No need to check searchParams here
             const params = new URLSearchParams(searchParams.toString());
             params.set('page', String(pageNo - 1));
-            router.push(`/dashboard/logs?${params.toString()}`);
+            router.push(`/admin/logs?${params.toString()}`);
           }}
           disabled={pageNo <= 1}
         >
@@ -218,9 +227,10 @@ export function LogTable({
           variant="outline"
           size="sm"
           onClick={() => {
+            // No need to check searchParams here
             const params = new URLSearchParams(searchParams.toString());
             params.set('page', String(pageNo + 1));
-            router.push(`/dashboard/logs?${params.toString()}`);
+            router.push(`/admin/logs?${params.toString()}`);
           }}
           disabled={pageNo >= pageCount}
         >

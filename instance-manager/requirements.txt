@@ -1,0 +1,10 @@
+jsonschema
+PyYAML
+gunicorn
+gevent
+python-dotenv
+kubernetes
+requests
+Flask
+Flask-Cors
+psutil

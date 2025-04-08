@@ -5,7 +5,9 @@ import path from 'path';
 // Load environment variables
 dotenv.config({ path: path.resolve(process.cwd(), '.env') });
 
-const DATABASE_API_URL = process.env.DATABASE_API_URL || 'http://database-api-service.default.svc.cluster.local';
+// Use the database proxy route with query parameter for activity logging
+// This provides better reliability with local database fallback
+const ACTIVITY_LOG_URL = '/api/proxy/database?path=activity/log';
 
 // Define event types to match backend
 export enum ActivityEventType {
@@ -33,6 +35,7 @@ export enum ActivityEventType {
   USER_DELETED = "USER_DELETED",
   CHALLENGE_PACK_INSTALLED = "CHALLENGE_PACK_INSTALLED",
   ACCESS_CODE_INVALID = "ACCESS_CODE_INVALID",
+  CHALLENGE_TERMINATION_INITIATED = "CHALLENGE_TERMINATION_INITIATED",
 }
 
 export enum LogSeverity {
@@ -65,6 +68,7 @@ export class ActivityLogger {
       }
 
       // Create a clean payload with proper type annotations
+      // Remove any fields not supported in the schema
       const payload: any = {
         eventType: params.eventType,
         userId: params.userId,
@@ -72,14 +76,58 @@ export class ActivityLogger {
         metadata: metadata // Send the object directly, don't stringify it
       };
 
-      // Add optional fields only if they exist
-      if (params.challengeId) payload.challengeId = params.challengeId;
+      // If a challengeId is provided, verify it's a valid UUID-like string
+      // This helps prevent database errors due to missing challenge references
+      if (params.challengeId) {
+        // Only include challengeId if it looks like a valid format (basic validation)
+        // UUID format or challenge-like IDs
+        if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(params.challengeId) || 
+            /^[a-zA-Z0-9_-]+$/.test(params.challengeId)) {
+          payload.challengeId = params.challengeId;
+        } else {
+          // If it's not a valid format, log the original ID in metadata
+          metadata.originalChallengeId = params.challengeId;
+          console.warn(`ActivityLogger: Invalid challenge ID format: ${params.challengeId}, saving to metadata instead`);
+        }
+      }
+      
+      // Add other optional fields only if they exist
       if (params.groupId) payload.groupId = params.groupId;
       if (params.challengeInstanceId) payload.challengeInstanceId = params.challengeInstanceId;
       if (params.accessCodeId) payload.accessCodeId = params.accessCodeId;
 
+      // Determine the base URL for server-side requests
+      let apiUrl = ACTIVITY_LOG_URL;
+
+      // If we're server-side (no window object), and not running in a browser environment,
+      // we need to use an absolute URL
+      if (typeof window === 'undefined') {
+        // For server-side in kubernetes, directly access the service
+        if (process.env.KUBERNETES_SERVICE_HOST) {
+          // Try direct access to the database API service first
+          try {
+            const response = await axios.post(
+              'http://database-api-service.default.svc.cluster.local/activity/log', 
+              payload
+            );
+            return response.data;
+          } catch (directError) {
+            // If direct access fails, try the fallback URL
+            console.warn('Direct database API access failed, trying fallback');
+            
+            // Generate a fallback URL using dashboard base URL
+            const dashboardUrl = process.env.DASHBOARD_URL || 'http://dashboard.default.svc.cluster.local';
+            apiUrl = `${dashboardUrl}/api/proxy/database?path=activity/log`;
+          }
+        } else {
+          // In other server environments, use the configured base URL
+          const baseUrl = process.env.NEXTAUTH_URL || 'http://localhost:3000';
+          apiUrl = `${baseUrl}${ACTIVITY_LOG_URL}`;
+        }
+      }
+
       // Send the request
-      const response = await axios.post(`${DATABASE_API_URL}/activity/log`, payload);
+      const response = await axios.post(apiUrl, payload);
       return response.data;
     } catch (error: any) {
       console.error('=== ACTIVITY LOGGER: Error logging activity ===');
@@ -97,7 +145,14 @@ export class ActivityLogger {
       }
 
       console.error('Original params:', JSON.stringify(params, null, 2));
-      throw error;
+      
+      // Don't throw the error, just return a failure object
+      // This will prevent the error from stopping the main application flow
+      return { 
+        success: false, 
+        error: error?.message || 'Unknown error in activity logging',
+        params: params
+      };
     }
   }
 

@@ -3,9 +3,11 @@ import Card from '../../components/Card';
 import Button from '../../components/Button';
 import StatusBadge from '../../components/StatusBadge';
 import useInstallStore from '../../store/installStore';
+import { installMonitoringService } from './MonitoringService';
 import { installDatabaseController } from './DatabaseController';
 import { installInstanceManager } from './InstanceManager';
-import { installMonitoringService } from './MonitoringService';
+import { setupDatabaseController } from './DatabaseController';
+import { setupInstanceManager } from './InstanceManager';
 
 // Constants
 const WILDCARD_CERT_NAME = 'wildcard-certificate-prod';
@@ -389,6 +391,16 @@ spec:
       addLog(`Retrieved domain name from certificate: ${useInstallStore.getState().domain.name}`);
     }
 
+    // First, set up terminal RBAC
+    addLog('Setting up terminal RBAC permissions before Instance Manager installation...');
+    const rbacResult = await setupTerminalRBAC();
+    if (!rbacResult) {
+      addLog('Failed to set up terminal RBAC permissions. Aborting Instance Manager installation.');
+      setIsInstalling(false);
+      return;
+    }
+
+    // Then proceed with Instance Manager installation
     const result = await installInstanceManager({
       setActiveComponent,
       setInstallationStatus,
@@ -407,10 +419,8 @@ spec:
       setIsInstalling
     });
 
-    // If instance manager installation was successful, setup terminal RBAC
     if (result && result.success) {
-      addLog('Instance Manager installed successfully. Setting up terminal RBAC permissions...');
-      await setupTerminalRBAC();
+      addLog('Instance Manager installed successfully.');
     }
   };
 
@@ -679,13 +689,16 @@ spec:
         throw new Error(`Failed to create terminal-account: ${result.stderr}`);
       });
 
-      // Apply the terminal RBAC yaml
+      // Apply the terminal RBAC yaml with automountServiceAccountToken set to true
       const terminalRbacYaml = `
 apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: terminal-account
   namespace: default
+  annotations:
+    kubernetes.io/service-account.name: "terminal-account"
+automountServiceAccountToken: true
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
@@ -738,9 +751,26 @@ type: kubernetes.io/service-account-token
         throw new Error(`Failed to create token secret: ${secretResult.stderr}`);
       }
 
-      // Wait for the token to be created
-      addLog('Waiting for token to be generated...');
-      await new Promise(resolve => setTimeout(resolve, 5000));
+      // Function to get token with retries
+      const getTokenWithRetries = async (maxRetries = 12, retryInterval = 5000) => {
+        for (let i = 0; i < maxRetries; i++) {
+          addLog(`Waiting for token to be generated (attempt ${i + 1}/${maxRetries})...`);
+          await new Promise(resolve => setTimeout(resolve, retryInterval));
+
+          const tokenResult = await window.api.executeCommand('kubectl', [
+            'get',
+            'secret',
+            'terminal-account-token',
+            '-o',
+            'jsonpath={.data.token}'
+          ]);
+
+          if (tokenResult.code === 0 && tokenResult.stdout) {
+            return tokenResult.stdout;
+          }
+        }
+        throw new Error('Timed out waiting for token to be generated');
+      };
 
       // Get the Kubernetes host
       addLog('Getting Kubernetes host...');
@@ -758,23 +788,12 @@ type: kubernetes.io/service-account-token
       
       const kubernetesHost = kubeHostResult.stdout.replace('https://', '');
 
-      // Get the service account token
+      // Get the service account token with retries
       addLog('Getting service account token...');
-      const tokenResult = await window.api.executeCommand('kubectl', [
-        'get',
-        'secret',
-        'terminal-account-token',
-        '-o',
-        'jsonpath={.data.token}'
-      ]);
-      
-      if (tokenResult.code !== 0 || !tokenResult.stdout) {
-        throw new Error(`Failed to get token: ${tokenResult.stderr || 'Token not found'}`);
-      }
+      const base64Token = await getTokenWithRetries();
       
       // Decode the base64 token
       addLog('Decoding service account token...');
-      const base64Token = tokenResult.stdout;
       const decodeResult = await window.api.executeCommand('bash', [
         '-c',
         `echo "${base64Token}" | base64 -d`
@@ -793,6 +812,8 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: terminal-credentials
+  annotations:
+    kubernetes.io/description: "Contains credentials for terminal access. Required for challenge pods."
 data:
   KUBERNETES_HOST: "${kubernetesHost}"
   KUBERNETES_SERVICE_ACCOUNT_TOKEN: "${kubernetesToken}"
@@ -924,6 +945,14 @@ data:
     // Reset installation state
     setIsInstalling(false);
     setActiveComponent(null);
+  };
+
+  const setupComponents = async () => {
+    try {
+      // ... existing code ...
+    } catch (error) {
+      // ... existing code ...
+    }
   };
 
   // Update the UI to ensure install and uninstall buttons are properly displayed

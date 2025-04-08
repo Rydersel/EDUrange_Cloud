@@ -3,6 +3,8 @@ import { getDatabaseApiUrl } from '@/lib/api-config';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { authorizeProxyAction } from '@/lib/auth-utils';
+import { isValidUUID } from '@/lib/validation/uuid';
 
 /**
  * Proxy API endpoint for database API requests
@@ -20,6 +22,30 @@ export async function GET(req: NextRequest) {
     const url = new URL(req.url);
     const searchParams = url.searchParams;
     const path = searchParams.get('path') || '';
+    
+    // For instance-specific operations, check authorization
+    const instanceId = searchParams.get('instanceId') || searchParams.get('id');
+    if (instanceId && 
+        (path.includes('challenge-instance') || path.includes('instance'))) {
+      
+      // Validate the UUID format of the instanceId
+      if (!isValidUUID(instanceId)) {
+        return NextResponse.json({
+          error: 'Invalid parameter format',
+          message: 'instanceId must be a valid UUID'
+        }, { status: 400 });
+      }
+      
+      // Use shared authorization utility to validate access
+      const { authorized, error } = await authorizeProxyAction(instanceId, session);
+      
+      // If not authorized, return the error response
+      if (!authorized) {
+        return error;
+      }
+      
+      console.log(`[DB Proxy] Authorized access to instance data ${instanceId} by user ${session.user.id}`);
+    }
     
     // Special handling for challenge-instances
     if (path === 'challenge-instances') {
@@ -159,17 +185,18 @@ async function handleChallengeInstances(userId: string) {
       userId: instance.userId,
       userEmail: instance.user?.email,
       userName: instance.user?.name,
-      challengeImage: instance.challengeImage,
+      challengeId: instance.challengeId,
       challengeUrl: instance.challengeUrl,
       creationTime: instance.creationTime.toISOString(),
-      status: instance.status,
+      status: instance.status || 'Unknown',
       flagSecretName: instance.flagSecretName,
       flag: instance.flag,
       groupId: instance.competitionId,
       groupName: instance.competition?.name,
-      challengeType: instance.challengeImage.split(':')[0] // Extract the challenge type from the image
+      challengeType: instance.user?.id ? 'fullos' : 'unknown'
     }));
 
+    // Return the instances wrapped in an instances array
     return NextResponse.json({ instances: transformedInstances });
   } catch (error) {
     console.error('Error fetching challenge instances:', error);
@@ -244,22 +271,30 @@ async function handleChallengeInstancesDirect(userId: string) {
 
     // Transform the data to match the expected format
     const transformedInstances = instances.map(instance => ({
+      user: {
+        id: instance.userId,
+        name: instance.user.name,
+        email: instance.user.email,
+      },
+      competition: {
+        id: instance.competitionId,
+        name: instance.competition.name,
+      },
+      status: instance.status,
       id: instance.id,
       userId: instance.userId,
-      userEmail: instance.user?.email,
-      userName: instance.user?.name,
-      challengeImage: instance.challengeImage,
+      challengeId: instance.challengeId,
       challengeUrl: instance.challengeUrl,
-      creationTime: instance.creationTime.toISOString(),
-      status: instance.status || 'Unknown',
+      creationTime: instance.creationTime,
       flagSecretName: instance.flagSecretName,
       flag: instance.flag,
-      groupId: instance.competitionId,
-      groupName: instance.competition?.name,
-      challengeType: extractChallengeTypeFromImage(instance.challengeImage)
+      competitionId: instance.competitionId,
+      k8s_instance_name: instance.k8s_instance_name,
     }));
 
-    return NextResponse.json({ instances: transformedInstances });
+    const systemData = transformedInstances.map(instanceToSystemData);
+    
+    return NextResponse.json(systemData);
   } catch (error) {
     console.error('Error in direct challenge instances:', error);
     return NextResponse.json({ 
@@ -305,9 +340,46 @@ export async function POST(req: NextRequest) {
     const url = new URL(req.url);
     const searchParams = url.searchParams;
     const path = searchParams.get('path') || '';
-
+    
     // Get the request body
     const body = await req.json();
+    
+    // For instance-specific operations, perform authorization check
+    if (path.includes('challenge-instance') || path.includes('instance')) {
+      // Extract instance ID from appropriate location in body or query params
+      let instanceId = searchParams.get('instanceId') || 
+                       body.instanceId || 
+                       body.id;
+      
+      // If we have an instance ID, validate and authorize access
+      if (instanceId) {
+        // Validate UUID format
+        if (!isValidUUID(instanceId)) {
+          return NextResponse.json({
+            error: 'Invalid parameter format',
+            message: 'Instance ID must be a valid UUID'
+          }, { status: 400 });
+        }
+        
+        // Authorize access to this specific instance
+        const { authorized, error } = await authorizeProxyAction(instanceId, session);
+        
+        // If not authorized, return the error response
+        if (!authorized) {
+          return error;
+        }
+        
+        console.log(`[DB Proxy] Authorized modification of instance ${instanceId} by user ${session.user.id}`);
+      }
+    }
+
+    // Forward all other search params
+    const queryParams = new URLSearchParams();
+    Array.from(searchParams.entries()).forEach(([key, value]) => {
+      if (key !== 'path') {
+        queryParams.append(key, value);
+      }
+    });
 
     // Construct the database API URL
     const databaseApiUrl = getDatabaseApiUrl();
@@ -377,6 +449,26 @@ export async function DELETE(req: NextRequest) {
 
     // Special handling for delete-challenge-instance
     if (path === 'delete-challenge-instance' && instanceId) {
+      // Validate the UUID format of the instanceId
+      if (!isValidUUID(instanceId)) {
+        return NextResponse.json({
+          error: 'Invalid parameter format',
+          message: 'instanceId must be a valid UUID'
+        }, { status: 400 });
+      }
+      
+      // Use shared authorization utility to validate access to this instance
+      const { authorized, error } = await authorizeProxyAction(instanceId, session);
+      
+      // If not authorized, return the error response
+      if (!authorized) {
+        return error;
+      }
+      
+      // Log authorization for audit purposes
+      console.log(`[DB Proxy] Authorized deletion of instance ${instanceId} by user ${session.user.id}`);
+      
+      // Proceed with deletion
       return handleDeleteChallengeInstance(instanceId, session.user.id);
     }
 
@@ -468,24 +560,7 @@ async function handleDeleteChallengeInstance(instanceId: string, userId: string)
   try {
     console.log(`Directly deleting challenge instance with ID: ${instanceId}`);
     
-    // Check if user is admin
-    const user = await prisma.user.findUnique({
-      where: { id: userId }
-    });
-    
-    // If not admin, verify ownership
-    if (user?.role !== 'ADMIN') {
-      const instance = await prisma.challengeInstance.findUnique({
-        where: { id: instanceId }
-      });
-      
-      if (!instance || instance.userId !== userId) {
-        return NextResponse.json({ 
-          error: 'Not authorized to delete this instance',
-          message: 'You can only delete your own instances' 
-        }, { status: 403 });
-      }
-    }
+    // Authorization is already handled by authorizeProxyAction, no need to check again
     
     // Delete the instance
     await prisma.challengeInstance.delete({
@@ -519,3 +594,27 @@ async function handleDeleteChallengeInstance(instanceId: string, userId: string)
     }, { status: 500 });
   }
 }
+
+const instanceToUserData = (instance: any) => ({
+  ...instance.user,
+  group: {
+    id: instance.competitionId,
+    name: instance.competition?.name
+  },
+  startTime: instance.creationTime,
+  id: instance.id,
+  challengeId: instance.challengeId,
+  challengeUrl: instance.challengeUrl,
+  challengeType: 'fullos',
+});
+
+const instanceToSystemData = (instance: any) => ({
+  user: { id: instance.userId, name: instance.user.name, email: instance.user.email },
+  id: instance.id,
+  challengeId: instance.challengeId,
+  challengeUrl: instance.challengeUrl,
+  competitionId: instance.competitionId,
+  groupId: instance.competitionId,
+  groupName: instance.competition?.name,
+  challengeType: 'fullos'
+});

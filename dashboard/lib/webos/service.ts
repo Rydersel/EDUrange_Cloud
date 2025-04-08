@@ -10,17 +10,15 @@ export class WebOSService {
     userId: string
   ): Promise<WebOSChallengeConfig> {
     // Fetch challenge data with questions and app configs
-    // @ts-ignore
-    const challenge = await prisma.challenges.findUnique({
+    const challenge = await prisma.challenge.findUnique({
       where: { id: challengeId },
       include: {
-        // @ts-ignore
+        challengeType: true,
         questions: {
           orderBy: {
             order: 'asc'
           }
         },
-        // @ts-ignore
         appConfigs: true
       }
     });
@@ -30,7 +28,6 @@ export class WebOSService {
     }
 
     // Get user's completions for this challenge
-    // @ts-ignore
     const completions = await prisma.questionCompletion.findMany({
       where: {
         userId,
@@ -46,8 +43,8 @@ export class WebOSService {
       id: challenge.id,
       name: challenge.name,
       description: challenge.description || '',
-      challengeImage: challenge.challengeImage,
-      difficulty: challenge.difficulty,
+      challengeImage: challenge.challengeType.name, // Use challenge type name as the image identifier
+      difficulty: challenge.challengeType.name, // Use challenge type name as the difficulty
       AppsConfig: challenge.appConfigs ? transformToWebOSFormat(challenge.appConfigs) : []
     };
 
@@ -59,22 +56,19 @@ export class WebOSService {
     groupId: string,
     userId: string
   ): Promise<WebOSChallengeConfig[]> {
-    // @ts-ignore
     const groupChallenges = await prisma.groupChallenge.findMany({
       where: {
         groupId,
       },
       include: {
-        // @ts-ignore
         challenge: {
           include: {
-            // @ts-ignore
+            challengeType: true,
             questions: {
               orderBy: {
                 order: 'asc'
               }
             },
-            // @ts-ignore
             appConfigs: true
           }
         }
@@ -82,10 +76,9 @@ export class WebOSService {
     });
 
     // Transform each challenge to WebOS format
-    const configs: WebOSChallengeConfig[] = groupChallenges
+    const configs = groupChallenges
       .filter(gc => gc.challenge) // Filter out any null challenges
       .map(gc => {
-        // @ts-ignore
         if (!gc.challenge) {
           throw new Error('Challenge not found in group challenge');
         }
@@ -96,10 +89,10 @@ export class WebOSService {
           id: challenge.id,
           name: challenge.name,
           description: challenge.description || '',
-          challengeImage: challenge.challengeImage,
-          difficulty: challenge.difficulty,
+          challengeImage: challenge.challengeType.name, // Use challenge type name as image
+          difficulty: challenge.challengeType.name, // Use challenge type name as difficulty
           AppsConfig: challenge.appConfigs ? transformToWebOSFormat(challenge.appConfigs) : []
-        };
+        } as WebOSChallengeConfig;
       });
 
     return configs;

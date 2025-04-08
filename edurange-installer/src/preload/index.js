@@ -1,0 +1,6 @@
+contextBridge.exposeInMainWorld('api', {
+  // ... existing exposed functions ...
+  applyManifestFromString: (manifestYaml) => ipcRenderer.invoke('apply-manifest-from-string', manifestYaml),
+  executeCommand: (command, args) => ipcRenderer.invoke('execute-command', command, args),
+  // ... existing code ...
+}); 

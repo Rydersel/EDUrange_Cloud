@@ -1,0 +1,65 @@
+# docker buildx build --platform linux/amd64 -t registry.rydersel.cloud/instance-manager . --push
+
+# Build stage
+FROM python:3.10.13-slim AS builder
+
+# Set environment variables
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PYTHONPATH=/app
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libffi-dev \
+    libssl-dev \
+    gcc \
+    libc-dev \
+    make \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements for build
+WORKDIR /app
+COPY requirements.txt .
+
+# Install dependencies into the /install directory
+RUN pip install --prefix=/install --no-cache-dir -r requirements.txt
+
+# Final stage
+FROM python:3.10.13-slim
+
+# Set environment variables
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PYTHONPATH=/app
+
+# Install only essential runtime dependencies with specific versions
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libffi8 \
+    curl \
+    # Required for secure HTTPS connections to Kubernetes API
+    ca-certificates \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/* \
+    # Remove unnecessary APT files
+    && rm -rf /var/cache/apt/* \
+    /usr/share/doc/* \
+    /usr/share/man/* \
+    /usr/share/locale/* \
+    # Remove unnecessary packages
+    && apt-get purge -y --auto-remove \
+    && apt-get autoremove -y \
+    && apt-get autoclean -y
+
+WORKDIR /app
+
+# Copy installed Python packages from builder stage
+COPY --from=builder /install /usr/local
+
+# Copy the application code
+COPY . .
+
+# Run the application with our custom Gunicorn config
+CMD ["gunicorn", "--config", "gunicorn.conf.py", "app:app"]

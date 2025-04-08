@@ -129,8 +129,8 @@ const authConfig: AuthOptions = {
       return token;
     },
     async redirect({ url, baseUrl }) {
-      // Redirect to home instead of dashboard
-      if (url.includes('/dashboard')) {
+      // Redirect to home instead of admin dashboard
+      if (url.includes('/admin')) {
         return `${baseUrl}/home`;
       }
       

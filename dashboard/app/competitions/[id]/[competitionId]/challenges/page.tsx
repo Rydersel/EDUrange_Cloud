@@ -47,7 +47,7 @@ export default async function CompetitionChallengesPage(props: Props) {
       userId: session.user.id,
       AND: {
         competitionId: params.competitionId,
-        status: "running",
+        status: "ACTIVE",
       },
     },
   });

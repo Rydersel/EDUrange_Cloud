@@ -12,16 +12,16 @@ const nextConfig = {
   },
   // Enable standalone output for Docker deployment
   output: 'standalone',
-  
+
   // Security headers configuration
   poweredByHeader: false, // Remove X-Powered-By header
-  
+
   // ESLint configuration
   eslint: {
     // Disable ESLint during production builds for better performance
     ignoreDuringBuilds: true,
   },
-  
+
   // Configure headers for additional security
   async headers() {
     return [

@@ -32,7 +32,7 @@ export const validationSchemas = {
   
   // Competition validation
   competitionName: z.string().min(3, 'Competition name must be at least 3 characters'),
-  competitionDescription: z.string().min(10, 'Description must be at least 10 characters'),
+  competitionDescription: z.string().min(3, 'Description must be at least 3 characters'),
   
   // URL validation
   url: z.string().url('Invalid URL'),

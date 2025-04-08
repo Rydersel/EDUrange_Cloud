@@ -8,211 +8,147 @@ import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
+interface Challenge {
+  name: string;
+  competition: string;
+  points: number;
+  type: string;
+}
+
 interface CompletionData {
   date: string;
   count: number;
-  challenges: {
-    name: string;
-    competition: string;
-    points: number;
-  }[];
+  challenges: Challenge[];
 }
 
 interface ChallengeHeatmapProps {
   userId: string;
 }
 
+interface ApiResponse {
+  completions: CompletionData[];
+  totalCompletions: number;
+  totalPoints: number;
+}
+
 export function ChallengeHeatmap({ userId }: ChallengeHeatmapProps) {
-  const [completions, setCompletions] = useState<CompletionData[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [data, setData] = useState<CompletionData[]>([]);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [year, setYear] = useState(new Date().getFullYear());
-  const [tooltipContent, setTooltipContent] = useState<React.ReactNode | null>(null);
-  const [tooltipVisible, setTooltipVisible] = useState(false);
-  const [tooltipPosition, setTooltipPosition] = useState({ x: 0, y: 0 });
-  
-  // Generate years for the dropdown (last 3 years)
-  const currentYear = new Date().getFullYear();
-  const years = Array.from({ length: 3 }, (_, i) => currentYear - i);
+  const [totalCompletions, setTotalCompletions] = useState(0);
+  const [totalPoints, setTotalPoints] = useState(0);
 
   useEffect(() => {
-    const fetchCompletions = async () => {
-      setIsLoading(true);
-      setError(null);
-      
+    const fetchData = async () => {
       try {
+        setLoading(true);
+        console.log(`Fetching challenge completions for user ${userId} in year ${year}`);
         const response = await fetch(`/api/profile/challenge-completions?userId=${userId}&year=${year}`);
         
         if (!response.ok) {
-          throw new Error('Failed to fetch challenge completions');
+          const errorData = await response.json().catch(() => null);
+          console.error('Failed to fetch challenge completions:', {
+            status: response.status,
+            statusText: response.statusText,
+            error: errorData
+          });
+          throw new Error(`Failed to fetch challenge completions: ${response.statusText}`);
         }
         
-        const data = await response.json();
-        setCompletions(data.completions);
+        const data: ApiResponse = await response.json();
+        console.log('Received challenge completion data:', {
+          completionsCount: data.completions.length,
+          totalCompletions: data.totalCompletions,
+          totalPoints: data.totalPoints
+        });
+        
+        setData(data.completions);
+        setTotalCompletions(data.totalCompletions);
+        setTotalPoints(data.totalPoints);
+        setError(null);
       } catch (err) {
-        console.error('Error fetching challenge completions:', err);
-        setError('Failed to load challenge completion data');
+        console.error('Error in challenge heatmap:', err);
+        setError(err instanceof Error ? err.message : 'An error occurred');
+        setData([]);
       } finally {
-        setIsLoading(false);
+        setLoading(false);
       }
     };
-    
-    fetchCompletions();
+
+    fetchData();
   }, [userId, year]);
 
-  // Generate dates for the current year
-  const generateDates = () => {
-    const dates = [];
-    const startDate = new Date(year, 0, 1); // January 1st of the selected year
-    const endDate = new Date(year, 11, 31); // December 31st of the selected year
-    
-    for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
-      const dateStr = d.toISOString().split('T')[0];
-      const existingData = completions.find(c => c.date === dateStr);
-      
-      dates.push({
-        date: dateStr,
-        count: existingData?.count || 0,
-        challenges: existingData?.challenges || []
-      });
-    }
-    
-    return dates;
+  const handlePrevYear = () => setYear(prev => prev - 1);
+  const handleNextYear = () => setYear(prev => prev + 1);
+
+  const getColor = (count: number): string => {
+    if (count === 0) return 'bg-primary/5';
+    if (count === 1) return 'bg-primary/20';
+    if (count === 2) return 'bg-primary/40';
+    if (count === 3) return 'bg-primary/60';
+    return 'bg-primary/80';
   };
 
-  // Generate months for the heatmap
-  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-
-  // Generate days for the heatmap
-  const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-
-  // Handle cell hover
-  const handleCellHover = (completion: CompletionData, event: React.MouseEvent) => {
-    if (completion.count > 0) {
-   
-      setTooltipContent(
-        <div className="space-y-2">
-          <p className="font-medium">{new Date(completion.date).toLocaleDateString(undefined, { 
-            weekday: 'long', 
-            year: 'numeric', 
-            month: 'long', 
-            day: 'numeric' 
-          })}</p>
-          <p className="text-sm font-medium">{completion.count} challenge{completion.count !== 1 ? 's' : ''} completed</p>
-          <ul className="space-y-1 text-xs">
-            {completion.challenges.map((challenge, i) => (
-              <li key={i} className="flex justify-between">
-                <span>{challenge.name}</span>
-                <span className="text-green-400">+{challenge.points} pts</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      );
-      setTooltipVisible(true);
-    }
-  };
-
-  // Handle cell leave
-  const handleCellLeave = () => {
-    setTooltipVisible(false);
-  };
-
-  // Get color based on count
-  const getCellColor = (count: number) => {
-    if (count === 0) return 'bg-black/40';
-    if (count === 1) return 'bg-green-800/50';
-    if (count <= 3) return 'bg-green-700/60';
-    if (count <= 5) return 'bg-green-500/70';
-    return 'bg-green-400/80';
-  };
-
-  // Handle year change
-  const handlePrevYear = () => {
-    setYear(prev => prev - 1);
-  };
-
-  const handleNextYear = () => {
-    if (year < new Date().getFullYear()) {
-      setYear(prev => prev + 1);
-    }
-  };
-
-  // Calculate total completions and longest streak
-  const calculateStats = () => {
-    const totalCompletions = completions.reduce((sum, day) => sum + day.count, 0);
-    
-    // Calculate longest streak
-    let currentStreak = 0;
-    let longestStreak = 0;
-    let lastDate: Date | null = null;
-    
-    const sortedCompletions = [...completions]
-      .filter(c => c.count > 0)
-      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-    
-    for (const completion of sortedCompletions) {
-      const currentDate = new Date(completion.date);
-      
-      if (!lastDate) {
-        currentStreak = 1;
-      } else {
-        const diffDays = Math.floor((currentDate.getTime() - lastDate.getTime()) / (1000 * 60 * 60 * 24));
-        
-        if (diffDays === 1) {
-          currentStreak++;
-        } else if (diffDays > 1) {
-          currentStreak = 1;
+  const months = Array.from({ length: 12 }, (_, i) => {
+    const date = new Date(year, i, 1);
+    return {
+      name: date.toLocaleString('default', { month: 'short' }),
+      days: Array.from(
+        { length: new Date(year, i + 1, 0).getDate() },
+        (_, d) => {
+          const currentDate = new Date(year, i, d + 1);
+          const dateStr = currentDate.toISOString().split('T')[0];
+          const completion = data.find(c => c.date === dateStr);
+          return {
+            date: currentDate,
+            count: completion?.count || 0,
+            challenges: completion?.challenges || []
+          };
         }
-      }
-      
-      if (currentStreak > longestStreak) {
-        longestStreak = currentStreak;
-      }
-      
-      lastDate = currentDate;
-    }
-    
-    return { totalCompletions, longestStreak };
-  };
-
-  const { totalCompletions, longestStreak } = calculateStats();
-  const allDates = generateDates();
-  
-  // Group dates by week for the heatmap
-  const weeks: CompletionData[][] = [];
-  let currentWeek: CompletionData[] = [];
-  
-  // Fill in missing days at the start
-  const firstDay = new Date(allDates[0].date).getDay();
-  for (let i = 0; i < firstDay; i++) {
-    currentWeek.push({ date: '', count: -1, challenges: [] });
-  }
-  
-  // Add all dates
-  allDates.forEach(date => {
-    currentWeek.push(date);
-    
-    if (currentWeek.length === 7) {
-      weeks.push(currentWeek);
-      currentWeek = [];
-    }
+      )
+    };
   });
-  
-  // Add remaining days to the last week
-  if (currentWeek.length > 0) {
-    weeks.push(currentWeek);
+
+  if (loading) {
+    return (
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle className="flex items-center gap-2">
+              <Calendar className="h-5 w-5" />
+              Challenge Activity
+            </CardTitle>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <Skeleton className="h-[200px] w-full" />
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (error) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Error</CardTitle>
+          <CardDescription>{error}</CardDescription>
+        </CardHeader>
+      </Card>
+    );
   }
 
   return (
-    <Card className="bg-black/40 backdrop-blur-sm border-green-900/50">
-      <CardHeader className="flex flex-row items-center justify-between pb-2">
-        <div>
-          <CardTitle className="text-sm font-medium flex items-center gap-2">
+    <Card>
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <CardTitle className="flex items-center gap-2">
+            <Calendar className="h-5 w-5" />
             Challenge Activity
             <TooltipProvider>
               <Tooltip>
-                <TooltipTrigger asChild>
+                <TooltipTrigger>
                   <HelpCircle className="h-4 w-4 text-muted-foreground" />
                 </TooltipTrigger>
                 <TooltipContent>
@@ -224,137 +160,110 @@ export function ChallengeHeatmap({ userId }: ChallengeHeatmapProps) {
               </Tooltip>
             </TooltipProvider>
           </CardTitle>
-          <CardDescription>Your challenge completion history</CardDescription>
+          <div className="flex items-center gap-2">
+            <Button 
+              variant="outline" 
+              size="icon" 
+              className="h-8 w-8" 
+              onClick={handlePrevYear}
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <Select value={year.toString()} onValueChange={(value) => setYear(parseInt(value))}>
+              <SelectTrigger className="w-[100px]">
+                <SelectValue>{year}</SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                {Array.from({ length: 5 }, (_, i) => {
+                  const yearValue = new Date().getFullYear() - i;
+                  return (
+                    <SelectItem key={yearValue} value={yearValue.toString()}>
+                      {yearValue}
+                    </SelectItem>
+                  );
+                })}
+              </SelectContent>
+            </Select>
+            <Button 
+              variant="outline" 
+              size="icon" 
+              className="h-8 w-8" 
+              onClick={handleNextYear}
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          <Button 
-            variant="outline" 
-            size="icon" 
-            className="h-8 w-8" 
-            onClick={handlePrevYear}
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-          
-          <Select value={year.toString()} onValueChange={(value) => setYear(parseInt(value))}>
-            <SelectTrigger className="w-[100px] h-8">
-              <SelectValue placeholder={year.toString()} />
-            </SelectTrigger>
-            <SelectContent>
-              {years.map((y) => (
-                <SelectItem key={y} value={y.toString()}>
-                  {y}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          
-          <Button 
-            variant="outline" 
-            size="icon" 
-            className="h-8 w-8" 
-            onClick={handleNextYear}
-            disabled={year >= new Date().getFullYear()}
-          >
-            <ChevronRight className="h-4 w-4" />
-          </Button>
-        </div>
+        <CardDescription>
+          {totalCompletions} challenges completed ({totalPoints} points earned) in {year}
+        </CardDescription>
       </CardHeader>
-      
-      <CardContent className="space-y-4">
-        {isLoading ? (
-          <div className="space-y-4">
-            <Skeleton className="h-4 w-full" />
-            <Skeleton className="h-40 w-full" />
-          </div>
-        ) : error ? (
-          <div className="text-center py-4 text-muted-foreground">
-            {error}
-          </div>
-        ) : (
-          <>
-            <div className="flex items-center justify-between text-xs text-muted-foreground">
-              <div>
-                <span className="font-medium text-green-400">{totalCompletions}</span> challenges completed in {year}
-              </div>
-              <div>
-                Longest streak: <span className="font-medium text-green-400">{longestStreak}</span> days
-              </div>
+      <CardContent>
+        <div className="space-y-4">
+          {data.length === 0 && year === new Date().getFullYear() ? (
+            <div className="flex flex-col items-center justify-center py-8 text-center">
+              <Calendar className="h-12 w-12 text-muted-foreground mb-4" />
+              <p className="text-lg font-medium">No challenges completed yet</p>
+              <p className="text-sm text-muted-foreground">
+                Complete challenges to see your activity here
+              </p>
             </div>
-            
-            <div className="relative overflow-x-auto">
-              <div className="flex">
-                <div className="pr-2 pt-6">
-                  <div className="grid grid-cols-1 gap-[3px]">
-                    {days.map((day, i) => (
-                      <div key={i} className="h-[10px] text-xs text-muted-foreground flex items-center">
-                        {i % 2 === 0 ? day : ''}
-                      </div>
-                    ))}
+          ) : data.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-8 text-center">
+              <Calendar className="h-12 w-12 text-muted-foreground mb-4" />
+              <p className="text-lg font-medium">No activity in {year}</p>
+              <p className="text-sm text-muted-foreground">
+                Try selecting a different year
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-12 gap-2">
+              {months.map((month, i) => (
+                <div key={i} className="space-y-2">
+                  <div className="text-xs text-muted-foreground">{month.name}</div>
+                  <div className="grid grid-rows-[repeat(31,1fr)] gap-1 justify-items-center">
+                    {month.days.map((day, j) => {
+                      const hasCompletions = day.count > 0;
+                      return (
+                        <TooltipProvider key={j}>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <div
+                                className={`h-2 w-2 rounded-sm ${getColor(day.count)} transition-colors hover:opacity-75`}
+                              />
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <div className="text-xs">
+                                {day.date.toLocaleDateString('en-US', {
+                                  month: 'short',
+                                  day: 'numeric',
+                                  year: 'numeric'
+                                })}
+                                <br />
+                                {hasCompletions ? (
+                                  <>
+                                    {day.count} challenge{day.count !== 1 ? 's' : ''} completed
+                                    {day.challenges.map((challenge, k) => (
+                                      <div key={k} className="mt-1 text-[10px]">
+                                        • {challenge.name} ({challenge.points} pts)
+                                      </div>
+                                    ))}
+                                  </>
+                                ) : (
+                                  'No challenges completed'
+                                )}
+                              </div>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      );
+                    })}
                   </div>
                 </div>
-                
-                <div>
-                  <div className="flex gap-1 mb-1">
-                    {months.map((month, i) => (
-                      <div 
-                        key={i} 
-                        className="text-xs text-muted-foreground"
-                        style={{ 
-                          width: `${Math.ceil(weeks.length / 12) * 13}px`,
-                          textAlign: 'center'
-                        }}
-                      >
-                        {month}
-                      </div>
-                    ))}
-                  </div>
-                  
-                  <div className="flex gap-[3px]">
-                    {weeks.map((week, weekIndex) => (
-                      <div key={weekIndex} className="grid grid-cols-1 gap-[3px]">
-                        {week.map((day, dayIndex) => (
-                          <div
-                            key={`${weekIndex}-${dayIndex}`}
-                            className={`w-[10px] h-[10px] rounded-sm ${
-                              day.count === -1 ? 'bg-transparent' : getCellColor(day.count)
-                            } cursor-pointer transition-colors`}
-                            onMouseEnter={(e) => handleCellHover(day, e)}
-                            onMouseLeave={handleCellLeave}
-                            title={day.count > 0 ? `${day.count} challenges on ${day.date}` : ''}
-                          />
-                        ))}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-              
-              <div className="flex justify-end mt-2 gap-1 items-center">
-                <span className="text-xs text-muted-foreground mr-1">Less</span>
-                {[0, 1, 3, 5, 7].map((count) => (
-                  <div 
-                    key={count} 
-                    className={`w-[10px] h-[10px] rounded-sm ${getCellColor(count)}`}
-                  />
-                ))}
-                <span className="text-xs text-muted-foreground ml-1">More</span>
-              </div>
+              ))}
             </div>
-            
-            {tooltipVisible && tooltipContent && (
-              <div 
-                className="fixed z-50 bg-black/90 border border-green-900/50 rounded-md p-3 shadow-lg max-w-xs"
-                style={{
-                  top: `${tooltipPosition.y}px`,
-                  left: `${tooltipPosition.x}px`,
-                }}
-              >
-                {tooltipContent}
-              </div>
-            )}
-          </>
-        )}
+          )}
+        </div>
       </CardContent>
     </Card>
   );

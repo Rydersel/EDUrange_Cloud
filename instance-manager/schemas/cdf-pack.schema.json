@@ -1,0 +1,97 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "EDURange CDF Pack Manifest",
+  "description": "Schema for the pack.json manifest file within a CDF Pack.",
+  "type": "object",
+  "required": [
+    "id",
+    "name",
+    "version",
+    "challenges"
+  ],
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "format": "uri",
+      "description": "Reference to the JSON schema definition for this file."
+    },
+    "id": {
+      "type": "string",
+      "description": "Unique machine-readable identifier for the pack (e.g., \"web-security-basics\").",
+      "pattern": "^[a-z0-9-_]+$"
+    },
+    "name": {
+      "type": "string",
+      "description": "Human-readable name of the pack."
+    },
+    "version": {
+      "type": "string",
+      "description": "Version string for the pack (e.g., \"1.1.0\"). Semantic versioning recommended.",
+      "pattern": "^\\d+\\.\\d+\\.\\d+(-[0-9A-Za-z-]+(\\.[0-9A-Za-z-]+)*)?$"
+    },
+    "description": {
+      "type": "string",
+      "description": "Brief description of the pack's content and goals."
+    },
+    "author": {
+      "type": "string",
+      "description": "Author or creator of the pack."
+    },
+    "license": {
+      "type": "string",
+      "description": "License information for the pack content."
+    },
+    "website": {
+      "type": "string",
+      "description": "URL for more information about the pack.",
+      "format": "uri"
+    },
+    "tags": {
+      "type": "array",
+      "description": "List of tags for categorizing the pack.",
+      "items": {
+        "type": "string"
+      },
+      "uniqueItems": true
+    },
+    "prerequisites": {
+      "type": "array",
+      "description": "List of recommended prerequisite knowledge or skills.",
+      "items": {
+        "type": "string"
+      },
+      "uniqueItems": true
+    },
+    "challenges": {
+      "type": "array",
+      "description": "List of filenames (relative to the root or challenges/ directory) for the CDF files included in this pack.",
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "shared_resources": {
+      "type": "array",
+      "description": "List of filenames (relative to the shared_resources/ directory) included in the pack.",
+      "items": {
+        "type": "string"
+      },
+      "uniqueItems": true
+    },
+    "dependencies": {
+      "type": "object",
+      "description": "Other packs that this pack depends on.",
+      "additionalProperties": {
+        "type": "string",
+        "description": "Version constraint for the dependency."
+      }
+    },
+    "metadata": {
+      "type": "object",
+      "description": "Additional metadata about the pack.",
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": false
+} 

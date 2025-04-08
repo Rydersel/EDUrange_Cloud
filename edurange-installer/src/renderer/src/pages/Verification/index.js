@@ -553,8 +553,9 @@ const Verification = () => {
       const studioName = `prisma-studio-${Date.now()}`;
       setStudioPodName(studioName);
 
-      // Create a ConfigMap with the Prisma schema and script
+      // Create a simplified schema that's less likely to cause YAML parsing issues
       const schemaConfigMapName = `prisma-schema-studio-${Date.now()}`;
+
       const schemaConfigMapYaml = `
 apiVersion: v1
 kind: ConfigMap
@@ -571,8 +572,7 @@ data:
       url      = env("DATABASE_URL")
     }
     
-    // Schema definition (same as in migration)
-    model User {
+     model User {
       id                   String                @id @default(cuid())
       name                 String?
       email                String                @unique
@@ -618,7 +618,7 @@ data:
       createdAt           DateTime              @default(now())
       updatedAt           DateTime              @updatedAt
       completions         ChallengeCompletion[]
-      challenge           Challenges            @relation(fields: [challengeId], references: [id])
+      challenge           Challenge            @relation(fields: [challengeId], references: [id])
       group               CompetitionGroup      @relation(fields: [groupId], references: [id], onDelete: Cascade)
       questionAttempts    QuestionAttempt[]
       questionCompletions QuestionCompletion[]
@@ -663,7 +663,7 @@ data:
       challengeInstanceId String?
       severity            LogSeverity            @default(INFO)
       accessCode          CompetitionAccessCode? @relation(fields: [accessCodeId], references: [id])
-      challenge           Challenges?            @relation(fields: [challengeId], references: [id])
+      challenge           Challenge?            @relation(fields: [challengeId], references: [id])
       challengeInstance   ChallengeInstance?     @relation(fields: [challengeInstanceId], references: [id])
       group               CompetitionGroup?      @relation(fields: [groupId], references: [id])
       user                User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -672,7 +672,7 @@ data:
     model ChallengeType {
       id         String       @id @default(cuid())
       name       String
-      challenges Challenges[]
+      challenges Challenge[]
     }
     
     model ChallengeQuestion {
@@ -681,13 +681,22 @@ data:
       content     String
       type        String
       points      Int
-      answer      String
+      answer      String?
       order       Int
+      title       String?
+      format      String?
+      hint        String?
+      required    Boolean @default(true)
+      cdf_question_id String?
+      cdf_payload Json?
+
       createdAt   DateTime             @default(now())
       updatedAt   DateTime             @updatedAt
-      challenge   Challenges           @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+      challenge   Challenge            @relation(fields: [challengeId], references: [id], onDelete: Cascade)
       attempts    QuestionAttempt[]
       completions QuestionCompletion[]
+
+      @@unique([challengeId, order])
     }
     
     model QuestionCompletion {
@@ -720,39 +729,66 @@ data:
       additional_config Json?      @default("{}")
       createdAt         DateTime   @default(now())
       updatedAt         DateTime   @updatedAt
-      challenge         Challenges @relation(fields: [challengeId], references: [id], onDelete: Cascade)
-    
+      challenge         Challenge  @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+
       @@unique([challengeId, appId])
     }
     
-    model Challenges {
-      id              String               @id @default(cuid())
-      name            String
-      challengeImage  String
-      difficulty      ChallengeDifficulty  @default(MEDIUM)
-      challengeTypeId String
-      description     String?
-      activityLogs    ActivityLog[]
-      appConfigs      ChallengeAppConfig[]
-      questions       ChallengeQuestion[]
-      challengeType   ChallengeType        @relation(fields: [challengeTypeId], references: [id], onDelete: Cascade)
-      groupChallenges GroupChallenge[]
+    model Challenge {
+      id                String               @id @default(cuid())
+      name              String
+      description       String?
+      difficulty        ChallengeDifficulty?
+      challengeTypeId   String
+      challengeType     ChallengeType        @relation(fields: [challengeTypeId], references: [id])
+      questions         ChallengeQuestion[]
+      appConfigs        ChallengeAppConfig[]
+      groupChallenges   GroupChallenge[]
+      activityLogs      ActivityLog[]
+      createdAt         DateTime             @default(now())
+      updatedAt         DateTime             @updatedAt
+
+      // --- CDF Fields ---
+      cdf_version       String?
+      cdf_content       Json?
+      pack_id           String?
+      pack              ChallengePack?       @relation(fields: [pack_id], references: [id])
+      pack_challenge_id String?
+
+      @@unique([pack_id, pack_challenge_id])
+    }
+    
+    model ChallengePack {
+      id             String      @id @default(cuid())
+      name           String      // Human-readable name from pack.json
+      description    String?     // Description from pack.json
+      version        String      // Version from pack.json
+      author         String?     // Author from pack.json
+      license        String?     // License from pack.json
+      website        String?     // Website URL from pack.json
+      installed_date DateTime    @default(now()) // When the pack was installed
+      updatedAt      DateTime    @updatedAt
+
+      // Relation to challenges contained within this pack
+      challenges     Challenge[]
     }
     
     model ChallengeInstance {
-      id             String           @id @default(uuid())
-      challengeId    String
-      userId         String
-      challengeImage String
-      challengeUrl   String
-      creationTime   DateTime         @default(now())
-      status         String
-      flagSecretName String
-      flag           String
-      competitionId  String
-      activityLogs   ActivityLog[]
-      competition    CompetitionGroup @relation(fields: [competitionId], references: [id], onDelete: Cascade)
-      user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+      id                String           @id @default(uuid())
+      challengeId       String           // Refers to Challenge model ID
+      userId            String
+      challengeUrl      String
+      creationTime      DateTime         @default(now())
+      status            ChallengeStatus  // Changed from String to enum type
+      terminationAttempts Int            @default(0) // Track retry attempts
+      lastStatusChange   DateTime        @default(now()) // Track timing of status changes
+      flagSecretName    String?          // Made optional
+      flag              String?          // Made optional
+      competitionId     String
+      k8s_instance_name String?          // Added field
+      activityLogs      ActivityLog[]
+      competition       CompetitionGroup @relation(fields: [competitionId], references: [id], onDelete: Cascade)
+      user              User             @relation(fields: [userId], references: [id], onDelete: Cascade)
     }
     
     model Account {
@@ -822,28 +858,31 @@ data:
     }
     
     enum ActivityEventType {
-      CHALLENGE_STARTED
-      CHALLENGE_COMPLETED
-      GROUP_JOINED
-      GROUP_CREATED
-      ACCESS_CODE_GENERATED
       USER_REGISTERED
       USER_LOGGED_IN
       USER_ROLE_CHANGED
       USER_UPDATED
       CHALLENGE_INSTANCE_CREATED
       CHALLENGE_INSTANCE_DELETED
+      CHALLENGE_COMPLETED
       QUESTION_ATTEMPTED
       QUESTION_COMPLETED
+      GROUP_JOINED
+      GROUP_CREATED
       GROUP_UPDATED
       GROUP_LEFT
       GROUP_DELETED
+      ACCESS_CODE_GENERATED
       ACCESS_CODE_USED
       ACCESS_CODE_EXPIRED
       ACCESS_CODE_DELETED
-      SYSTEM_ERROR
-      CHALLENGE_PACK_INSTALLED
       ACCESS_CODE_INVALID
+      CHALLENGE_TERMINATION_INITIATED
+      SYSTEM_WARNING
+      SYSTEM_ERROR
+      SECURITY_EVENT
+      CHALLENGE_PACK_INSTALLED
+      CHALLENGE_TYPE_INSTALLED
     }
     
     enum LogSeverity {
@@ -852,6 +891,14 @@ data:
       ERROR
       CRITICAL
     }
+    enum ChallengeStatus {
+      CREATING
+      STARTING
+      ACTIVE
+      TERMINATING
+      TERMINATED
+      ERROR
+    }
     
     enum ChallengeDifficulty {
       EASY
@@ -859,6 +906,7 @@ data:
       HARD
       EXPERT
     }
+    
 `;
 
       // Apply the ConfigMap
@@ -1430,8 +1478,8 @@ spec:
             <div className="p-3 bg-gray-50 rounded-md">
               <h3 className="font-medium text-gray-900">Database API</h3>
               <p className="text-gray-600">
-                <span className="text-amber-600 font-medium">Internal access only</span> - 
-                For security reasons, the Database API is only accessible from within the Kubernetes cluster 
+                <span className="text-amber-600 font-medium">Internal access only</span> -
+                For security reasons, the Database API is only accessible from within the Kubernetes cluster
                 at <code className="bg-gray-100 px-1 py-0.5 rounded">http://database-api-service.default.svc.cluster.local</code>
               </p>
             </div>

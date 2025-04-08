@@ -148,15 +148,15 @@ export async function POST(
       const completedQuestions = await prisma.questionCompletion.findMany({
         where: {
           userId: session.user.id,
-          groupChallengeId: groupChallenge.id,
-        },
+          groupChallengeId: groupChallenge.id
+        }
       });
 
-      const allCompleted =
-        completedQuestions.length === groupChallenge.challenge.questions.length;
+      // Check if challenge is completed by comparing completed questions count to total questions count
+      const allQuestionsCompleted = completedQuestions.length === (groupChallenge.challenge.questions?.length || 0);
 
       // If all questions are completed, create a challenge completion
-      if (allCompleted) {
+      if (allQuestionsCompleted) {
         // Get total points earned
         const totalPoints = await prisma.$queryRaw<[{ total: number }]>`
           SELECT SUM("pointsEarned") as total
@@ -220,7 +220,7 @@ export async function POST(
       return NextResponse.json({
         success: true,
         completion,
-        challengeCompleted: allCompleted
+        challengeCompleted: allQuestionsCompleted
       });
     } else {
       return NextResponse.json({

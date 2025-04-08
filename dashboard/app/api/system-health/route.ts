@@ -168,60 +168,59 @@ async function getDatabaseHealth(): Promise<DatabaseHealth> {
     
     // Try to fetch detailed PostgreSQL metrics directly from the database controller
     try {
-      const databaseApiUrl = getDatabaseApiUrl();
-      if (databaseApiUrl) {
-        console.log('Fetching detailed PostgreSQL health from:', `${databaseApiUrl}/health/detailed`);
+      // Determine base URL for server-side fetch
+      const baseUrl = typeof window === 'undefined' ? process.env.NEXTAUTH_URL || 'http://localhost:3000' : '';
+      console.log('Fetching detailed PostgreSQL health from internal proxy');
+      
+      const pgResponse = await fetch(`${baseUrl}/api/proxy/database/health/detailed`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        cache: 'no-store',
+        // Set a timeout to prevent hanging if the database controller is not responding
+        signal: AbortSignal.timeout(5000)
+      });
+      
+      if (pgResponse.ok) {
+        const pgData = await pgResponse.json();
         
-        const pgResponse = await fetch(`${databaseApiUrl}/health/detailed`, {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          cache: 'no-store',
-          // Set a timeout to prevent hanging if the database controller is not responding
-          signal: AbortSignal.timeout(5000)
-        });
+        // Store the detailed PostgreSQL metrics
+        dbHealth.postgres = {
+          version: pgData.version || "Unknown",
+          uptime: pgData.uptime || "Unknown",
+          connections: pgData.connections || { current: 0, max: 0, utilization_percent: 0 },
+          performance: pgData.performance || { query_latency_ms: null, transaction_latency_ms: null },
+          storage: pgData.storage || { database_size_mb: 0, pretty_size: "0 bytes" },
+          status: pgData.status || "error",
+          tables: [] // Initialize with empty array
+        };
         
-        if (pgResponse.ok) {
-          const pgData = await pgResponse.json();
+        // Check if there's a metrics error and handle tables data
+        if (pgData.metrics_error) {
+          console.log('PostgreSQL metrics error:', pgData.metrics_error);
           
-          // Store the detailed PostgreSQL metrics
-          dbHealth.postgres = {
-            version: pgData.version || "Unknown",
-            uptime: pgData.uptime || "Unknown",
-            connections: pgData.connections || { current: 0, max: 0, utilization_percent: 0 },
-            performance: pgData.performance || { query_latency_ms: null, transaction_latency_ms: null },
-            storage: pgData.storage || { database_size_mb: 0, pretty_size: "0 bytes" },
-            status: pgData.status || "error",
-            tables: [] // Initialize with empty array
-          };
-          
-          // Check if there's a metrics error and handle tables data
-          if (pgData.metrics_error) {
-            console.log('PostgreSQL metrics error:', pgData.metrics_error);
-            
-            // Add a helpful error message based on the error
-            if (pgData.metrics_error.includes("relation") && pgData.metrics_error.includes("does not exist")) {
-              // This is likely because the database is new and tables haven't been created yet
-              dbHealth.postgres.tables_error = "Database tables are not yet created or migrated";
-            } else {
-              dbHealth.postgres.tables_error = pgData.metrics_error;
-            }
-          } else if (pgData.tables) {
-            // Use tables data if available
-            dbHealth.postgres.tables = pgData.tables;
+          // Add a helpful error message based on the error
+          if (pgData.metrics_error.includes("relation") && pgData.metrics_error.includes("does not exist")) {
+            // This is likely because the database is new and tables haven't been created yet
+            dbHealth.postgres.tables_error = "Database tables are not yet created or migrated";
+          } else {
+            dbHealth.postgres.tables_error = pgData.metrics_error;
           }
-          
-          // If we have tables_info from the API, use that
-          if (pgData.tables_info) {
-            dbHealth.postgres.tables_info = pgData.tables_info;
-          }
-          
-          // Update the main database health with PostgreSQL version and connection info
-          if (pgData.version) dbHealth.version = pgData.version;
-          if (pgData.connections && pgData.connections.current) dbHealth.connections = pgData.connections.current;
-          if (pgData.uptime) dbHealth.uptime = pgData.uptime;
+        } else if (pgData.tables) {
+          // Use tables data if available
+          dbHealth.postgres.tables = pgData.tables;
         }
+        
+        // If we have tables_info from the API, use that
+        if (pgData.tables_info) {
+          dbHealth.postgres.tables_info = pgData.tables_info;
+        }
+        
+        // Update the main database health with PostgreSQL version and connection info
+        if (pgData.version) dbHealth.version = pgData.version;
+        if (pgData.connections && pgData.connections.current) dbHealth.connections = pgData.connections.current;
+        if (pgData.uptime) dbHealth.uptime = pgData.uptime;
       }
     } catch (pgError) {
       console.error('Error fetching detailed PostgreSQL health:', pgError);

@@ -65,4 +65,47 @@ export const extractInstanceId = (hostname, domainName) => {
   
   // Fallback to first segment of hostname
   return hostname.split('.')[0];
+};
+
+/**
+ * Fetches all challenge-specific URLs from the instance manager for a specific instance
+ * @param {string} instanceId - The instance ID to fetch URLs for
+ * @param {string} instanceManagerUrl - The instance manager API URL
+ * @returns {Promise<Object>} Promise resolving to an object with all challenge URLs
+ */
+export const fetchChallengeUrls = async (instanceId, instanceManagerUrl) => {
+  try {
+    // Use a direct fetch to the instance manager's list-challenge-pods endpoint
+    const response = await fetch(`${instanceManagerUrl}/list-challenge-pods`);
+    
+    if (!response.ok) {
+      console.warn('Failed to fetch challenge pods from instance manager:', response.status);
+      return {};
+    }
+    
+    const data = await response.json();
+    
+    // Find the pod with matching instance ID
+    const instancePod = data.challenge_pods?.find(pod => pod.pod_name === instanceId);
+    
+    if (!instancePod) {
+      console.warn(`No pod found with instance ID: ${instanceId}`);
+      return {};
+    }
+    
+    // Extract all URL-like fields (ending with 'Url')
+    const urlFields = {};
+    Object.keys(instancePod).forEach(key => {
+      // Check if the key ends with 'Url' (case-sensitive) and has a string value
+      if (key.endsWith('Url') && typeof instancePod[key] === 'string') {
+        urlFields[key] = instancePod[key];
+      }
+    });
+    
+    console.log('Extracted URL fields from instance manager:', urlFields);
+    return urlFields;
+  } catch (error) {
+    console.error('Error fetching challenge URLs:', error);
+    return {};
+  }
 }; 

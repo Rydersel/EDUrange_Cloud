@@ -1,8 +1,0 @@
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: postgresql-conf
-data:
-  postgresql.conf: |
-    listen_addresses = '*'
-

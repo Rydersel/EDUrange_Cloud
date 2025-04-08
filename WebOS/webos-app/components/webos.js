@@ -1,70 +1,98 @@
 'use client';
 
-import React, { Component } from 'react';
-import BootingScreen from './screen/booting_screen';
+import React, { useState, useEffect } from 'react';
 import Desktop from './screen/desktop';
 import LockScreen from './screen/lock_screen';
+import LoadingScreen from './screen/loading_screen';
 import Navbar from './screen/navbar';
 import ReactGA from 'react-ga4';
 
-export default class Webos extends Component {
-	constructor() {
-		super();
-		this.state = {
-			screen_locked: false,
-			bg_image_name: 'wall-1',
-			booting_screen: false, // Enable boot screen
-			shutDownScreen: false // Requires pressing button to enter, will eventually be login screen
-		};
-	}
+const Webos = () => {
+	const [state, setState] = useState({
+		screen_locked: false,
+		bg_image_name: 'wall-1',
+		shutDownScreen: false,
+		isLoading: true,
+		loadingProgress: 0,
+		loadingStatus: 'Initializing WebOS...'
+	});
 
-	componentDidMount() {
-		if (typeof window !== 'undefined') {
-			this.getLocalData();
-		}
-	}
-
-	setTimeOutBootScreen = () => {
-		setTimeout(() => {
-			this.setState({ booting_screen: false });
-		}, 2000);
+	const updateLoadingState = (progress, status) => {
+		setState(prevState => ({
+			...prevState,
+			loadingProgress: progress,
+			loadingStatus: status
+		}));
 	};
 
-	getLocalData = () => {
+	const loadConfiguration = async () => {
+		try {
+			updateLoadingState(10, 'Loading system configuration...');
+			
+			// Simulate loading different components
+			await new Promise(resolve => setTimeout(resolve, 500));
+			updateLoadingState(30, 'Initializing system services...');
+			
+			await new Promise(resolve => setTimeout(resolve, 500));
+			updateLoadingState(50, 'Loading user preferences...');
+			
+			// Load actual data
+			await getLocalData();
+			
+			updateLoadingState(70, 'Preparing desktop environment...');
+			await new Promise(resolve => setTimeout(resolve, 500));
+			
+			updateLoadingState(90, 'Finalizing setup...');
+			await new Promise(resolve => setTimeout(resolve, 500));
+			
+			updateLoadingState(100, 'Welcome to WebOS!');
+			
+			// Hide loading screen after a brief delay
+			setTimeout(() => {
+				setState(prevState => ({
+					...prevState,
+					isLoading: false
+				}));
+			}, 500);
+			
+		} catch (error) {
+			console.error('Error loading WebOS:', error);
+			updateLoadingState(100, 'Error loading WebOS. Please refresh.');
+		}
+	};
+
+	useEffect(() => {
 		if (typeof window !== 'undefined') {
+			loadConfiguration();
+		}
+	}, []);
+
+	const getLocalData = async () => {
+		if (typeof window !== 'undefined') {
+			updateLoadingState(60, 'Loading user preferences...');
+			
 			// Get Previously selected Background Image
 			let bg_image_name = localStorage.getItem('bg-image');
 			if (bg_image_name !== null && bg_image_name !== undefined) {
-				this.setState({ bg_image_name });
-			}
-
-			let booting_screen = localStorage.getItem('booting_screen');
-			if (booting_screen !== null && booting_screen !== undefined) {
-				// user has visited site before
-				this.setState({ booting_screen: false });
-			} else {
-				// user is visiting site for the first time
-				localStorage.setItem('booting_screen', false);
-				this.setTimeOutBootScreen();
+				setState(prevState => ({ ...prevState, bg_image_name }));
 			}
 
 			// get shutdown state
 			let shut_down = localStorage.getItem('shut-down');
 			if (shut_down !== null && shut_down !== undefined && shut_down === 'true') {
-				this.shutDown();
+				shutDown();
 			} else {
 				// Get previous lock screen state
 				let screen_locked = localStorage.getItem('screen-locked');
 				if (screen_locked !== null && screen_locked !== undefined) {
-					this.setState({ screen_locked: screen_locked === 'true' });
+					setState(prevState => ({ ...prevState, screen_locked: screen_locked === 'true' }));
 				}
 			}
 		}
 	};
 
-	lockScreen = () => {
+	const lockScreen = () => {
 		if (typeof window !== 'undefined') {
-			// google analytics
 			ReactGA.send({ hitType: "pageview", page: "/lock-screen", title: "Lock Screen" });
 			ReactGA.event({
 				category: `Screen Change`,
@@ -73,32 +101,32 @@ export default class Webos extends Component {
 
 			document.getElementById('status-bar').blur();
 			setTimeout(() => {
-				this.setState({ screen_locked: true });
-			}, 100); // waiting for all windows to close (transition-duration)
+				setState(prevState => ({ ...prevState, screen_locked: true }));
+			}, 100);
 			localStorage.setItem('screen-locked', true);
 		}
 	};
 
-	unLockScreen = () => {
+	const unLockScreen = () => {
 		if (typeof window !== 'undefined') {
 			ReactGA.send({ hitType: "pageview", page: "/desktop", title: "Custom Title" });
 
-			window.removeEventListener('click', this.unLockScreen);
-			window.removeEventListener('keypress', this.unLockScreen);
+			window.removeEventListener('click', unLockScreen);
+			window.removeEventListener('keypress', unLockScreen);
 
-			this.setState({ screen_locked: false });
+			setState(prevState => ({ ...prevState, screen_locked: false }));
 			localStorage.setItem('screen-locked', false);
 		}
 	};
 
-	changeBackgroundImage = (img_name) => {
+	const changeBackgroundImage = (img_name) => {
 		if (typeof window !== 'undefined') {
-			this.setState({ bg_image_name: img_name });
+			setState(prevState => ({ ...prevState, bg_image_name: img_name }));
 			localStorage.setItem('bg-image', img_name);
 		}
 	};
 
-	shutDown = () => {
+	const shutDown = () => {
 		if (typeof window !== 'undefined') {
 			ReactGA.send({ hitType: "pageview", page: "/switch-off", title: "Custom Title" });
 
@@ -108,37 +136,36 @@ export default class Webos extends Component {
 			});
 
 			document.getElementById('status-bar').blur();
-			this.setState({ shutDownScreen: true });
+			setState(prevState => ({ ...prevState, shutDownScreen: true }));
 			localStorage.setItem('shut-down', true);
 		}
 	};
 
-	turnOn = () => {
+	const turnOn = () => {
 		if (typeof window !== 'undefined') {
 			ReactGA.send({ hitType: "pageview", page: "/desktop", title: "Custom Title" });
 
-			this.setState({ shutDownScreen: false, booting_screen: true });
-			this.setTimeOutBootScreen();
+			setState(prevState => ({ ...prevState, shutDownScreen: false }));
 			localStorage.setItem('shut-down', false);
 		}
 	};
 
-	render() {
-		return (
-			<div className="w-screen h-screen overflow-hidden" id="monitor-screen">
-				<LockScreen
-					isLocked={this.state.screen_locked}
-					bgImgName={this.state.bg_image_name}
-					unLockScreen={this.unLockScreen}
-				/>
-				<BootingScreen
-					visible={this.state.booting_screen}
-					isShutDown={this.state.shutDownScreen}
-					turnOn={this.turnOn}
-				/>
-				<Navbar lockScreen={this.lockScreen} shutDown={this.shutDown} />
-				<Desktop bg_image_name={this.state.bg_image_name} changeBackgroundImage={this.changeBackgroundImage} />
-			</div>
-		);
-	}
-}
+	return (
+		<div className="w-screen h-screen overflow-hidden" id="monitor-screen">
+			<LoadingScreen 
+				isLoading={state.isLoading}
+				progress={state.loadingProgress}
+				statusMessage={state.loadingStatus}
+			/>
+			<LockScreen
+				isLocked={state.screen_locked}
+				bgImgName={state.bg_image_name}
+				unLockScreen={unLockScreen}
+			/>
+			<Navbar lockScreen={lockScreen} shutDown={shutDown} />
+			<Desktop bg_image_name={state.bg_image_name} changeBackgroundImage={changeBackgroundImage} />
+		</div>
+	);
+};
+
+export default Webos;

@@ -120,30 +120,12 @@ export function ChallengeItem({
       // Refresh the page to update the instances list
       router.refresh();
 
-      if (data.challengeUrl) {
-        // Update toast to show waiting status
-        toast({
-          title: "Challenge Created",
-          description: "Waiting for challenge environment to be ready...",
-        });
+      // Show success toast
+      toast({
+        title: "Challenge Created",
+        description: "Your challenge instance has been created. You can access it from the Instances tab.",
+      });
 
-        // Wait for the URL to be available
-        const isAvailable = await checkUrlAvailability(data.challengeUrl);
-
-        if (isAvailable) {
-          toast({
-            title: "Challenge Ready",
-            description: "Opening challenge in a new tab...",
-          });
-          window.open(data.challengeUrl, '_blank');
-        } else {
-          toast({
-            title: "Challenge Created",
-            description: "Challenge is taking longer than expected to be ready. You can try accessing it manually in a few moments.",
-            duration: 5000,
-          });
-        }
-      }
     } catch (error) {
       console.error("Error starting challenge:", error);
       toast({
@@ -224,8 +206,8 @@ export function ChallengeItem({
                 </p>
                 <div className="flex items-center gap-2 ml-4">
                   <span className="text-sm text-gray-400">Questions completed:</span>
-                  <StatusBadge 
-                    status={challenge.completedQuestions === challenge.totalQuestions ? "completed" : "info"} 
+                  <StatusBadge
+                    status={challenge.completedQuestions === challenge.totalQuestions ? "completed" : "info"}
                     customText={`${challenge.completedQuestions}/${challenge.totalQuestions}`}
                   />
                 </div>

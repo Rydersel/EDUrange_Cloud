@@ -74,11 +74,23 @@ export class Window extends Component {
         if (this.state.maximized) {
             this.restoreWindow();
         }
-        this.setState({ cursorType: "cursor-move" })
+        this.setState({ cursorType: "cursor-move" });
+        
+        // Remove transition during drag
+        var r = document.querySelector("#" + this.id);
+        if (r) {
+            r.style.transition = 'none';
+        }
     }
 
     changeCursorToDefault = () => {
-        this.setState({ cursorType: "cursor-default" })
+        this.setState({ cursorType: "cursor-default" });
+        
+        // Restore transitions after drag
+        var r = document.querySelector("#" + this.id);
+        if (r) {
+            r.style.transition = '';
+        }
     }
 
     handleVerticalResize = () => {
@@ -117,27 +129,48 @@ export class Window extends Component {
             posx = -510;
         }
         this.setWindowPosition();
+        
+        // Add transition only for minimize animation
+        var r = document.querySelector("#" + this.id);
+        r.style.transition = 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)';
+        
         // get corresponding sidebar app's position
-        var r = document.querySelector("#sidebar-" + this.id);
-        var sideBarApp = r.getBoundingClientRect();
+        var sideBarApp = document.querySelector("#sidebar-" + this.id).getBoundingClientRect();
 
-        r = document.querySelector("#" + this.id);
         // translate window to that position
         r.style.transform = `translate(${posx}px,${sideBarApp.y.toFixed(1) - 240}px) scale(0.2)`;
-        this.props.hasMinimized(this.id);
+        r.style.opacity = '0';
+        this.props.hasMinimised(this.id);
+        
+        // Remove transition after animation completes
+        setTimeout(() => {
+            if (r) {
+                r.style.transition = '';
+            }
+        }, 300);
     }
 
     restoreWindow = () => {
         var r = document.querySelector("#" + this.id);
         this.setDefaultWindowDimension();
+        
+        // Add transition for restore animation
+        r.style.transition = 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)';
+        
         // get previous position
         let posx = r.style.getPropertyValue("--window-transform-x");
         let posy = r.style.getPropertyValue("--window-transform-y");
 
         r.style.transform = `translate(${posx},${posy})`;
+        
         setTimeout(() => {
             this.setState({ maximized: false });
             this.checkOverlap();
+            
+            // Remove transition after animation completes
+            if (r) {
+                r.style.transition = '';
+            }
         }, 300);
     }
 
@@ -149,20 +182,40 @@ export class Window extends Component {
             this.focusWindow();
             var r = document.querySelector("#" + this.id);
             this.setWindowPosition();
+            
+            // Add transition for maximize animation
+            r.style.transition = 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)';
+            
             // translate window to maximize position
             r.style.transform = `translate(-1pt,-2pt)`;
             this.setState({ maximized: true, height: 96.3, width: 100.2 });
             this.props.hideDock(this.id, true);
+            
+            // Remove transition after animation completes
+            setTimeout(() => {
+                if (r) {
+                    r.style.transition = '';
+                }
+            }, 300);
         }
     }
 
     closeWindow = () => {
         this.setWindowPosition();
+        
+        // Add smooth transition for close
+        var r = document.querySelector("#" + this.id);
+        if (r) {
+            r.style.transition = 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)';
+        }
+        
         this.setState({ closed: true }, () => {
             this.props.hideDock(this.id, false);
+            
+            // After animation completes, tell parent to unmount
             setTimeout(() => {
-                this.props.closed(this.id)
-            }, 300) // after 3 seconds this window will be unmounted from parent (Desktop)
+                this.props.closed(this.id);
+            }, 300);
         });
     }
 
@@ -181,7 +234,7 @@ export class Window extends Component {
         return (
             <Draggable
                 axis="both"
-                handle=".bg-ub-window-title"
+                handle=".window-drag-handle"
                 grid={[1, 1]}
                 scale={1}
                 onStart={this.changeCursorToMove}
@@ -192,13 +245,19 @@ export class Window extends Component {
                 bounds={{ left: 0, top: 0, right: this.state.parentSize.width, bottom: this.state.parentSize.height }}
             >
                 <div style={{ width: `${this.state.width}%`, height: `${this.state.height}%`, backgroundColor: 'transparent' }}
-                    className={this.state.cursorType + " " + (this.state.closed ? " closed-window " : "") + (this.state.maximized ? " duration-300 rounded-none" : " rounded-lg rounded-b-none") + (this.props.minimized ? " opacity-0 invisible duration-200 " : "") + (this.props.isFocused ? " z-30 " : " z-20 notFocused") + " opened-window overflow-hidden min-w-1/4 min-h-1/4 main-window absolute window-shadow border-black border-opacity-40 border border-t-0 flex flex-col"}
+                    className={`${this.state.cursorType} ${this.state.closed ? "closed-window scale-95 opacity-0" : "scale-100 opacity-100"} ${
+                        this.state.maximized ? "duration-300 ease-out rounded-none" : "rounded-xl"
+                    } ${this.props.minimized ? "opacity-0 invisible duration-300 ease-out" : ""} ${
+                        this.props.isFocused ? "z-30 shadow-2xl backdrop-blur-sm bg-white/10" : "z-20 notFocused backdrop-blur-sm bg-white/5"
+                    } opened-window overflow-hidden min-w-1/4 min-h-1/4 main-window absolute border border-white/10 flex flex-col ${
+                        this.state.cursorType === "cursor-move" ? "" : "transition-all transform"
+                    }`}
                     id={this.id}
                     onClick={this.focusWindow}
                 >
                     <WindowYBorder resize={this.handleHorizontalResize} />
                     <WindowXBorder resize={this.handleVerticalResize} />
-                    <WindowTopBar title={this.props.title} />
+                    <WindowTopBar title={this.props.title} onFocus={this.focusWindow} />
                     <WindowEditButtons minimize={this.minimizeWindow} maximize={this.maximizeWindow} isMaximized={this.state.maximized} close={this.closeWindow} id={this.id} />
                     {this.id === "settings" ? (
                         <Settings changeBackgroundImage={this.props.changeBackgroundImage} currBgImgName={this.props.bg_image_name} />
@@ -219,8 +278,15 @@ export default Window
 // Window's title bar
 export function WindowTopBar(props) {
     return (
-        <div className={" relative bg-ub-window-title border-t-2 border-white border-opacity-5 py-1.5 px-3 text-white w-full select-none rounded-b-none"}>
-            <div className="flex justify-center text-sm font-bold">{props.title}</div>
+        <div
+            className="window-drag-handle relative py-1.5 px-3 w-full select-none rounded-t-xl backdrop-blur-md bg-gray-800/90 border-t border-white/20"
+            onMouseDown={props.onFocus}
+        >
+            <div className="flex justify-center">
+                <span className="text-[13px] font-normal tracking-wide text-white truncate max-w-[90%]">
+                    {props.title}
+                </span>
+            </div>
         </div>
     )
 }
@@ -255,45 +321,32 @@ export class WindowXBorder extends Component {
 }
 
 // Window's Edit Buttons
-// components/WindowEditButtons.js
 export function WindowEditButtons(props) {
-  const basePath = process.env.NEXT_PUBLIC_BASE_PATH;
-
   return (
-    <div className="absolute select-none right-0 top-0 mt-1 mr-1 flex justify-center items-center">
-      <span className="mx-1.5 bg-white bg-opacity-0 hover:bg-opacity-10 rounded-full flex justify-center mt-1 h-5 w-5 items-center" onClick={props.minimize}>
-        <img
-          src={`./icons/window/window-minimize.svg`}
-          alt="ubuntu window minimize"
-          className="h-5 w-5 inline"
-        />
-      </span>
-      {
-        (props.isMaximized
-          ?
-          <span className="mx-2 bg-white bg-opacity-0 hover:bg-opacity-10 rounded-full flex justify-center mt-1 h-5 w-5 items-center" onClick={props.maximize}>
-            <img
-              src={`./icons/window/window-restore.svg`}
-              alt="ubuntu window restore"
-              className="h-5 w-5 inline"
-            />
-          </span>
-          :
-          <span className="mx-2 bg-white bg-opacity-0 hover:bg-opacity-10 rounded-full flex justify-center mt-1 h-5 w-5 items-center" onClick={props.maximize}>
-            <img
-              src={`./icons/window/window-maximize.svg`}
-              alt="ubuntu window maximize"
-              className="h-5 w-5 inline"
-            />
-          </span>
-        )
-      }
-      <button tabIndex="-1" id={`close-${props.id}`} className="mx-1.5 focus:outline-none cursor-default bg-ub-orange bg-opacity-90 hover:bg-opacity-100 rounded-full flex justify-center mt-1 h-5 w-5 items-center" onClick={props.close}>
-        <img
-          src={`./icons/window/window-close.svg`}
-          alt="ubuntu window close"
-          className="h-5 w-5 inline"
-        />
+    <div className="absolute top-0 left-0 px-2 py-1.5 flex gap-1.5 items-center z-50 group/buttons">
+      <button
+        className="w-3 h-3 rounded-full bg-red-500 transition-opacity focus:outline-none relative"
+        onClick={props.close}
+      >
+        <span className="absolute inset-0 flex items-center justify-center opacity-0 group-hover/buttons:opacity-100 transition-opacity text-black text-[11px] font-light leading-none" style={{ marginTop: '-0.5px', marginLeft: '0.5px' }}>
+          ×
+        </span>
+      </button>
+      <button
+        className="w-3 h-3 rounded-full bg-yellow-500 transition-opacity focus:outline-none relative"
+        onClick={props.minimize}
+      >
+        <span className="absolute inset-0 flex items-center justify-center opacity-0 group-hover/buttons:opacity-100 transition-opacity text-black text-[11px] font-light leading-none" style={{ marginTop: '-1px' }}>
+          -
+        </span>
+      </button>
+      <button
+        className="w-3 h-3 rounded-full bg-green-500 transition-opacity focus:outline-none relative"
+        onClick={props.maximize}
+      >
+        <span className="absolute inset-0 flex items-center justify-center opacity-0 group-hover/buttons:opacity-100 transition-opacity text-black text-[11px] font-light leading-none" style={{ marginTop: '-0.5px' }}>
+          +
+        </span>
       </button>
     </div>
   )
@@ -305,17 +358,34 @@ export class WindowMainScreen extends Component {
         super();
         this.state = {
             setDarkBg: false,
+            isLoading: true
         }
     }
+    
     componentDidMount() {
+        // Start loading immediately when app opens
+        this.setState({ isLoading: true });
+
+        // Wait for next frame to ensure DOM is ready
+        requestAnimationFrame(() => {
+            this.setState({ isLoading: false });
+        });
+        
         setTimeout(() => {
             this.setState({ setDarkBg: true });
         }, 3000);
     }
+    
     render() {
         const { screen, disableScrolling } = this.props;
         return (
-            <div className={"w-full flex-grow z-20 max-h-full " + disableScrolling + " windowMainScreen" + (this.state.setDarkBg ? " bg-black opacity-100 " : "opacity-100")}>
+            <div 
+                className={`w-full flex-grow z-20 max-h-full ${disableScrolling} windowMainScreen ${this.state.setDarkBg ? "bg-black opacity-100" : "opacity-100"}`}
+                style={{
+                    opacity: this.state.isLoading ? 0 : 1,
+                    transition: 'opacity 0.2s ease-in-out',
+                }}
+            >
                 {screen()}
             </div>
         )

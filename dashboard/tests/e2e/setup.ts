@@ -245,13 +245,11 @@ export async function createTestChallenge(competitionId: string): Promise<string
     const challengeTypeId = await getFirstChallengeType();
 
     // Create the challenge
-    const challenge = await prisma.challenges.create({
+    const challenge = await prisma.challenge.create({
       data: {
         name: `Test Challenge ${Date.now()}`,
         description: 'Test challenge created for E2E tests',
-        difficulty: ChallengeDifficulty.EASY,
         challengeTypeId: challengeTypeId,
-        challengeImage: 'test-image.png', // Add the required field
       }
     });
 
@@ -662,7 +660,7 @@ async function cleanupTestData(): Promise<void> {
     // Delete challenges
     if (testData.challenges.length > 0) {
       console.log(`Cleaning up ${testData.challenges.length} tracked challenges...`);
-      await prisma.challenges.deleteMany({
+      await prisma.challenge.deleteMany({
         where: {
           id: { in: testData.challenges }
         }
@@ -746,7 +744,7 @@ async function cleanupTestData(): Promise<void> {
     }
 
     // Find and delete any leftover challenges
-    const leftoverChallenges = await prisma.challenges.findMany({
+    const leftoverChallenges = await prisma.challenge.findMany({
       where: {
         name: { startsWith: 'Test Challenge' }
       },
@@ -755,9 +753,9 @@ async function cleanupTestData(): Promise<void> {
 
     if (leftoverChallenges.length > 0) {
       console.log(`Found ${leftoverChallenges.length} leftover challenges to clean up`);
-      await prisma.challenges.deleteMany({
+      await prisma.challenge.deleteMany({
         where: {
-          id: { in: leftoverChallenges.map(challenge => challenge.id) }
+          id: { in: leftoverChallenges.map((challenge: any) => challenge.id) }
         }
       });
     }

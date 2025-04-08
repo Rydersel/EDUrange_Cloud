@@ -1,0 +1,163 @@
+{
+  "typeId": "fullOS",
+  "version": "1.0.0",
+  "description": "Full OS challenge with terminal access",
+  "podTemplate": {
+    "containers": [
+      {
+        "name": "challenge-container",
+        "image": "registry.rydersel.cloud/challenge-base",
+        "ports": [
+          {
+            "containerPort": 22,
+            "name": "ssh",
+            "protocol": "TCP"
+          }
+        ],
+        "env": [
+          {
+            "name": "FLAG",
+            "valueFrom": {
+              "secretKeyRef": {
+                "name": "{{FLAG_SECRET_NAME}}",
+                "key": "flag"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "name": "webos",
+        "image": "registry.rydersel.cloud/webos",
+        "ports": [
+          {
+            "containerPort": 3000,
+            "name": "webos-http",
+            "protocol": "TCP"
+          }
+        ],
+        "env": [
+          {"name": "NEXT_PUBLIC_POD_NAME", "value": "{{INSTANCE_NAME}}"},
+          {"name": "NEXT_PUBLIC_APPS_CONFIG", "value": "{{APPS_CONFIG}}"},
+          {"name": "NEXT_PUBLIC_CHALLENGE_POD_NAME", "value": "{{INSTANCE_NAME}}"},
+          {"name": "NEXT_PUBLIC_CHALLENGE_API_URL", "value": "http://localhost:5000/execute"},
+          {"name": "NEXT_PUBLIC_TERMINAL_URL", "value": "https://terminal-{{INSTANCE_NAME}}.{{DOMAIN}}"},
+          {"name": "NEXT_PUBLIC_CHALLENGE_URL", "value": "https://{{INSTANCE_NAME}}.{{DOMAIN}}"},
+          {"name": "DATABASE_API_URL", "value": "http://database-api-service.default.svc.cluster.local"},
+          {"name": "INSTANCE_MANAGER_URL", "value": "http://instance-manager.default.svc.cluster.local/api"},
+          {"name": "HOSTNAME", "value": "{{INSTANCE_NAME}}"},
+          {"name": "DOMAIN_NAME", "value": "{{DOMAIN}}"},
+          {"name": "NODE_ENV", "value": "production"},
+          {"name": "FLAG_SECRET_NAME", "value": "{{FLAG_SECRET_NAME}}"}
+        ]
+      },
+      {
+        "name": "terminal",
+        "image": "registry.rydersel.cloud/terminal",
+        "ports": [
+          {
+            "containerPort": 3001,
+            "name": "terminal-http",
+            "protocol": "TCP"
+          }
+        ],
+        "env": [
+          {"name": "CONTAINER_NAME", "value": "challenge-container"},
+          {"name": "POD_NAME", "value": "{{INSTANCE_NAME}}"},
+          {"name": "KUBERNETES_HOST", "value": "{{KUBERNETES_HOST}}"},
+          {"name": "KUBERNETES_NAMESPACE", "value": "default"},
+          {"name": "KUBERNETES_SERVICE_ACCOUNT_TOKEN", "value": "{{KUBERNETES_TOKEN}}"}
+        ]
+      }
+    ]
+  },
+  "services": [
+    {
+      "name": "service-{{INSTANCE_NAME}}",
+      "ports": [
+        {
+          "port": 80,
+          "targetPort": 3000,
+          "name": "webos-http"
+        },
+        {
+          "port": 3001,
+          "targetPort": 3001,
+          "name": "terminal-http"
+        }
+      ]
+    }
+  ],
+  "ingress": [
+    {
+      "name": "ingress-{{INSTANCE_NAME}}",
+      "annotations": {
+        "nginx.ingress.kubernetes.io/use-regex": "true",
+        "nginx.ingress.kubernetes.io/proxy-read-timeout": "3600",
+        "nginx.ingress.kubernetes.io/proxy-send-timeout": "3600",
+        "nginx.ingress.kubernetes.io/proxy-connect-timeout": "3600",
+        "nginx.ingress.kubernetes.io/websocket-services": "service-{{INSTANCE_NAME}}"
+      },
+      "rules": [
+        {
+          "host": "{{INSTANCE_NAME}}.{{DOMAIN}}",
+          "http": {
+            "paths": [
+              {
+                "path": "/",
+                "pathType": "ImplementationSpecific",
+                "backend": {
+                  "service": {
+                    "name": "service-{{INSTANCE_NAME}}",
+                    "port": {
+                      "number": 80
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        },
+        {
+          "host": "terminal-{{INSTANCE_NAME}}.{{DOMAIN}}",
+          "http": {
+            "paths": [
+              {
+                "path": "/",
+                "pathType": "ImplementationSpecific",
+                "backend": {
+                  "service": {
+                    "name": "service-{{INSTANCE_NAME}}",
+                    "port": {
+                      "number": 3001
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "tls": [
+        {
+          "hosts": [
+            "{{INSTANCE_NAME}}.{{DOMAIN}}",
+            "terminal-{{INSTANCE_NAME}}.{{DOMAIN}}"
+          ],
+          "secretName": "wildcard-domain-certificate-prod"
+        }
+      ]
+    }
+  ],
+  "extensionPoints": {
+    "challengeImage": {
+      "container": "challenge-container",
+      "property": "image",
+      "default": "registry.rydersel.cloud/challenge-base"
+    },
+    "appsConfig": {
+      "container": "webos",
+      "property": "env.NEXT_PUBLIC_APPS_CONFIG"
+    }
+  }
+} 

@@ -1,0 +1,211 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "EDURange Challenge Type Definition (CTD)",
+  "description": "Schema for defining standard challenge types for EDURange.",
+  "type": "object",
+  "required": [
+    "typeId",
+    "version",
+    "podTemplate"
+  ],
+  "properties": {
+    "typeId": {
+      "type": "string",
+      "description": "Unique identifier for this challenge type."
+    },
+    "version": {
+      "type": "string",
+      "description": "Version of this challenge type definition."
+    },
+    "description": {
+      "type": "string",
+      "description": "Description of this challenge type."
+    },
+    "podTemplate": {
+      "type": "object",
+      "description": "Template for the Kubernetes pod and related resources.",
+      "required": ["containers"],
+      "properties": {
+        "containers": {
+          "type": "array",
+          "description": "List of containers in this challenge type pod.",
+          "items": {
+            "type": "object",
+            "required": ["name", "image"],
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "Container name."
+              },
+              "image": {
+                "type": "string",
+                "description": "Default container image."
+              },
+              "ports": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": ["containerPort"],
+                  "properties": {
+                    "containerPort": {
+                      "type": "integer",
+                      "description": "Port to expose from the container."
+                    },
+                    "name": {
+                      "type": "string",
+                      "description": "Name for the port."
+                    },
+                    "protocol": {
+                      "type": "string",
+                      "enum": ["TCP", "UDP"],
+                      "default": "TCP"
+                    }
+                  }
+                }
+              },
+              "env": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": ["name"],
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "value": {
+                      "type": "string"
+                    },
+                    "valueFrom": {
+                      "type": "object",
+                      "description": "Source for the environment variable's value."
+                    }
+                  }
+                }
+              },
+              "volumeMounts": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": ["name", "mountPath"],
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "mountPath": {
+                      "type": "string"
+                    },
+                    "readOnly": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "volumes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["name"],
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "configMap": {
+                "type": "object"
+              },
+              "secret": {
+                "type": "object"
+              },
+              "emptyDir": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "services": {
+      "type": "array",
+      "description": "Service definitions for this challenge type.",
+      "items": {
+        "type": "object",
+        "required": ["name", "ports"],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "ports": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["port", "targetPort"],
+              "properties": {
+                "port": {
+                  "type": "integer"
+                },
+                "targetPort": {
+                  "type": ["integer", "string"]
+                },
+                "name": {
+                  "type": "string"
+                },
+                "protocol": {
+                  "type": "string",
+                  "enum": ["TCP", "UDP"],
+                  "default": "TCP"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "ingress": {
+      "type": "array",
+      "description": "Ingress definitions for this challenge type.",
+      "items": {
+        "type": "object",
+        "required": ["name", "rules"],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "rules": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "annotations": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "extensionPoints": {
+      "type": "object",
+      "description": "Points where challenge-specific configuration can override defaults.",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "container": {
+            "type": "string",
+            "description": "Container name to apply extension to."
+          },
+          "property": {
+            "type": "string",
+            "description": "Property to override (e.g., 'image', 'env')."
+          },
+          "default": {
+            "description": "Default value if not provided by challenge."
+          }
+        }
+      }
+    }
+  }
+} 

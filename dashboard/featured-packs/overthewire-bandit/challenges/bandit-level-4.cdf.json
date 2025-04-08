@@ -1,0 +1,150 @@
+{
+  "$schema": "https://raw.githubusercontent.com/EDURange/schema/main/schemas/cdf.schema.json",
+  "metadata": {
+    "id": "bandit-4",
+    "pack_id": "overthewire-bandit",
+    "name": "Bandit Level 4",
+    "version": "1.0.0",
+    "description": "The password for the next level is stored in the only human-readable file in the 'inhere' directory. Learn how to identify file types and filter command output.",
+    "challenge_type": "fullOS",
+    "difficulty": "beginner",
+    "author": "EDURange Team"
+  },
+  "components": [
+    {
+      "type": "container",
+      "id": "bandit-4-os",
+      "config": {
+        "image": "registry.rydersel.cloud/bandit4",
+        "resources": {
+          "cpu_limit": "500m",
+          "mem_limit": "512Mi"
+        }
+      }
+    },
+    {
+      "type": "webosApp",
+      "id": "terminal",
+      "config": {
+        "title": "Terminal",
+        "icon": "./icons/Remote-Terminal.svg",
+        "width": 60,
+        "height": 55,
+        "screen": "displayTerminal",
+        "disabled": false,
+        "favourite": true,
+        "desktop_shortcut": true,
+        "launch_on_startup": true,
+        "additional_config": {
+          "disableScrolling": true
+        },
+        "app_type": "terminal"
+      }
+    },
+    {
+      "type": "webosApp",
+      "id": "chrome",
+      "config": {
+        "title": "Browser",
+        "icon": "./icons/browser.svg",
+        "width": 70,
+        "height": 80,
+        "screen": "displayChrome",
+        "disabled": false,
+        "favourite": true,
+        "desktop_shortcut": true,
+        "launch_on_startup": false,
+        "app_type": "browser"
+      }
+    },
+    {
+      "type": "webosApp",
+      "id": "calc",
+      "config": {
+        "title": "Calculator",
+        "icon": "./icons/calculator.svg",
+        "width": 5,
+        "height": 50,
+        "screen": "displayTerminalCalc",
+        "disabled": false,
+        "favourite": true,
+        "desktop_shortcut": false,
+        "launch_on_startup": false,
+        "app_type": "terminal"
+      }
+    },
+    {
+      "type": "webosApp",
+      "id": "codeeditor",
+      "config": {
+        "title": "Code Editor",
+        "icon": "./icons/code-editor.svg",
+        "width": 60,
+        "height": 75,
+        "screen": "displayCodeEditor",
+        "disabled": false,
+        "favourite": true,
+        "desktop_shortcut": false,
+        "launch_on_startup": false,
+        "app_type": "editor"
+      }
+    },
+    {
+      "type": "webosApp",
+      "id": "settings",
+      "config": {
+        "title": "Settings",
+        "icon": "./icons/settings.svg",
+        "width": 50,
+        "height": 60,
+        "screen": "displaySettings",
+        "disabled": false,
+        "favourite": true,
+        "desktop_shortcut": false,
+        "launch_on_startup": false,
+        "app_type": "custom"
+      }
+    },
+    {
+      "type": "webosApp",
+      "id": "cyberchef",
+      "config": {
+        "title": "Cyber Chef",
+        "icon": "./icons/cyberchef.svg",
+        "width": 75,
+        "height": 85,
+        "screen": "Cyberchef",
+        "disabled": false,
+        "favourite": true,
+        "desktop_shortcut": true,
+        "launch_on_startup": false,
+        "app_type": "custom"
+      }
+    },
+    {
+      "type": "question",
+      "id": "q1_filetype",
+      "config": {
+        "text": "What command can be used to determine the type of a file?",
+        "type": "text",
+        "points": 5,
+        "answer": "file",
+        "order": 0
+      }
+    },
+    {
+      "type": "question",
+      "id": "q2_flag",
+      "config": {
+        "text": "Find the password stored in the only human-readable file in the 'inhere' directory.",
+        "type": "flag",
+        "points": 10,
+        "answer": "bandit4_password_flag",
+        "order": 1
+      }
+    }
+  ],
+  "typeConfig": {
+    "challengeImage": "registry.rydersel.cloud/bandit4"
+  }
+}

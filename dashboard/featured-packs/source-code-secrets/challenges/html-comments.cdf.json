@@ -1,0 +1,77 @@
+{
+  "$schema": "https://raw.githubusercontent.com/EDURange/schema/main/schemas/cdf.schema.json",
+  "metadata": {
+    "id": "html-comments",
+    "pack_id": "source-code-secrets",
+    "name": "HTML Comments",
+    "version": "1.0.0",
+    "description": "Find a hidden flag in HTML comments. This challenge teaches you how to view the source code of a webpage to find information that isn't visible when viewing the page normally.",
+    "challenge_type": "web",
+    "difficulty": "beginner",
+    "author": "EDURange Team"
+  },
+  "components": [
+    {
+      "type": "container",
+      "id": "webserver-1",
+      "config": {
+        "image": "registry.rydersel.cloud/source-code-secrets-1",
+        "ports": [
+          {
+            "containerPort": 80,
+            "protocol": "TCP"
+          }
+        ],
+        "resources": {
+          "cpu_limit": "500m",
+          "mem_limit": "512Mi"
+        }
+      }
+    },
+    {
+      "type": "webosApp",
+      "id": "chrome",
+      "config": {
+        "title": "Browser",
+        "icon": "./icons/browser.svg",
+        "width": 70,
+        "height": 80,
+        "screen": "displayChrome",
+        "disabled": false,
+        "favourite": true,
+        "desktop_shortcut": true,
+        "launch_on_startup": false,
+        "app_type": "browser"
+      }
+    },
+    {
+      "type": "webosApp",
+      "id": "web_chal",
+      "config": {
+        "title": "Web Challenge",
+        "icon": "./icons/browser.svg",
+        "width": 70,
+        "height": 80,
+        "screen": "displayWebChal",
+        "disabled": false,
+        "favourite": true,
+        "desktop_shortcut": true,
+        "launch_on_startup": true,
+        "app_type": "custom"
+      }
+    },
+    {
+      "type": "question",
+      "id": "q1_flag",
+      "config": {
+        "text": "What is the flag hidden in the HTML comments?",
+        "type": "flag",
+        "points": 10,
+        "order": 0
+      }
+    }
+  ],
+  "typeConfig": {
+    "challengeImage": "registry.rydersel.cloud/source-code-secrets-1"
+  }
+}

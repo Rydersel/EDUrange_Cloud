@@ -296,6 +296,14 @@ spec:
           value: "5"
         - name: DATABASE_CONNECTION_MAX_RETRIES
           value: "10"
+        - name: PYTHONUNBUFFERED
+          value: "1"
+        - name: PYTHONTRACEMALLOC
+          value: "1"
+        - name: PYTHONMALLOCSTATS
+          value: "1"
+        - name: PYTHONDEVMODE
+          value: "1"
         resources:
           requests:
             memory: "256Mi"
@@ -322,6 +330,17 @@ spec:
       - name: database-sync
         image: ${registry.url}/database-sync:latest
         imagePullPolicy: Always
+        workingDir: /app
+        command: ["/bin/bash", "-c"]
+        args:
+          - |
+            # Limit Python's memory usage
+            export PYTHONMEMORY=368435456
+            
+            while true; do
+              python main.py || true
+              sleep 10
+            done
         env:
         - name: POSTGRES_HOST
           valueFrom:
@@ -356,12 +375,19 @@ spec:
           value: "5"
         - name: DATABASE_CONNECTION_MAX_RETRIES
           value: "10"
+        - name: PYTHONUNBUFFERED
+          value: "1"
+        - name: PYTHONTRACEMALLOC
+          value: "1"
+        - name: PYTHONMALLOCSTATS
+          value: "1"
+        - name: PYTHONDEVMODE
+          value: "1"
         resources:
           requests:
-            memory: "128Mi"
+            memory: "400Mi"
             cpu: "50m"
           limits:
-            memory: "256Mi"
             cpu: "200m"
 `;
 

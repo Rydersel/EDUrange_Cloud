@@ -44,7 +44,7 @@ export function ChallengeActions({ challengeId, challengeName }: ChallengeAction
       });
 
       // Redirect back to challenges list
-      router.push('/dashboard/challenges');
+      router.push('/admin/challenges');
       router.refresh();
     } catch (error) {
       console.error('Error deleting challenge:', error);

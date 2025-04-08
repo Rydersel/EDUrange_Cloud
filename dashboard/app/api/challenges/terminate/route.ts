@@ -1,18 +1,19 @@
 import { NextResponse, NextRequest } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { User } from "@prisma/client";
-import { ActivityLogger, ActivityEventType } from '@/lib/activity-logger';
-import { getInstanceManagerUrl } from "@/lib/api-config";
+import { ActivityEventType } from '@/lib/activity-logger';
+import { requireUser, authorizeProxyAction } from '@/lib/auth-utils';
 
 export async function POST(req: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    // Use existing auth utility for consistent authentication
+    const { session, authorized, error } = await requireUser();
+
+    // If not authorized, return the error response
+    if (!authorized || !session) {
+      return error;
     }
 
+    // Parse the request body
     const body = await req.json();
     const { instanceId } = body;
 
@@ -24,97 +25,104 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Get instance details and check authorization
-    const instance = await prisma.challengeInstance.findFirst({
+    // Use shared authorization utility for instance actions
+    const { authorized: isAuthorized, error: authError, instance } = 
+      await authorizeProxyAction(instanceId, session);
+
+    // If not authorized, return the error response
+    if (!isAuthorized || !instance) {
+      return authError;
+    }
+
+    // Get the authenticated user's ID from the session
+    const authenticatedUserId = session.user.id;
+
+    // Update status to TERMINATING
+    await prisma.challengeInstance.update({
       where: { id: instanceId },
-      include: {
-        user: true,
-        competition: {
-          include: {
-            instructors: true
-          }
-        }
-      }
+      data: { status: "TERMINATING" }
     });
 
-    if (!instance) {
-      return NextResponse.json(
-        { error: "Challenge instance not found" },
-        { status: 404 }
-      );
-    }
-
-    // Verify user owns instance or is competition instructor
-    const isInstructor = instance.competition?.instructors?.some(
-      (instructor: User) => instructor.id === session.user.id
-    ) || false;
-
-    if (instance.userId !== session.user.id && !isInstructor) {
-      return NextResponse.json(
-        { error: "Not authorized to terminate this instance" },
-        { status: 403 }
-      );
-    }
-
-    // Get the instance manager URL
-    const instanceManagerUrl = getInstanceManagerUrl();
-
+    // Log the termination initiation
     try {
-      // Call instance manager to terminate challenge
-      const response = await fetch(
-        `${instanceManagerUrl}/end-challenge`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            deployment_name: instanceId,
-          }),
+      await prisma.activityLog.create({
+        data: {
+          eventType: "CHALLENGE_INSTANCE_DELETED" as any,
+          userId: authenticatedUserId,
+          challengeInstanceId: instance.id,
+          severity: "INFO",
+          metadata: {
+            userId: instance.userId,
+            challengeId: instance.challengeId,
+            status: "TERMINATING"
+          }
         }
-      );
+      });
+    } catch (logError) {
+      console.warn("Error logging termination initiation:", logError);
+      // Continue even if logging fails
+    }
 
-      if (!response.ok) {
-        const error = await response.text();
-        throw new Error(`Failed to terminate challenge instance: ${error}`);
-      }
+    // Get instance manager URL, ensuring no duplicate /api prefix
+    const instanceManagerBaseUrl = process.env.INSTANCE_MANAGER_URL || 
+                              "http://instance-manager.default.svc.cluster.local";
+    
+    // Ensure we have only one /api in the path by removing any trailing /api
+    const instanceManagerUrl = instanceManagerBaseUrl.endsWith('/api') 
+                            ? instanceManagerBaseUrl.slice(0, -4) // Remove trailing /api
+                            : instanceManagerBaseUrl;
+                            
+    // Construct the final URL with the correct endpoint path                            
+    const apiUrl = `${instanceManagerUrl}/api/end-challenge`;
 
-      // Update instance status to terminated
-      await prisma.challengeInstance.update({
-        where: { id: instanceId },
-        data: { status: "terminated" },
+    console.log(`Terminating challenge: ${instanceId} via ${apiUrl}`);
+    
+    // Make the API call to terminate the challenge
+    const response = await fetch(apiUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        deployment_name: instanceId
+      }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.text();
+      console.error('Failed to terminate challenge:', {
+        status: response.status,
+        error: errorData
       });
 
-      // Log the instance deletion
-      try {
-        await ActivityLogger.logChallengeEvent(
-          ActivityEventType.CHALLENGE_INSTANCE_DELETED,
-          session.user.id,
-          instance.challengeId,
-          instance.id,
-          {
-            challengeImage: instance.challengeImage,
-            challengeUrl: instance.challengeUrl,
-            deletionTime: new Date().toISOString()
-          }
-        );
-      } catch (logError) {
-        console.error("Error logging instance deletion:", logError);
-        // Continue even if logging fails
-      }
+      // Update status to ERROR
+      await prisma.challengeInstance.update({
+        where: { id: instanceId },
+        data: { status: "ERROR" },
+      });
 
-      return NextResponse.json({ message: "Challenge instance terminated successfully" });
-    } catch (instanceError) {
-      console.error("Error with instance manager:", instanceError);
       return NextResponse.json(
-        { error: instanceError instanceof Error ? instanceError.message : "Failed to terminate challenge instance" },
+        { error: `Failed to terminate challenge: ${errorData}` },
         { status: 500 }
       );
     }
+
+    // Update status to TERMINATED
+    await prisma.challengeInstance.update({
+      where: { id: instanceId },
+      data: { status: "TERMINATED" },
+    });
+
+    // Return success response
+    return NextResponse.json({
+      message: "Challenge termination completed",
+      status: "TERMINATED"
+    });
+    
   } catch (error) {
-    console.error("Error terminating challenge instance:", error);
+    console.error("Error terminating challenge:", error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Failed to terminate challenge instance" },
+      { error: error instanceof Error ? error.message : "Failed to terminate challenge" },
       { status: 500 }
     );
   }

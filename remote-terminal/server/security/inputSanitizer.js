@@ -87,15 +87,23 @@ function sanitizeTerminalInput(input) {
 function containsDangerousSequences(input) {
   if (!input) return false;
   
+  // Skip detection for common, safe terminal navigation sequences
+  // ESC key alone or ESC+Enter are normal terminal usage patterns
+  if (input === '\x1b' || input === '\x1b\r' || input === '\x1b\n') {
+    return false;
+  }
+  
   for (const pattern of DANGEROUS_ESCAPE_SEQUENCES) {
     if (pattern.test(input)) {
       return true;
     }
   }
   
-  // Check for other suspicious patterns
+  // Check for other suspicious patterns - but not single ESC characters
+  // which are used for normal terminal navigation
   const suspiciousPatterns = [
-    /\x1b/g,  // ESC character
+    // Only detect ESC followed by something other than carriage return or newline
+    /\x1b[^\r\n]/g, 
     /\x07/g,  // BEL character
     /\x1f/g   // Unit Separator
   ];

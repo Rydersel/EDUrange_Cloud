@@ -21,7 +21,7 @@ export function Navigation() {
             href={route.href || '#'}
             className={cn(
               buttonVariants({ variant: 'ghost' }),
-              pathname === route.href || pathname.startsWith(route.href + '/')
+              (pathname === route.href || (pathname && pathname.startsWith(route.href + '/')))
                 ? 'bg-muted hover:bg-muted'
                 : 'hover:bg-transparent hover:text-primary',
               'justify-start'

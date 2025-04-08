@@ -78,7 +78,7 @@ export function ChallengeRowActions({ challengeId, challengeName }: ChallengeRow
         <DropdownMenuContent align="end">
           <DropdownMenuLabel>Actions</DropdownMenuLabel>
           <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={() => router.push(`/dashboard/challenges/${challengeId}`)}>
+          <DropdownMenuItem onClick={() => router.push(`/admin/challenges/${challengeId}`)}>
             <Eye className="mr-2 h-4 w-4" />
             View Details
           </DropdownMenuItem>

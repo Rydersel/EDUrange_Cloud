@@ -215,16 +215,15 @@ export function DashboardClient({ systemStatus: initialSystemStatus }: Dashboard
   }, []);
 
   // Handle click on system health cards
-  const handleCardClick = useCallback((component: string) => {
-    // Add loading state before navigation
-    setIsRefreshing(true); 
-    router.push(`/dashboard/system/${component}`);
+  const handleSystemNavigate = useCallback((component: string) => {
+    setIsRefreshing(true);
+    router.push(`/admin/system/${component}`);
   }, [router]);
 
   // Memoize card click handlers to prevent recreating on each render
-  const handleInstanceManagerClick = useCallback(() => handleCardClick('instance-manager'), [handleCardClick]);
-  const handleDatabaseClick = useCallback(() => handleCardClick('database'), [handleCardClick]);
-  const handleMonitoringClick = useCallback(() => handleCardClick('monitoring'), [handleCardClick]);
+  const handleInstanceManagerClick = useCallback(() => handleSystemNavigate('instance-manager'), [handleSystemNavigate]);
+  const handleDatabaseClick = useCallback(() => handleSystemNavigate('database'), [handleSystemNavigate]);
+  const handleMonitoringClick = useCallback(() => handleSystemNavigate('monitoring'), [handleSystemNavigate]);
 
   // Memoize the card details to avoid recalculation on each render
   const instanceManagerDetails = useMemo(() => [
@@ -299,7 +298,7 @@ export function DashboardClient({ systemStatus: initialSystemStatus }: Dashboard
               onClick={() => {
                 // Add loading state before navigation for challenge instances
                 setIsRefreshing(true);
-                router.push('/dashboard/challenge');
+                router.push('/admin/challenge');
               }}
               className="cursor-pointer transition-transform hover:scale-[1.02]"
             >

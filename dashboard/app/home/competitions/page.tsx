@@ -31,7 +31,7 @@ export default async function CompetitionsPage() {
               Manage and participate in CTF competitions
             </p>
           </div>
-          <Link href="/dashboard/app/home/competitions/create">
+          <Link href="/admin/app/home/competitions/create">
             <Button>
               <Plus className="mr-2 h-4 w-4" />
               Create Competition

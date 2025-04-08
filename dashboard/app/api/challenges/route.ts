@@ -14,7 +14,7 @@ const challengesRateLimiter = rateLimit({
   limit: 50 // 50 requests per minute
 });
 
-type ChallengeWithDetails = Prisma.ChallengesGetPayload<{
+type ChallengeWithDetails = Prisma.ChallengeGetPayload<{
   include: {
     challengeType: true;
     questions: true;
@@ -33,7 +33,7 @@ function transformToWebOSFormat(challenge: ChallengeWithDetails) {
       points: number;
       answer?: string;
     }>;
-  }>, question) => {
+  }>, question: any) => {
     if (!acc.length) {
       acc.push({
         instructions: "Complete the following questions:",
@@ -73,7 +73,7 @@ function transformToWebOSFormat(challenge: ChallengeWithDetails) {
   // Transform app configs and add challenge prompt
   const appsConfig = [
     challengePromptApp,
-    ...challenge.appConfigs.map(app => ({
+    ...challenge.appConfigs.map((app: any) => ({
       id: app.appId,
       icon: app.icon,
       title: app.title,
@@ -92,8 +92,7 @@ function transformToWebOSFormat(challenge: ChallengeWithDetails) {
     id: challenge.id,
     name: challenge.name,
     description: challenge.description,
-    challengeImage: challenge.challengeImage,
-    difficulty: challenge.difficulty,
+    challengeType: challenge.challengeType.name,
     AppsConfig: appsConfig
   };
 }
@@ -110,7 +109,7 @@ export async function GET(req: NextRequest) {
       return createErrorResponse('Unauthorized', 401);
     }
 
-    const challenges = await prisma.challenges.findMany({
+    const challenges = await prisma.challenge.findMany({
       include: {
         challengeType: true,
         questions: true,
@@ -177,13 +176,11 @@ export async function POST(req: NextRequest) {
 
     // Create the challenge
     try {
-      const challenge = await prisma.challenges.create({
+      const challenge = await prisma.challenge.create({
         data: {
           name,
           description,
-          difficulty,
           challengeTypeId,
-          challengeImage,
           questions: {
             create: questions.map((q, index) => ({
               content: q.content,

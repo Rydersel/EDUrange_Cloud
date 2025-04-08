@@ -16,9 +16,9 @@ import { AlertCircle } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 import { devLog, errorLog } from '@/lib/logger';
 
-const breadcrumbItems = [
-  { title: 'Challenges', link: '/dashboard/challenge' },
-  { title: 'Create', link: '/dashboard/challenge/new' }
+let breadcrumbItems = [
+  { title: 'Challenges', link: '/admin/challenge' },
+  { title: 'Create', link: '/admin/challenge/new' }
 ];
 
 interface NewChallengeFormProps {
@@ -46,6 +46,13 @@ interface AppConfig {
       points: number;
     }[];
   }[];
+}
+
+interface TypeConfig {
+  challengeImage: string;
+  attackImage?: string;
+  defenseImage?: string;
+  [key: string]: any; // Allow additional properties for future challenge types
 }
 
 export default function NewChallengeForm({ userId }: NewChallengeFormProps) {
@@ -192,6 +199,17 @@ export default function NewChallengeForm({ userId }: NewChallengeFormProps) {
       
       const appsConfigToUse = overriddenConfig.length > 0 ? overriddenConfig : appsConfig;
       
+      // Create typeConfig based on challenge type
+      const typeConfig: TypeConfig = {
+        challengeImage
+      };
+      
+      // Add type-specific configuration based on challenge type
+      if (challengeType.toLowerCase() === 'metasploit') {
+        typeConfig.attackImage = challengeImage; // Default to same image
+        typeConfig.defenseImage = challengeImage; // Default to same image
+      }
+      
       // Create the instance using the instance manager proxy
       const response = await fetch('/api/instance-manager-proxy?path=start-challenge', {
         method: 'POST',
@@ -200,10 +218,10 @@ export default function NewChallengeForm({ userId }: NewChallengeFormProps) {
         },
         body: JSON.stringify({
           user_id: userId,
-          challenge_image: challengeImage,
           apps_config: appsConfigToUse.length > 0 ? JSON.stringify(appsConfigToUse) : null,
           chal_type: challengeType.toLowerCase(),
-          competition_id: "standalone"  // Use standalone for non-competition challenges
+          competition_id: "standalone",  // Use standalone for non-competition challenges
+          type_config: typeConfig // Add typeConfig to payload
         })
       });
 
@@ -220,7 +238,7 @@ export default function NewChallengeForm({ userId }: NewChallengeFormProps) {
       });
 
       // Redirect to the instances page
-      router.push('/dashboard/challenge');
+      router.push('/admin/challenge');
     } catch (error) {
       console.error('Error creating challenge instance:', error);
       setError(error instanceof Error ? error.message : 'Failed to create challenge instance');

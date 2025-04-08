@@ -26,6 +26,9 @@ import { Trophy, Medal, Award } from "lucide-react";
 
 export default function CompetitionDetailsPage() {
   const params = useParams();
+  if (!params) {
+    return <div>Loading...</div>;
+  }
   const id = params.id as string;
 
   // TODO: Fetch competition data

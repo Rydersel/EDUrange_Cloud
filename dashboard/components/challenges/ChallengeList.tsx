@@ -17,9 +17,10 @@ const difficultyColors = {
   "EASY": "bg-[#22C55E]/10 text-[#22C55E] hover:bg-[#22C55E]/20",
   "MEDIUM": "bg-[#EAB308]/10 text-[#EAB308] hover:bg-[#EAB308]/20",
   "HARD": "bg-[#EF4444]/10 text-[#EF4444] hover:bg-[#EF4444]/20",
+  "EXPERT": "bg-[#9333EA]/10 text-[#9333EA] hover:bg-[#9333EA]/20",
 };
 
-const difficultyOrder = ["EASY", "MEDIUM", "HARD"];
+const difficultyOrder = ["EASY", "MEDIUM", "HARD", "EXPERT"];
 
 interface Challenge {
   id: string;

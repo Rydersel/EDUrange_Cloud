@@ -48,6 +48,7 @@ export function Settings(props) {
     }
     return false;
   });
+  const [currBgImgName, setCurrBgImgName] = useState(props.bg_image_name || 'wall-1');
 
   const wallpapers = {
     "wall-1": "./images/wallpapers/wall-1.webp",
@@ -66,8 +67,21 @@ export function Settings(props) {
     return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
   }, []);
 
+  useEffect(() => {
+    if (props.bg_image_name) {
+      setCurrBgImgName(props.bg_image_name);
+    }
+  }, [props.bg_image_name]);
+
   const changeBackgroundImage = (wallpaperName) => {
-    props.changeBackgroundImage(wallpaperName);
+    if (typeof props.changeBackgroundImage === 'function') {
+      props.changeBackgroundImage(wallpaperName);
+      setCurrBgImgName(wallpaperName);
+    } else {
+      console.error('changeBackgroundImage function not provided in props');
+      // Fallback to just updating local state
+      setCurrBgImgName(wallpaperName);
+    }
   };
 
   const toggleFullscreen = () => {
@@ -156,7 +170,7 @@ export function Settings(props) {
       <h2 className="text-2xl font-bold mb-4">Wallpaper Settings</h2>
       <div className="w-2/3 mx-auto mb-4 rounded-lg overflow-hidden" style={{ aspectRatio: '16/9' }}>
         <div className="w-full h-full" style={{
-          backgroundImage: `url(${wallpapers[props.currBgImgName]})`,
+          backgroundImage: `url(${wallpapers[currBgImgName]})`,
           backgroundSize: "cover",
           backgroundRepeat: "no-repeat",
           backgroundPosition: "center center"
@@ -167,7 +181,7 @@ export function Settings(props) {
           <button
             key={name}
             onClick={() => changeBackgroundImage(name)}
-            className={`${name === props.currBgImgName ? "border-white" : "border-transparent"} md:w-1/4 w-1/3 aspect-video m-2 outline-none border-2 rounded-lg overflow-hidden`}
+            className={`${name === currBgImgName ? "border-white" : "border-transparent"} md:w-1/4 w-1/3 aspect-video m-2 outline-none border-2 rounded-lg overflow-hidden`}
             style={{ backgroundImage: `url(${wallpapers[name]})`, backgroundSize: "cover", backgroundRepeat: "no-repeat", backgroundPosition: "center center" }}
           ></button>
         ))}
@@ -240,6 +254,6 @@ export function Settings(props) {
 
 export default Settings;
 
-export const displaySettings = () => {
-  return <Settings />;
+export const displaySettings = (props) => {
+  return <Settings {...props} />;
 };

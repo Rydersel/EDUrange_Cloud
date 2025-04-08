@@ -62,17 +62,56 @@ export const installInstanceManager = async ({
   try {
     addComponentLog('Starting Instance Manager installation...');
 
-    addComponentLog('Checking for existing Instance Manager deployment...');
+    // First, clean up any existing resources
+    addComponentLog('Cleaning up any existing Instance Manager resources...');
     await checkAndDeleteExistingDeployment('instance-manager');
-
-    addComponentLog('Checking for existing Instance Manager service...');
     await checkAndDeleteExistingService('instance-manager');
-
-    addComponentLog('Checking for existing Instance Manager ingress...');
     await checkAndDeleteExistingIngress('instance-manager-ingress');
 
-    addComponentLog('Checking wildcard certificate...');
-    await checkAndUpdateWildcardCertificate();
+    // Create RBAC resources
+    addComponentLog('Creating Instance Manager RBAC resources...');
+    const rbacYaml = `
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: instance-manager-sa
+  namespace: default
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: instance-manager-role
+  namespace: default
+rules:
+- apiGroups: [""]
+  resources: ["pods", "services", "configmaps", "secrets"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+- apiGroups: ["apps"]
+  resources: ["deployments"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+- apiGroups: ["networking.k8s.io"]
+  resources: ["ingresses"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: instance-manager-rolebinding
+  namespace: default
+subjects:
+- kind: ServiceAccount
+  name: instance-manager-sa
+  namespace: default
+roleRef:
+  kind: Role
+  name: instance-manager-role
+  apiGroup: rbac.authorization.k8s.io`;
+
+    const rbacResult = await applyManifestFromString(rbacYaml, 'rbac');
+    if (!rbacResult.success) {
+      throw new Error(`Failed to create RBAC resources: ${rbacResult.error}`);
+    }
+    addComponentLog('RBAC resources created successfully');
 
     addComponentLog('Creating Instance Manager deployment...');
     const deploymentYaml = `
@@ -93,7 +132,11 @@ spec:
       labels:
         app: instance-manager
     spec:
-      serviceAccountName: default
+      serviceAccountName: instance-manager-sa
+      initContainers:
+      - name: wait-for-terminal-credentials
+        image: bitnami/kubectl:latest
+        command: ['sh', '-c', 'until kubectl get configmap terminal-credentials; do echo "waiting for terminal-credentials configmap"; sleep 2; done;']
       containers:
       - name: instance-manager
         image: ${registry.url}/instance-manager
@@ -107,6 +150,10 @@ spec:
           value: "${domain.databaseSubdomain}"
         - name: REGISTRY_URL
           value: "${registry.url}"
+        - name: CHALLENGE_POD_LABEL_KEY
+          value: "app"
+        - name: CHALLENGE_POD_LABEL_VALUE
+          value: "ctfchal"
         resources:
           limits:
             cpu: "500m"
@@ -114,7 +161,14 @@ spec:
           requests:
             cpu: "100m"
             memory: "128Mi"
-`;
+        volumeMounts:
+        - name: terminal-credentials
+          mountPath: /etc/terminal-credentials
+          readOnly: true
+      volumes:
+      - name: terminal-credentials
+        configMap:
+          name: terminal-credentials`;
 
     const deploymentResult = await applyManifestFromString(deploymentYaml, 'deployment');
     if (!deploymentResult.success) {
@@ -137,8 +191,7 @@ spec:
   - port: 80
     targetPort: 8000
     protocol: TCP
-  type: ClusterIP
-`;
+  type: ClusterIP`;
 
     const serviceResult = await applyManifestFromString(serviceYaml, 'service');
     if (!serviceResult.success) {
@@ -155,6 +208,20 @@ spec:
     }
 
     addComponentLog('Instance Manager pod is ready.');
+
+    // Verify terminal-credentials ConfigMap exists
+    addComponentLog('Verifying terminal-credentials ConfigMap...');
+    const configMapResult = await window.api.executeCommand('kubectl', [
+      'get',
+      'configmap',
+      'terminal-credentials',
+      '--ignore-not-found'
+    ]);
+
+    if (!configMapResult.stdout.includes('terminal-credentials')) {
+      throw new Error('terminal-credentials ConfigMap not found. Please ensure terminal RBAC setup is completed.');
+    }
+
     addComponentLog('Instance Manager installation completed successfully.');
     setInstallationStatus('instanceManager', 'installed');
 

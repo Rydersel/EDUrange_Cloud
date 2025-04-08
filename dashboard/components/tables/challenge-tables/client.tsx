@@ -174,7 +174,7 @@ export const ChallengesClient: React.FC<ChallengesClientProps> = ({ data, isLoad
         />
         <Button
           className="text-xs md:text-sm"
-          onClick={() => router.push('/dashboard/challenge/new')}
+          onClick={() => router.push('/admin/challenge/new')}
         >
           <Plus className="mr-2 h-4 w-4" /> Add New
         </Button>

@@ -17,7 +17,7 @@ export async function DELETE(req: NextRequest, props: { params: Promise<{ id: st
     const challengeId = params.id;
 
     // Check if challenge exists
-    const challenge = await prisma.challenges.findUnique({
+    const challenge = await prisma.challenge.findUnique({
       where: { id: challengeId },
       include: {
         questions: true,
@@ -40,7 +40,7 @@ export async function DELETE(req: NextRequest, props: { params: Promise<{ id: st
     });
 
     // Delete the challenge
-    await prisma.challenges.delete({
+    await prisma.challenge.delete({
       where: { id: challengeId }
     });
 

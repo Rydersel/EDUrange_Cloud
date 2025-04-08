@@ -1,0 +1,145 @@
+{
+  "typeId": "web",
+  "version": "1.0.0",
+  "description": "Web challenge with WebOS interface",
+  "podTemplate": {
+    "containers": [
+      {
+        "name": "challenge-container",
+        "image": "registry.rydersel.cloud/web-challenge-base",
+        "ports": [
+          {
+            "containerPort": 80,
+            "name": "web-http",
+            "protocol": "TCP"
+          }
+        ],
+        "env": [
+          {
+            "name": "FLAG",
+            "valueFrom": {
+              "secretKeyRef": {
+                "name": "{{FLAG_SECRET_NAME}}",
+                "key": "flag"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "name": "webos",
+        "image": "registry.rydersel.cloud/webos",
+        "ports": [
+          {
+            "containerPort": 3000,
+            "name": "webos-http",
+            "protocol": "TCP"
+          }
+        ],
+        "env": [
+          {"name": "NEXT_PUBLIC_POD_NAME", "value": "{{INSTANCE_NAME}}"},
+          {"name": "NEXT_PUBLIC_APPS_CONFIG", "value": "{{APPS_CONFIG}}"},
+          {"name": "NEXT_PUBLIC_CHALLENGE_POD_NAME", "value": "{{INSTANCE_NAME}}"},
+          {"name": "NEXT_PUBLIC_CHALLENGE_API_URL", "value": "http://localhost:5000/execute"},
+          {"name": "NEXT_PUBLIC_CHALLENGE_URL", "value": "https://{{INSTANCE_NAME}}.{{DOMAIN}}"},
+          {"name": "NEXT_PUBLIC_WEB_CHALLENGE_URL", "value": "https://web-{{INSTANCE_NAME}}.{{DOMAIN}}"},
+          {"name": "DATABASE_API_URL", "value": "http://database-api-service.default.svc.cluster.local"},
+          {"name": "INSTANCE_MANAGER_URL", "value": "http://instance-manager.default.svc.cluster.local/api"},
+          {"name": "HOSTNAME", "value": "{{INSTANCE_NAME}}"},
+          {"name": "DOMAIN_NAME", "value": "{{DOMAIN}}"},
+          {"name": "NODE_ENV", "value": "production"},
+          {"name": "FLAG_SECRET_NAME", "value": "{{FLAG_SECRET_NAME}}"}
+        ]
+      }
+    ]
+  },
+  "services": [
+    {
+      "name": "service-{{INSTANCE_NAME}}",
+      "ports": [
+        {
+          "port": 80,
+          "targetPort": 3000,
+          "name": "webos-http"
+        },
+        {
+          "port": 8080,
+          "targetPort": 80,
+          "name": "web-challenge-http"
+        }
+      ]
+    }
+  ],
+  "ingress": [
+    {
+      "name": "ingress-{{INSTANCE_NAME}}",
+      "annotations": {
+        "nginx.ingress.kubernetes.io/use-regex": "true",
+        "nginx.ingress.kubernetes.io/proxy-read-timeout": "3600",
+        "nginx.ingress.kubernetes.io/proxy-send-timeout": "3600",
+        "nginx.ingress.kubernetes.io/proxy-connect-timeout": "3600",
+        "nginx.ingress.kubernetes.io/websocket-services": "service-{{INSTANCE_NAME}}"
+      },
+      "rules": [
+        {
+          "host": "{{INSTANCE_NAME}}.{{DOMAIN}}",
+          "http": {
+            "paths": [
+              {
+                "path": "/",
+                "pathType": "ImplementationSpecific",
+                "backend": {
+                  "service": {
+                    "name": "service-{{INSTANCE_NAME}}",
+                    "port": {
+                      "number": 80
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        },
+        {
+          "host": "web-{{INSTANCE_NAME}}.{{DOMAIN}}",
+          "http": {
+            "paths": [
+              {
+                "path": "/",
+                "pathType": "ImplementationSpecific",
+                "backend": {
+                  "service": {
+                    "name": "service-{{INSTANCE_NAME}}",
+                    "port": {
+                      "number": 8080
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "tls": [
+        {
+          "hosts": [
+            "{{INSTANCE_NAME}}.{{DOMAIN}}",
+            "web-{{INSTANCE_NAME}}.{{DOMAIN}}"
+          ],
+          "secretName": "wildcard-domain-certificate-prod"
+        }
+      ]
+    }
+  ],
+  "extensionPoints": {
+    "challengeImage": {
+      "container": "challenge-container",
+      "property": "image",
+      "default": "registry.rydersel.cloud/web-challenge-base"
+    },
+    "appsConfig": {
+      "container": "webos",
+      "property": "env.NEXT_PUBLIC_APPS_CONFIG"
+    }
+  }
+} 

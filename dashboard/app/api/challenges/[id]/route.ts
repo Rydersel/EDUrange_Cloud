@@ -17,7 +17,7 @@ export async function GET(req: Request, props: { params: Promise<{ id: string }>
       return NextResponse.json({ error: 'Challenge ID is required' }, { status: 400 });
     }
 
-    const challenge = await prisma.challenges.findUnique({
+    const challenge = await prisma.challenge.findUnique({
       where: { id: params.id },
       include: {
         challengeType: true,
@@ -51,7 +51,7 @@ export async function GET(req: Request, props: { params: Promise<{ id: string }>
         undefined,
         {
           competitionId: undefined,
-          challengeImage: challenge.challengeImage,
+          challengeId: challenge.id,
           challengeUrl: undefined,
           creationTime: new Date().toISOString()
         }

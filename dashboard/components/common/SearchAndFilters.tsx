@@ -46,10 +46,10 @@ export function SearchAndFilters({
           </SelectTrigger>
           <SelectContent className="bg-[#1A2A1A] border-[#2A3A2A]">
             <SelectItem value="all" className="text-gray-200">All Difficulties</SelectItem>
-            <SelectItem value="very easy" className="text-gray-200">Very Easy {selectedDifficulty === "very easy" && sortByDifficulty && (sortByDifficulty === "asc" ? " ↑" : " ↓")}</SelectItem>
             <SelectItem value="easy" className="text-gray-200">Easy {selectedDifficulty === "easy" && sortByDifficulty && (sortByDifficulty === "asc" ? " ↑" : " ↓")}</SelectItem>
             <SelectItem value="medium" className="text-gray-200">Medium {selectedDifficulty === "medium" && sortByDifficulty && (sortByDifficulty === "asc" ? " ↑" : " ↓")}</SelectItem>
             <SelectItem value="hard" className="text-gray-200">Hard {selectedDifficulty === "hard" && sortByDifficulty && (sortByDifficulty === "asc" ? " ↑" : " ↓")}</SelectItem>
+            <SelectItem value="expert" className="text-gray-200">Expert {selectedDifficulty === "expert" && sortByDifficulty && (sortByDifficulty === "asc" ? " ↑" : " ↓")}</SelectItem>
           </SelectContent>
         </Select>
         <Select value={selectedCategory} onValueChange={setSelectedCategory}>

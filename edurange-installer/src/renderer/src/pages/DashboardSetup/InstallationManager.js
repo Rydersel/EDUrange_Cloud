@@ -241,9 +241,6 @@ spec:
         - name: HEALTH_CHECK_MONITORING_URL
           value: "https://${domain.monitoringSubdomain}.${domain.name}/metrics/health"
         resources:
-          limits:
-            cpu: 500m
-            memory: 512Mi
           requests:
             cpu: 100m
             memory: 256Mi

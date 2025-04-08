@@ -1,0 +1,88 @@
+{
+  "$schema": "https://raw.githubusercontent.com/EDURange/schema/main/schemas/cdf.schema.json",
+  "metadata": {
+    "id": "hackers-login",
+    "pack_id": "source-code-secrets",
+    "name": "Hacker's Login",
+    "version": "1.0.0",
+    "description": "Find hidden login credentials to access the system and retrieve the flag. This challenge combines all the techniques you've learned in the previous challenges to find information hidden in various parts of the source code.",
+    "challenge_type": "web",
+    "difficulty": "intermediate",
+    "author": "EDURange Team"
+  },
+  "components": [
+    {
+      "type": "container",
+      "id": "webserver-4",
+      "config": {
+        "image": "registry.rydersel.cloud/source-code-secrets-4",
+        "ports": [
+          {
+            "containerPort": 80,
+            "protocol": "TCP"
+          }
+        ],
+        "resources": {
+          "cpu_limit": "500m",
+          "mem_limit": "512Mi"
+        }
+      }
+    },
+    {
+      "type": "webosApp",
+      "id": "chrome",
+      "config": {
+        "title": "Browser",
+        "icon": "./icons/browser.svg",
+        "width": 70,
+        "height": 80,
+        "screen": "displayChrome",
+        "disabled": false,
+        "favourite": true,
+        "desktop_shortcut": true,
+        "launch_on_startup": false,
+        "app_type": "browser"
+      }
+    },
+    {
+      "type": "webosApp",
+      "id": "web_chal",
+      "config": {
+        "title": "Web Challenge",
+        "icon": "./icons/browser.svg",
+        "width": 70,
+        "height": 80,
+        "screen": "displayWebChal",
+        "disabled": false,
+        "favourite": true,
+        "desktop_shortcut": true,
+        "launch_on_startup": true,
+        "app_type": "custom"
+      }
+    },
+    {
+      "type": "question",
+      "id": "q1_flag",
+      "config": {
+        "text": "What is the flag you obtained after logging in?",
+        "type": "flag",
+        "points": 40,
+        "order": 0
+      }
+    },
+    {
+      "type": "question",
+      "id": "q2_encoding",
+      "config": {
+        "text": "What encoding was used for the backdoor password in the footer?",
+        "type": "text",
+        "points": 10,
+        "answer": "Base64",
+        "order": 1
+      }
+    }
+  ],
+  "typeConfig": {
+    "challengeImage": "registry.rydersel.cloud/source-code-secrets-4"
+  }
+}

@@ -1,0 +1,89 @@
+{
+  "$schema": "https://raw.githubusercontent.com/EDURange/schema/main/schemas/cdf.schema.json",
+  "metadata": {
+    "id": "sql-injection-basic",
+    "pack_id": "sql-injection-basics",
+    "name": "SQL Injection Basic",
+    "version": "1.0.0",
+    "description": "A basic SQL injection challenge where you need to bypass authentication to find the flag.",
+    "challenge_type": "sql-injection",
+    "difficulty": "beginner",
+    "estimated_time": 30
+  },
+  "components": [
+    {
+      "type": "webosApp",
+      "id": "settings",
+      "config": {
+        "title": "Settings",
+        "icon": "./icons/settings.svg",
+        "width": 50,
+        "height": 60,
+        "screen": "displaySettings",
+        "disabled": false,
+        "favourite": true,
+        "desktop_shortcut": false,
+        "launch_on_startup": false,
+        "app_type": "custom"
+      }
+    },
+     {
+      "type": "webosApp",
+      "id": "chrome",
+      "config": {
+        "title": "Browser",
+        "icon": "./icons/browser.svg",
+        "width": 70,
+        "height": 80,
+        "screen": "displayChrome",
+        "disabled": false,
+        "favourite": true,
+        "desktop_shortcut": true,
+        "launch_on_startup": false,
+        "app_type": "browser"
+      }
+    },
+    {
+      "type": "webosApp",
+      "id": "web_chal",
+      "config": {
+        "title": "Web Challenge",
+        "icon": "./icons/browser.svg",
+        "width": 70,
+        "height": 80,
+        "screen": "displayWebChal",
+        "disabled": false,
+        "favourite": true,
+        "desktop_shortcut": true,
+        "launch_on_startup": true,
+        "app_type": "custom"
+      }
+    },
+
+    {
+      "id": "basic-sql-injection-quiz",
+      "type": "question",
+      "config": {
+        "type": "flag",
+        "text": "What is the flag you found in the admin's account? (Format: EDU-{...})",
+        "points": 100,
+        "answer": "{{FLAG}}",
+        "hint": "Try logging in as admin by bypassing the password check with SQL injection. Look for code comments or documentation for common SQL injection techniques."
+      }
+    },
+    {
+      "id": "sql-injection-technique-quiz",
+      "type": "question",
+      "config": {
+        "type": "text",
+        "text": "What SQL injection technique did you use to solve this challenge? Explain briefly how it works.",
+        "points": 50,
+        "answer": ["authentication bypass", "comment out", "-- comment", "admin' --"]
+      }
+    }
+  ],
+  "typeConfig": {
+    "challengeImage": "registry.rydersel.cloud/sql-injection-basic",
+    "databaseImage": "mysql:5.7"
+  }
+}

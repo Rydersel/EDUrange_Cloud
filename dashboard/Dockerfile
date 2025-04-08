@@ -71,6 +71,8 @@ RUN chown nextjs:nodejs .next
 # This is optimized for Next.js 15.2.1 with the standalone output format
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+# Copy the featured packs needed by the API route
+COPY --from=builder --chown=nextjs:nodejs /app/featured-packs ./featured-packs
 
 USER nextjs
 

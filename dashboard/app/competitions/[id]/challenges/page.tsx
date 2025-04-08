@@ -21,7 +21,7 @@ export default async function CompetitionChallengesPage(
       userId: session.user.id,
       competitionId: params.id,
       status: {
-        in: ["running", "creating", "active"]
+        in: ["ACTIVE", "CREATING", "STARTING"]
       }
     },
     orderBy: {
@@ -33,7 +33,7 @@ export default async function CompetitionChallengesPage(
   const mappedInstances = activeInstances.map(instance => ({
     id: instance.id,
     challengeUrl: instance.challengeUrl,
-    status: instance.status === "active" ? "running" : instance.status,
+    status: instance.status,
     creationTime: instance.creationTime.toISOString(),
   }));
 

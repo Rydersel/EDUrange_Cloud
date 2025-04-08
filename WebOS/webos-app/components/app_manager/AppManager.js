@@ -1,25 +1,27 @@
-import React, { Component } from 'react';
+import React, { useState, forwardRef, useImperativeHandle } from 'react';
 import ReactGA from 'react-ga4';
 
-class AppManager extends Component {
-    constructor() {
-        super();
-        this.state = {
-            app_instances: {},
-            instanceCounter: {},
-        };
-        this.terminalOffsetX = 30;
-        this.terminalOffsetY = 30;
-        this.maxTerminalInstances = 5;
-    }
+const AppManager = forwardRef(function AppManager(props, ref) {
+    const { apps, closed_windows, minimized_windows, app_stack, focus, onNewAppOpen, onAppRestore, onInstanceCreated, disabled_apps } = props;
 
-    createNewAppInstance = (appId) => {
-        const { apps } = this.props;
+    const [app_instances, setAppInstances] = useState({});
+    const [instanceCounter, setInstanceCounter] = useState({});
+
+    const terminalOffsetX = 30;
+    const terminalOffsetY = 30;
+    const maxTerminalInstances = 5;
+
+    // Expose methods to parent component via ref
+    useImperativeHandle(ref, () => ({
+        handleAppOpen,
+    }));
+
+    const createNewAppInstance = (appId) => {
         const baseApp = apps.find(app => app.id === appId);
         if (!baseApp) return;
 
-        const instanceCount = this.getOpenInstancesCount(appId);
-        if (instanceCount >= this.maxTerminalInstances) {
+        const instanceCount = getOpenInstancesCount(appId);
+        if (instanceCount >= maxTerminalInstances) {
             console.log("Maximum number of terminal instances reached");
             return;
         }
@@ -27,34 +29,39 @@ class AppManager extends Component {
         // Get next instance number
         const nextInstanceNum = instanceCount + 1;
         const instanceId = `${appId}-${nextInstanceNum}`;
-        
+
         const newInstance = {
             ...baseApp,
             id: instanceId,
             title: `${baseApp.title} ${nextInstanceNum}`,
             defaultPosition: {
-                x: this.terminalOffsetX * nextInstanceNum,
-                y: this.terminalOffsetY * nextInstanceNum
+                x: terminalOffsetX * nextInstanceNum,
+                y: terminalOffsetY * nextInstanceNum
             }
         };
 
-        this.setState(prevState => ({
-            app_instances: {
-                ...prevState.app_instances,
+        setAppInstances(prevInstances => {
+            const updatedInstances = {
+                ...prevInstances,
                 [instanceId]: newInstance
-            }
-        }), () => {
-            this.props.onInstanceCreated(newInstance);
+            };
+
+            // Call this after state update using the callback
+            setTimeout(() => {
+                onInstanceCreated(newInstance);
+            }, 0);
+
+            return updatedInstances;
         });
     };
 
-    getOpenInstancesCount = (appId) => {
-        return Object.keys(this.state.app_instances).filter(id =>
-            id.startsWith(`${appId}-`) && !this.props.closed_windows[id]
+    const getOpenInstancesCount = (appId) => {
+        return Object.keys(app_instances).filter(id =>
+            id.startsWith(`${appId}-`) && !closed_windows[id]
         ).length;
     };
 
-    updateAppFrequency = (appId) => {
+    const updateAppFrequency = (appId) => {
         const frequentApps = JSON.parse(localStorage.getItem('frequentApps')) || [];
         const currentApp = frequentApps.find(app => app.id === appId);
 
@@ -68,44 +75,43 @@ class AppManager extends Component {
         localStorage.setItem('frequentApps', JSON.stringify(frequentApps));
     };
 
-    handleAppOpen = (appId) => {
+    const handleAppOpen = (appId) => {
         ReactGA.event({ category: 'Open App', action: `Opened ${appId} window` });
 
-        if (this.props.disabled_apps[appId]) return;
+        if (disabled_apps[appId]) return;
 
         if (appId === 'terminal') {
-            this.createNewAppInstance(appId);
+            createNewAppInstance(appId);
         } else {
-            this.openExistingApp(appId);
+            openExistingApp(appId);
         }
     };
 
-    openExistingApp = (appId) => {
-        if (this.props.minimized_windows[appId]) {
-            this.restoreMinimizedApp(appId);
+    const openExistingApp = (appId) => {
+        if (minimized_windows[appId]) {
+            restoreMinimizedApp(appId);
             return;
         }
 
-        if (this.props.app_stack.includes(appId)) {
-            this.props.focus(appId);
+        if (app_stack.includes(appId)) {
+            focus(appId);
         } else {
-            this.updateAppFrequency(appId);
-            this.props.onNewAppOpen(appId);
+            updateAppFrequency(appId);
+            onNewAppOpen(appId);
         }
     };
 
-    restoreMinimizedApp = (appId) => {
-        this.props.focus(appId);
+    const restoreMinimizedApp = (appId) => {
+        focus(appId);
         const appWindow = document.querySelector(`#${appId}`);
         if (appWindow) {
             appWindow.style.transform = `translate(${appWindow.style.getPropertyValue("--window-transform-x")},${appWindow.style.getPropertyValue("--window-transform-y")}) scale(1)`;
-            this.props.onAppRestore(appId);
+            onAppRestore(appId);
         }
     };
 
-    render() {
-        return null; // This is a logic component, it doesn't render anything
-    }
-}
+    // This component doesn't render anything
+    return null;
+});
 
-export default AppManager; 
+export default AppManager;

@@ -105,12 +105,20 @@ const FileUploader = ({ onFileLoaded }: FileUploaderProps) => {
         return `Challenge #${index + 1} "${challenge.name}": App config #${i + 1} - Icon is required and must be a string`;
       }
       
-      if (appConfig.width === undefined || typeof appConfig.width !== 'number' || appConfig.width <= 0) {
-        return `Challenge #${index + 1} "${challenge.name}": App config #${i + 1} - Width is required and must be a positive number`;
+      if (appConfig.width === undefined || typeof appConfig.width !== 'number') {
+        return `Challenge #${index + 1} "${challenge.name}": App config #${i + 1} - Width is required and must be a number`;
       }
       
-      if (appConfig.height === undefined || typeof appConfig.height !== 'number' || appConfig.height <= 0) {
-        return `Challenge #${index + 1} "${challenge.name}": App config #${i + 1} - Height is required and must be a positive number`;
+      if (appConfig.width <= 0) {
+        return `Challenge #${index + 1} "${challenge.name}": App config #${i + 1} - Width must be greater than zero`;
+      }
+      
+      if (appConfig.height === undefined || typeof appConfig.height !== 'number') {
+        return `Challenge #${index + 1} "${challenge.name}": App config #${i + 1} - Height is required and must be a number`;
+      }
+      
+      if (appConfig.height <= 0) {
+        return `Challenge #${index + 1} "${challenge.name}": App config #${i + 1} - Height must be greater than zero`;
       }
       
       if (!appConfig.screen || typeof appConfig.screen !== 'string') {
@@ -174,16 +182,24 @@ const FileUploader = ({ onFileLoaded }: FileUploaderProps) => {
         return `Challenge #${index + 1} "${challenge.name}": Question #${i + 1} - Type must be one of: ${validTypes.join(', ')}`;
       }
       
-      if (question.points === undefined || typeof question.points !== 'number' || question.points <= 0) {
-        return `Challenge #${index + 1} "${challenge.name}": Question #${i + 1} - Points is required and must be a positive number`;
+      if (question.points === undefined || typeof question.points !== 'number') {
+        return `Challenge #${index + 1} "${challenge.name}": Question #${i + 1} - Points is required and must be a number`;
+      }
+      
+      if (question.points <= 0) {
+        return `Challenge #${index + 1} "${challenge.name}": Question #${i + 1} - Points must be greater than zero`;
       }
       
       if (!question.answer || typeof question.answer !== 'string') {
         return `Challenge #${index + 1} "${challenge.name}": Question #${i + 1} - Answer is required and must be a string`;
       }
       
-      if (question.order === undefined || typeof question.order !== 'number' || question.order < 0) {
-        return `Challenge #${index + 1} "${challenge.name}": Question #${i + 1} - Order is required and must be a non-negative number`;
+      if (question.order === undefined || typeof question.order !== 'number') {
+        return `Challenge #${index + 1} "${challenge.name}": Question #${i + 1} - Order is required and must be a number`;
+      }
+      
+      if (question.order < 0) {
+        return `Challenge #${index + 1} "${challenge.name}": Question #${i + 1} - Order must be 0 or greater`;
       }
     }
     

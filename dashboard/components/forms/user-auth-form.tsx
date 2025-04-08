@@ -15,7 +15,7 @@ export default function UserAuthForm() {
   const router = useRouter();
   const { data: session, status } = useSession();
   const searchParams = useSearchParams();
-  const callbackUrl = searchParams.get('callbackUrl') || '/home';
+  const callbackUrl = searchParams ? searchParams.get('callbackUrl') || '/home' : '/home';
 
   // Redirect to home if already authenticated
   useEffect(() => {

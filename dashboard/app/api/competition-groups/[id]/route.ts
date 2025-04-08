@@ -4,6 +4,67 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { ActivityLogger, ActivityEventType } from '@/lib/activity-logger';
 import { z } from 'zod';
+import { Prisma, CompetitionGroup, Challenge, ChallengeType, ChallengeAppConfig, ChallengeQuestion } from '@prisma/client';
+
+type CompetitionWithRelations = CompetitionGroup & {
+  _count: {
+    members: number;
+    challenges: number;
+  };
+  challenges: Array<{
+    challenge: Challenge & {
+      challengeType: ChallengeType;
+      appConfigs: ChallengeAppConfig[];
+      questions: ChallengeQuestion[];
+    };
+    completions: any[];
+    questionCompletions: any[];
+  }>;
+  members: Array<{
+    id: string;
+    groupPoints: Array<{
+      points: number;
+    }>;
+  }>;
+  instructors: Array<{
+    id: string;
+  }>;
+};
+
+// Types for the challenge data structure
+interface FormattedChallenge {
+  id: string;
+  name: string;
+  description: string | null;
+  AppsConfig: ChallengeAppConfig[];
+  points: number;
+  completed: boolean;
+  challengeType: {
+    id: string;
+    name: string;
+  };
+  totalQuestions: number;
+  completedQuestions: number;
+}
+
+// Type for the competition response
+interface CompetitionResponse {
+  id: string;
+  name: string;
+  description: string | null;
+  startDate: Date;
+  endDate: Date | null;
+  _count: {
+    members: number;
+    challenges: number;
+  };
+  challenges: FormattedChallenge[];
+  userPoints: number;
+  totalPoints: number;
+  completedChallenges: number;
+  challengeCount: number;
+  accuracy: number;
+}
 
 const updateGroupSchema = z.object({
   name: z.string().min(1, 'Name is required').optional(),
@@ -35,9 +96,19 @@ export async function GET(req: Request, props: { params: Promise<{ id: string }>
           include: {
             challenge: {
               include: {
-                challengeType: true,
+                challengeType: {
+                  select: {
+                    id: true,
+                    name: true
+                  }
+                },
                 appConfigs: true,
-                questions: true
+                questions: {
+                  select: {
+                    id: true,
+                    points: true
+                  }
+                }
               }
             },
             completions: {
@@ -53,44 +124,45 @@ export async function GET(req: Request, props: { params: Promise<{ id: string }>
           }
         },
         members: {
-          where: {
-            id: session.user.id
-          },
-          include: {
+          select: {
+            id: true,
             groupPoints: {
               where: {
                 groupId: params.id
               }
             }
           }
+        },
+        instructors: {
+          select: {
+            id: true
+          }
         }
       },
-    });
+    }) as CompetitionWithRelations | null;
 
     if (!competition) {
       return new NextResponse('Competition not found', { status: 404 });
     }
 
-    // Check if user is a member of this competition
-    const isMember = competition.members.length > 0;
-    if (!isMember) {
+    // Check if user is a member or instructor of this competition
+    const isMember = competition.members.some(member => member.id === session.user.id);
+    const isInstructor = competition.instructors.some(instructor => instructor.id === session.user.id);
+
+    if (!isMember && !isInstructor) {
       return new NextResponse('Unauthorized', { status: 403 });
     }
 
     // Format challenges data
-    const challenges = competition.challenges.map(challenge => {
+    const challenges: FormattedChallenge[] = competition.challenges.map(challenge => {
       // Calculate total points from questions
-      const totalPoints = challenge.challenge.questions.reduce((sum, question) => sum + question.points, 0);
+      const totalPoints = challenge.challenge.questions.reduce((sum: number, question) => sum + question.points, 0);
       
       // Get total questions count
-      const totalQuestions = challenge.challenge.questions.length;
+      const totalQuestions = challenge.challenge.questions?.length || 0;
       
       // Get completed questions count
-      const completedQuestions = challenge.challenge.questions.filter(question =>
-        challenge.questionCompletions.some(completion => 
-          completion.questionId === question.id && completion.groupChallengeId === challenge.id
-        )
-      ).length;
+      const completedQuestions = challenge.questionCompletions.length;
       
       // Check if challenge is completed by checking if all questions are completed
       const isCompleted = completedQuestions === totalQuestions;
@@ -98,8 +170,7 @@ export async function GET(req: Request, props: { params: Promise<{ id: string }>
       return {
         id: challenge.challenge.id,
         name: challenge.challenge.name,
-        difficulty: challenge.challenge.difficulty,
-        description: challenge.challenge.description || '',
+        description: challenge.challenge.description,
         AppsConfig: challenge.challenge.appConfigs,
         points: totalPoints,
         completed: isCompleted,
@@ -110,19 +181,20 @@ export async function GET(req: Request, props: { params: Promise<{ id: string }>
     });
 
     // Calculate total points and user points
-    const totalPoints = competition.challenges.reduce((sum, challenge) => {
-      const challengePoints = challenge.challenge.questions.reduce((qSum, question) => qSum + question.points, 0);
+    const totalPoints = competition.challenges.reduce((sum: number, challenge) => {
+      const challengePoints = challenge.challenge.questions.reduce((qSum: number, question) => qSum + question.points, 0);
       return sum + challengePoints;
     }, 0);
 
-    const userPoints = competition.members[0]?.groupPoints[0]?.points || 0;
+    const userMember = competition.members.find(member => member.id === session.user.id);
+    const userPoints = userMember?.groupPoints[0]?.points || 0;
 
     // Calculate completed challenges and accuracy
     const completedChallenges = challenges.filter(challenge => challenge.completed).length;
     const challengeCount = challenges.length;
     const accuracy = challengeCount > 0 ? Math.round((completedChallenges / challengeCount) * 100) : 0;
 
-    return NextResponse.json({
+    const response: CompetitionResponse = {
       id: competition.id,
       name: competition.name,
       description: competition.description,
@@ -135,7 +207,9 @@ export async function GET(req: Request, props: { params: Promise<{ id: string }>
       completedChallenges,
       challengeCount,
       accuracy
-    });
+    };
+
+    return NextResponse.json(response);
   } catch (error) {
     console.error('Error fetching competition:', error);
     return new NextResponse('Internal Server Error', { status: 500 });

@@ -535,13 +535,7 @@ spec:
   const encodedPgbouncerDbUrl = btoa(pgbouncerDbUrl);
   
   // Update the database-secrets
-  const patchSecretYaml = `
-{
-  "data": {
-    "database-url": "${encodedPgbouncerDbUrl}",
-    "direct-database-url": "${encodedDirectDbUrl}"
-  }
-}`;
+  const patchSecretYaml = `{"data":{"database-url":"${encodedPgbouncerDbUrl}","direct-database-url":"${encodedDirectDbUrl}"}}`;
 
   // Apply the patch
   const patchResult = await window.api.executeCommand('kubectl', [
@@ -549,7 +543,7 @@ spec:
     'secret',
     'database-secrets',
     '-p',
-    patchSecretYaml
+    `'${patchSecretYaml}'`
   ]);
 
   if (patchResult.code !== 0) {
@@ -602,20 +596,14 @@ spec:
         const encodedDirectDashboardDbUrl = btoa(directDashboardDbUrl);
         
         // Update the dashboard-secrets
-        const patchDashboardSecretYaml = `
-{
-  "data": {
-    "database-url": "${encodedUpdatedDashboardDbUrl}",
-    "direct-database-url": "${encodedDirectDashboardDbUrl}"
-  }
-}`;
+        const patchDashboardSecretYaml = `{"data":{"database-url":"${encodedUpdatedDashboardDbUrl}","direct-database-url":"${encodedDirectDashboardDbUrl}"}}`;
         
         const patchDashboardResult = await window.api.executeCommand('kubectl', [
           'patch',
           'secret',
           'dashboard-secrets',
           '-p',
-          patchDashboardSecretYaml
+          `'${patchDashboardSecretYaml}'`
         ]);
         
         if (patchDashboardResult.code === 0) {
@@ -804,7 +792,7 @@ const installPostgresInCluster = async ({ addLog, setLogs, enableStorageCleanup,
           'pvc',
           'postgres-pvc',
           '-p',
-          '{"metadata":{"finalizers":null}}',
+          `'{"metadata":{"finalizers":null}}'`,
           '--type=merge'
         ]);
 
@@ -859,7 +847,7 @@ const installPostgresInCluster = async ({ addLog, setLogs, enableStorageCleanup,
               'pv',
               pv.metadata.name,
               '-p',
-              '{"metadata":{"finalizers":null}}',
+              `'{"metadata":{"finalizers":null}}'`,
               '--type=merge'
             ]);
 
@@ -1935,7 +1923,7 @@ data:
         'secret',
         'database-secrets',
         '-p',
-        `{"data":{"database-url":"${encodedCorrectedUrl}"}}`
+        `'{"data":{"database-url":"${encodedCorrectedUrl}"}}'`
       ]);
 
       if (updateDbSecretsCmd.code !== 0) {

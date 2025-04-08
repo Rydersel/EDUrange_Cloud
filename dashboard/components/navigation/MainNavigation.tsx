@@ -29,7 +29,7 @@ export function MainNavigation() {
 
   // Add admin item if user is admin/instructor
   if (status === 'authenticated' && isAdminOrInstructor) {
-    navigationItems.push({ name: "Admin", path: "/dashboard" });
+    navigationItems.push({ name: "Admin", path: "/admin" });
   }
 
   return (

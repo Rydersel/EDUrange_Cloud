@@ -117,14 +117,16 @@ export function ChallengeItem({
         return newMap;
       });
 
-      // Refresh the page to update the instances list
-      router.refresh();
-
       // Show success toast
       toast({
         title: "Challenge Created",
-        description: "Your challenge instance has been created. You can access it from the Instances tab.",
+        description: "Your challenge instance has been created. Refreshing page to show the new instance...",
       });
+
+      // Do a full page reload to ensure instances list is updated
+      setTimeout(() => {
+        window.location.reload();
+      }, 1000);
 
     } catch (error) {
       console.error("Error starting challenge:", error);

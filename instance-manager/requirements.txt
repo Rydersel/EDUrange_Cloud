@@ -1,6 +1,6 @@
 jsonschema
 PyYAML
-gunicorn
+gunicorn==23.0.0
 gevent
 python-dotenv
 kubernetes

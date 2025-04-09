@@ -212,18 +212,20 @@ def end_challenge():
         logging.error(f"Error processing request JSON: {e}")
         return jsonify({"error": f"Invalid request format: {e}"}), 400
 
-    logging.info(f"Received request to end challenge pod: {pod_name}")
+    logging.info(f"[RESOURCE CLEANUP] Starting comprehensive cleanup for challenge pod: {pod_name}")
     
     # Perform the deletion immediately (no background thread)
     try:
         delete_challenge_pod(pod_name, namespace)
+        logging.info(f"[RESOURCE CLEANUP] Successfully completed cleanup for challenge pod: {pod_name}")
         return jsonify({
             "success": True, 
             "message": f"Termination of {pod_name} completed",
-            "status": "terminated"
+            "status": "terminated",
+            "deleted_resources": ["Pod", "Service", "Ingress", "Secret", "ConfigMaps", "PVCs"]
         }), 200
     except Exception as e:
-        logging.error(f"Error terminating pod {pod_name}: {e}")
+        logging.error(f"[RESOURCE CLEANUP] Error terminating pod {pod_name}: {e}")
         return jsonify({
             "success": False,
             "error": str(e),
@@ -254,7 +256,20 @@ def delete_challenge_pod(pod_name, namespace="default"):
         
         # Delete service
         try:
-            service_name = pod_name  # Just pod_name, not service-{pod_name}
+            service_name = f"service-{pod_name}"
+            core_api.delete_namespaced_service(
+                name=service_name,
+                namespace=namespace,
+                body=client.V1DeleteOptions()
+            )
+            logging.info(f"Successfully deleted service {service_name}")
+        except ApiException as e:
+            if e.status != 404:  # Ignore 404 (not found)
+                logging.warning(f"Error deleting service {service_name}: {e}")
+        
+        # Also try deleting service with just pod_name (for backward compatibility)
+        try:
+            service_name = pod_name
             core_api.delete_namespaced_service(
                 name=service_name,
                 namespace=namespace,
@@ -280,7 +295,7 @@ def delete_challenge_pod(pod_name, namespace="default"):
         
         # Delete ingress
         try:
-            ingress_name = pod_name  # Just pod_name, not ingress-{pod_name}
+            ingress_name = f"ingress-{pod_name}"
             networking_v1.delete_namespaced_ingress(
                 name=ingress_name,
                 namespace=namespace,
@@ -290,6 +305,53 @@ def delete_challenge_pod(pod_name, namespace="default"):
         except ApiException as e:
             if e.status != 404:  # Ignore 404 (not found)
                 logging.warning(f"Error deleting ingress {ingress_name}: {e}")
+                
+        # Also try deleting ingress with just pod_name (for backward compatibility)
+        try:
+            ingress_name = pod_name
+            networking_v1.delete_namespaced_ingress(
+                name=ingress_name,
+                namespace=namespace,
+                body=client.V1DeleteOptions()
+            )
+            logging.info(f"Successfully deleted ingress {ingress_name}")
+        except ApiException as e:
+            if e.status != 404:  # Ignore 404 (not found)
+                logging.warning(f"Error deleting ingress {ingress_name}: {e}")
+        
+        # Check for and delete any other persistent volume claims
+        try:
+            pvcs = core_api.list_namespaced_persistent_volume_claim(
+                namespace=namespace,
+                label_selector=f"instance={pod_name}"
+            )
+            
+            for pvc in pvcs.items:
+                core_api.delete_namespaced_persistent_volume_claim(
+                    name=pvc.metadata.name,
+                    namespace=namespace,
+                    body=client.V1DeleteOptions()
+                )
+                logging.info(f"Successfully deleted PVC {pvc.metadata.name}")
+        except ApiException as e:
+            logging.warning(f"Error cleaning up PVCs for {pod_name}: {e}")
+        
+        # Check for and delete any other config maps
+        try:
+            config_maps = core_api.list_namespaced_config_map(
+                namespace=namespace,
+                label_selector=f"instance={pod_name}"
+            )
+            
+            for cm in config_maps.items:
+                core_api.delete_namespaced_config_map(
+                    name=cm.metadata.name,
+                    namespace=namespace,
+                    body=client.V1DeleteOptions()
+                )
+                logging.info(f"Successfully deleted ConfigMap {cm.metadata.name}")
+        except ApiException as e:
+            logging.warning(f"Error cleaning up ConfigMaps for {pod_name}: {e}")
         
         logging.info(f"Successfully terminated all resources for pod {pod_name}")
         return True
@@ -343,6 +405,9 @@ def list_challenge_pods():
                     'challenge': web_challenge_url
                 }
                 
+                # Flag secret name follows a standard pattern
+                flag_secret_name = f"flag-secret-{instance_name}"
+                
                 pod_info = {
                     'name': pod.metadata.name,
                     'status': status,
@@ -353,6 +418,7 @@ def list_challenge_pods():
                     'urls': urls,
                     'webosUrl': webos_url,  # Add the webosUrl explicitly for backwards compatibility
                     'webConsoleUrl': web_console_url,  # Add webConsoleUrl explicitly for backwards compatibility
+                    'flag_secret_name': flag_secret_name  # Add the flag secret name
                 }
                 challenge_pods.append(pod_info)
                 logging.info(f"Added pod info to response: {pod_info}")

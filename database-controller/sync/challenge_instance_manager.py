@@ -83,6 +83,11 @@ class ChallengeInstanceManager:
             except Exception as e:
                 logging.error(f"Error finding challenge for name {challenge_name}: {str(e)}")
         
+        # Ensure challengeUrl is not empty as it's a required field
+        if not challenge_url:
+            challenge_url = f"https://{pod_name}.edurange.cloud"
+            logging.info(f"Setting default challenge URL: {challenge_url}")
+        
         try:
             # Create the challenge instance
             challenge_instance = await self.prisma.challengeinstance.create(
@@ -90,12 +95,17 @@ class ChallengeInstanceManager:
                     'id': pod_name,  # Use pod_name as the ID
                     'challengeId': challenge_id,
                     'userId': user_id,
-                    'competitionId': competition_id,
                     'challengeUrl': challenge_url,
                     'status': status,
                     'flagSecretName': flag_secret_name,
                     'flag': new_flag,
-                    'k8s_instance_name': pod_name
+                    'k8s_instance_name': pod_name,
+                    # Use the connect key for relation field
+                    'competition': {
+                        'connect': {
+                            'id': competition_id
+                        }
+                    }
                 }
             )
             

@@ -4,10 +4,8 @@ from enum import Enum, auto
 class ChallengeStatus(Enum):
     """Challenge status enum mirroring the database schema enum"""
     CREATING = "CREATING"
-    STARTING = "STARTING"
     ACTIVE = "ACTIVE"
     TERMINATING = "TERMINATING"
-    TERMINATED = "TERMINATED"
     ERROR = "ERROR"
     
     @classmethod
@@ -27,7 +25,6 @@ class ChallengeStatus(Enum):
 class StatusEvent(Enum):
     """Events that can trigger status transitions"""
     CREATED = auto()
-    STARTED = auto()
     ACTIVATED = auto()
     TERMINATION_REQUESTED = auto()
     TERMINATED = auto()
@@ -46,12 +43,7 @@ class ChallengeStatusManager:
     # Format: {current_status: {event: next_status}}
     TRANSITIONS = {
         ChallengeStatus.CREATING: {
-            StatusEvent.STARTED: ChallengeStatus.STARTING,
             StatusEvent.ACTIVATED: ChallengeStatus.ACTIVE,  # Direct transition to ACTIVE for running pods
-            StatusEvent.ERROR_OCCURRED: ChallengeStatus.ERROR
-        },
-        ChallengeStatus.STARTING: {
-            StatusEvent.ACTIVATED: ChallengeStatus.ACTIVE,
             StatusEvent.ERROR_OCCURRED: ChallengeStatus.ERROR
         },
         ChallengeStatus.ACTIVE: {
@@ -59,12 +51,8 @@ class ChallengeStatusManager:
             StatusEvent.ERROR_OCCURRED: ChallengeStatus.ERROR
         },
         ChallengeStatus.TERMINATING: {
-            StatusEvent.TERMINATED: ChallengeStatus.TERMINATED,
+            StatusEvent.TERMINATED: ChallengeStatus.ACTIVE,  # Allow recreating terminated pods
             StatusEvent.ERROR_OCCURRED: ChallengeStatus.ERROR
-        },
-        ChallengeStatus.TERMINATED: {
-            # Terminal state - no transitions allowed
-            StatusEvent.CREATED: ChallengeStatus.CREATING,  # Allow recreation
         },
         ChallengeStatus.ERROR: {
             StatusEvent.RETRY: ChallengeStatus.CREATING,
@@ -90,11 +78,11 @@ class ChallengeStatusManager:
         "pending": ChallengeStatus.CREATING,
         "running": ChallengeStatus.ACTIVE,
         "active": ChallengeStatus.ACTIVE,
-        "succeeded": ChallengeStatus.TERMINATED,
+        "succeeded": ChallengeStatus.ACTIVE,  # Change from TERMINATED to ACTIVE
         "failed": ChallengeStatus.ERROR,
         "unknown": ChallengeStatus.ERROR,
         "terminating": ChallengeStatus.TERMINATING,
-        "terminated": ChallengeStatus.TERMINATED,
+        "terminated": ChallengeStatus.ACTIVE,  # Change from TERMINATED to ACTIVE
         "creating": ChallengeStatus.CREATING
     }
     

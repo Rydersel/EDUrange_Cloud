@@ -172,20 +172,20 @@ def get_pod_status(pod):
         pod: A V1Pod object
         
     Returns:
-        str: One of 'creating', 'active', 'error', 'deleting'
+        str: One of 'CREATING', 'ACTIVE', 'TERMINATING', 'ERROR'
     """
     if pod.metadata.deletion_timestamp:  # Work around for deleting status not showing up
-        return 'deleting'
+        return 'TERMINATING'
     elif pod.status.phase == 'Pending':
-        return 'creating'
+        return 'CREATING'
     elif pod.status.phase == 'Running':
-        return 'active'
+        return 'ACTIVE'
     elif pod.status.phase == 'Failed':
-        return 'error'
+        return 'ERROR'
     elif pod.status.phase == 'Succeeded':
-        return 'deleting'
+        return 'ACTIVE'
     else:
-        return pod.status.phase.lower()
+        return 'ERROR'  # Default to ERROR for unknown states
 
 def execute_in_pod(pod_name, namespace, command, container=None):
     """

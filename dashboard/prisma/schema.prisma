@@ -211,10 +211,8 @@ model ChallengePack {
 
 enum ChallengeStatus {
   CREATING
-  STARTING
   ACTIVE
   TERMINATING
-  TERMINATED
   ERROR
 }
 

@@ -249,6 +249,7 @@ export async function GET(req) {
         databaseApiProxy: databaseProxyUrl,
         instanceManagerProxy: getInstanceManagerProxyUrl(req),
         terminal: getTerminalUrl(instanceId, domainName),
+        webChallengeUrl: process.env.NEXT_PUBLIC_WEB_CHALLENGE_URL || `https://web-${instanceId}.${domainName}`,
       },
       challenge: {
         instanceId: instanceId !== 'unknown' ? instanceId : null,
@@ -414,6 +415,7 @@ export async function GET(req) {
         databaseApiProxy: getDatabaseProxyUrl(req),
         instanceManagerProxy: getInstanceManagerProxyUrl(req),
         terminal: null,
+        webChallengeUrl: process.env.NEXT_PUBLIC_WEB_CHALLENGE_URL || null,
       },
       challenge: {
         instanceId: null,

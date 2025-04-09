@@ -814,25 +814,22 @@ class CTDBasedHandler(BaseChallengeHandler):
             # Calculate URLs using the class domain property
             domain = self.domain
             webos_url = f"https://{self.instance_name}.{domain}"
-
-            # Get the challenge URL based on challenge type
-            challenge_url = None
-            if self.challenge_type == "web":
-                challenge_url = f"https://web-{self.instance_name}.{domain}"
-            elif self.challenge_type in ["fullOS", "metasploit"]:
-                challenge_url = f"https://{self.instance_name}.{domain}"
+            
+            # For web challenges, include the web-specific URL
+            web_challenge_url = f"https://web-{self.instance_name}.{domain}"
 
             logging.info(f"Challenge deployed successfully for instance {self.instance_name}")
             logging.info(f"WebOS URL: {webos_url}")
-            logging.info(f"Challenge URL: {challenge_url}")
+            logging.info(f"Web Challenge URL: {web_challenge_url}")
 
+            # Return all URLs - let the dashboard determine which to use as primary
             return {
                 "success": True,
                 "deployment_name": self.instance_name,
-                "webosUrl": webos_url,
-                "challengeUrl": challenge_url,
-                "flag_secret_name": self.flag_secret_name,  # Include flag_secret_name
-                "flags": self.flags,  # Include flags
+                "webosUrl": webos_url,  
+                "webChallengeUrl": web_challenge_url,
+                "flag_secret_name": self.flag_secret_name,
+                "flags": self.flags,
                 "status": "running"
             }
 

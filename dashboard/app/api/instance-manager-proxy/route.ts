@@ -1,8 +1,9 @@
 import { NextResponse, NextRequest } from 'next/server';
-import { getServerSession } from 'next-auth';
+import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
 import { authorizeProxyAction } from '@/lib/auth-utils';
 import { isValidUUID } from '@/lib/validation/uuid';
+import { getInstanceManagerUrl } from '@/lib/api-config';
 
 // Track request timestamps to prevent log spam
 const requestLog = new Map<string, number>();
@@ -153,14 +154,21 @@ export async function GET(req: NextRequest) {
 
       // Transform the data to match what InstanceComponent expects
       if (data.challenge_pods && Array.isArray(data.challenge_pods)) {
-        const transformedInstances = data.challenge_pods.map((pod: any) => ({
-          id: pod.pod_name,
+        // Get the current user ID from the session
+        const session = await getServerSession(authOptions);
+        const currentUserId = session?.user?.id;
+
+        // Only include instances that belong to the current user
+        const transformedInstances = data.challenge_pods
+          .filter((pod: any) => !currentUserId || pod.user_id === currentUserId) // Include all if no user ID (for admin views) or only matching user ID
+          .map((pod: any) => ({
+            id: pod.name,
           userId: pod.user_id,
           userEmail: pod.user_email || 'Loading...',
           userName: pod.user_name || 'Loading...',
-          challengeId: pod.challenge_id,
-          challengeUrl: pod.challenge_url,
-          creationTime: pod.creation_time,
+            challengeId: pod.challenge_id || pod.challenge_name,
+            challengeUrl: pod.challengeUrl || pod.webosUrl || `https://${pod.name}.edurange.cloud`,
+            creationTime: pod.creation_time || new Date().toISOString(),
           status: pod.status,
           flagSecretName: pod.flag_secret_name,
           groupId: pod.competition_id,

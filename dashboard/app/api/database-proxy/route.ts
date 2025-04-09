@@ -570,12 +570,14 @@ async function handleDeleteChallengeInstance(instanceId: string, userId: string)
     // Notify instance manager to clean up pods (best effort)
     try {
       const instanceManagerUrl = 'http://instance-manager.default.svc.cluster.local/api';
-      await fetch(`${instanceManagerUrl}/delete-challenge?podName=${instanceId}`, {
-        method: 'DELETE',
+      await fetch(`${instanceManagerUrl}/end-challenge`, {
+        method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${userId}`
-        }
+        },
+        body: JSON.stringify({
+          deployment_name: instanceId
+        })
       });
     } catch (imError) {
       console.error('Error notifying instance manager (continuing anyway):', imError);

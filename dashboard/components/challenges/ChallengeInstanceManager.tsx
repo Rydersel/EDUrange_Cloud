@@ -45,54 +45,54 @@ export function ChallengeInstanceManager({
   // Function to update instance statuses from the API
   const updateInstanceStatuses = async () => {
     if (!instances.length) return;
-    
+
     try {
       setIsRefreshing(true);
-      
+
       // Fetch real-time status from instance manager
       const response = await fetch('/api/instance-manager-proxy?path=list-challenge-pods');
-      
+
       if (!response.ok) {
         console.warn('Failed to refresh instance statuses:', await response.text());
         return;
       }
-      
+
       const data = await response.json();
-      
+
       if (!data.instances || !Array.isArray(data.instances)) {
         console.warn('Invalid response format from instance manager');
         return;
       }
-      
+
       // Create map of instance IDs to statuses from API response
       const statusMap = new Map();
       data.instances.forEach((instance: any) => {
         statusMap.set(instance.id, instance.status);
       });
-      
+
       // Check if any instance statuses have changed
       let hasStatusChanged = false;
-      
+
       const updatedInstances = instances.map(instance => {
         const newStatus = statusMap.get(instance.id);
         if (newStatus && newStatus !== instance.status) {
           hasStatusChanged = true;
+          // If an instance changed from creating to active, show a notification
+          if (instance.status.toLowerCase() === 'creating' && 
+              newStatus.toLowerCase() === 'active') {
+            toast.success(`Challenge instance is now ready!`, {
+              id: `instance-ready-${instance.id}`,
+              duration: 3000
+            });
+          }
           return { ...instance, status: newStatus };
         }
         return instance;
       });
-      
+
       // Only update state if statuses have changed
       if (hasStatusChanged) {
         setInstances(updatedInstances);
-        
-        // Show notification for completed instances
-        updatedInstances.forEach(instance => {
-          const oldInstance = initialInstances.find(i => i.id === instance.id);
-          if (oldInstance && oldInstance.status !== 'running' && instance.status === 'running') {
-            toast.success(`Challenge instance ${instance.id} is now ready!`);
-          }
-        });
       }
     } catch (error) {
       console.error('Error updating instance statuses:', error);
@@ -105,12 +105,12 @@ export function ChallengeInstanceManager({
   useEffect(() => {
     // Initial update
     updateInstanceStatuses();
-    
+
     // Set up polling every 5 seconds
     const interval = setInterval(() => {
       updateInstanceStatuses();
     }, 5000);
-    
+
     return () => clearInterval(interval);
   }, [initialInstances]); // Re-initialize when initialInstances changes
 
@@ -118,13 +118,15 @@ export function ChallengeInstanceManager({
     try {
       setTerminatingIds(prev => new Set(Array.from(prev).concat(instanceId)));
       await onTerminate(instanceId);
-      toast.success("Challenge instance terminated successfully");
-      
+      toast.success("Challenge instance terminated successfully. Refreshing page...");
+
       // Update local state to remove terminated instance
       setInstances(prev => prev.filter(instance => instance.id !== instanceId));
-      
-      // Refresh the page to update the instances list
-      router.refresh();
+
+      // Do a full page reload to ensure instances list is updated
+      setTimeout(() => {
+        window.location.reload();
+      }, 1000);
     } catch (error) {
       console.error("Error terminating instance:", error);
       toast.error(error instanceof Error ? error.message : "Failed to terminate challenge instance");
@@ -173,10 +175,10 @@ export function ChallengeInstanceManager({
             running simultaneously.
           </CardDescription>
         </div>
-        <Button 
-          variant="ghost" 
-          size="icon" 
-          onClick={handleManualRefresh} 
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={handleManualRefresh}
           disabled={isRefreshing}
         >
           <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
@@ -186,8 +188,8 @@ export function ChallengeInstanceManager({
       <CardContent>
         <Accordion type="single" collapsible className="space-y-4">
           {instances.map((instance) => (
-            <AccordionItem 
-              key={instance.id} 
+            <AccordionItem
+              key={instance.id}
               value={instance.id}
               className="border rounded-lg px-4"
             >
@@ -196,13 +198,21 @@ export function ChallengeInstanceManager({
                   <div className="flex items-center gap-4">
                     <span className="font-medium">Instance {instance.id}</span>
                     <span className="text-sm text-muted-foreground">
-                      {instance.status === "creating" || instance.status === "CREATING" ? (
+                      {instance.status.toLowerCase() === 'creating' ? (
                         <span className="flex items-center gap-2">
                           Creating <Loader2 className="h-3 w-3 animate-spin" />
                         </span>
-                      ) : instance.status === "running" || instance.status === "ACTIVE" ? (
-                        <span className="text-green-500">Running</span>
-                      ) : instance.status}
+                      ) : instance.status.toLowerCase() === 'active' ? (
+                        <span className="text-green-500">Active</span>
+                      ) : instance.status.toLowerCase() === 'terminating' ? (
+                        <span className="flex items-center gap-2">
+                          Terminating <Loader2 className="h-3 w-3 animate-spin" />
+                        </span>
+                      ) : instance.status.toLowerCase() === 'error' ? (
+                        <span className="text-red-500">Error</span>
+                      ) : (
+                        instance.status
+                      )}
                     </span>
                   </div>
                   <ChevronDown className="h-4 w-4 shrink-0 transition-transform duration-200 accordion-chevron" />
@@ -218,7 +228,7 @@ export function ChallengeInstanceManager({
                       variant="outline"
                       size="sm"
                       onClick={() => window.open(instance.challengeUrl, "_blank")}
-                      disabled={instance.status === "creating" || instance.status === "CREATING"}
+                      disabled={instance.status.toLowerCase() === 'creating' || instance.status.toLowerCase() === 'terminating' || instance.status.toLowerCase() === 'error'}
                     >
                       Open Challenge
                       <ExternalLink className="ml-2 h-4 w-4" />
@@ -227,7 +237,7 @@ export function ChallengeInstanceManager({
                       variant="destructive"
                       size="sm"
                       onClick={() => handleTerminate(instance.id)}
-                      disabled={terminatingIds.has(instance.id) || instance.status === "creating" || instance.status === "CREATING"}
+                      disabled={terminatingIds.has(instance.id) || instance.status.toLowerCase() === 'creating' || instance.status.toLowerCase() === 'terminating'}
                     >
                       {terminatingIds.has(instance.id) ? (
                         <>
@@ -247,4 +257,4 @@ export function ChallengeInstanceManager({
       </CardContent>
     </Card>
   );
-} 
+}

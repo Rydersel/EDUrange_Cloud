@@ -3,20 +3,13 @@ import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 
 export type StatusType = 
-  | 'running' 
-  | 'pending' 
-  | 'error' 
+  | 'active' 
+  | 'creating' 
+  | 'terminating' 
+  | 'error'
   | 'warning' 
-  | 'success' 
   | 'info'
-  | 'completed'
-  | 'creating'
-  | 'terminating'
-  | 'containercreating'
-  | 'crashloopbackoff'
-  | 'unknown'
-  | 'healthy'
-  | 'failed';
+  | 'unknown';
 
 interface StatusBadgeProps extends React.HTMLAttributes<HTMLDivElement> {
   status: string;
@@ -28,20 +21,17 @@ interface StatusBadgeProps extends React.HTMLAttributes<HTMLDivElement> {
 const normalizeStatus = (status: string): StatusType => {
   const lowerStatus = status.toLowerCase();
   
-  if (['running', 'active', 'online', 'healthy'].includes(lowerStatus)) {
-    return 'running';
+  if (['active', 'running', 'online', 'healthy'].includes(lowerStatus)) {
+    return 'active';
   } 
-  else if (['pending', 'waiting', 'queued', 'containercreating', 'initializing', 'creating'].includes(lowerStatus)) {
-    return 'pending';
+  else if (['creating', 'pending', 'waiting', 'queued', 'containercreating', 'initializing'].includes(lowerStatus)) {
+    return 'creating';
   } 
   else if (['error', 'failed', 'crashloopbackoff', 'unhealthy'].includes(lowerStatus)) {
     return 'error';
   } 
   else if (['warning'].includes(lowerStatus)) {
     return 'warning';
-  } 
-  else if (['success', 'completed', 'installed'].includes(lowerStatus)) {
-    return 'success';
   } 
   else if (['terminating', 'deleting', 'stopping'].includes(lowerStatus)) {
     return 'terminating';
@@ -55,25 +45,34 @@ const normalizeStatus = (status: string): StatusType => {
 
 // Get the display text for a status
 const getStatusDisplayText = (status: string): string => {
-  // Make status title case
+  const lowerStatus = status.toLowerCase();
+  
+  // Map status to standardized display text
+  if (['active', 'running', 'online', 'healthy'].includes(lowerStatus)) {
+    return 'Active';
+  } 
+  else if (['creating', 'pending', 'waiting', 'queued', 'containercreating', 'initializing'].includes(lowerStatus)) {
+    return 'Creating';
+  } 
+  else if (['error', 'failed', 'crashloopbackoff', 'unhealthy'].includes(lowerStatus)) {
+    return 'Error';
+  } 
+  else if (['terminating', 'deleting', 'stopping'].includes(lowerStatus)) {
+    return 'Terminating';
+  }
+  
+  // Make other statuses title case
   return status.charAt(0).toUpperCase() + status.slice(1).toLowerCase();
 };
 
 // Get className based on status
 const getStatusClassNames = (statusType: StatusType): string => {
   switch (statusType) {
-    case 'running':
-    case 'healthy':
-    case 'success':
-    case 'completed':
+    case 'active':
       return 'bg-green-500/10 text-green-500 hover:bg-green-500/20 border-green-500/10';
-    case 'pending':
     case 'creating':
-    case 'containercreating':
       return 'bg-yellow-500/10 text-yellow-500 hover:bg-yellow-500/20 border-yellow-500/10';
     case 'error':
-    case 'failed':
-    case 'crashloopbackoff':
       return 'bg-red-500/10 text-red-500 hover:bg-red-500/20 border-red-500/10';
     case 'warning':
       return 'bg-orange-500/10 text-orange-500 hover:bg-orange-500/20 border-orange-500/10';

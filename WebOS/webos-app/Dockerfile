@@ -18,6 +18,10 @@ RUN npm run build
 # Production stage
 FROM node:18.18.1-alpine
 
+# Create a non-root user to run the application
+RUN addgroup -g 1001 -S nodejs && \
+    adduser -S nextjs -u 1001 -G nodejs
+
 WORKDIR /app
 
 # Copy only necessary files from the builder stage
@@ -28,6 +32,12 @@ COPY --from=builder /app/node_modules ./node_modules
 
 # Set environment variables
 ENV NODE_ENV=production
+
+# Set ownership of application files to non-root user
+RUN chown -R nextjs:nodejs /app
+
+# Use the non-root user for subsequent operations
+USER nextjs
 
 # Expose the application port
 EXPOSE 3000

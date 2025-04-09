@@ -158,12 +158,32 @@ export async function POST(req: NextRequest) {
         flag = flags.FLAG_1 || Object.values(flags)[0] || flag;
         console.log(`Using flag from Instance Manager for ${challengeInstance.id}: ${flag}`);
       }
+
+      // Get the primary URL - always use the WebOS URL regardless of challenge type
+      // This ensures a consistent experience where users always start in the WebOS environment
+      const primaryUrl = imResult.webosUrl || "pending...";
+      console.log(`Setting primary URL for ${challengeInstance.id} to ${primaryUrl}`);
+      
+      // Create an entry in ActivityLog to store additional URL information
+      // Since ChallengeInstance doesn't have a metadata field
+      await ActivityLogger.logChallengeEvent(
+        ActivityEventType.CHALLENGE_INSTANCE_CREATED,
+        session.user.id,
+        challengeId,
+        challengeInstance.id,
+        {
+          webChallengeUrl: imResult.webChallengeUrl || null,
+          challengeUrl: primaryUrl,
+          challengeName: challenge.name,
+          challengeTypeId: challenge.challengeTypeId
+        }
+      );
       
       // Update the challenge instance with the actual URL and flag information
       await prisma.challengeInstance.update({
         where: { id: challengeInstance.id },
         data: {
-          challengeUrl: imResult.webosUrl || imResult.challengeUrl || "pending...",
+          challengeUrl: primaryUrl,
           flagSecretName: flagSecretName,
           flag: flag
         },

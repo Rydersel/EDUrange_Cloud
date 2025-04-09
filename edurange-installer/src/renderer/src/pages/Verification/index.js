@@ -893,10 +893,8 @@ data:
     }
     enum ChallengeStatus {
       CREATING
-      STARTING
       ACTIVE
       TERMINATING
-      TERMINATED
       ERROR
     }
     

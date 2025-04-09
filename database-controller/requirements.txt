@@ -1,5 +1,5 @@
 Flask[async]==2.2.5 # Updating to 3.0+ currently gives errors so temporarily setting to older version
-gunicorn==22.0.0
+gunicorn==23.0.0
 Werkzeug==3.0.6
 flask_cors==3.0.10
 requests==2.31.0

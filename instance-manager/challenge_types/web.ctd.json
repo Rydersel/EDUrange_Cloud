@@ -9,7 +9,7 @@
         "image": "registry.rydersel.cloud/web-challenge-base",
         "ports": [
           {
-            "containerPort": 80,
+            "containerPort": 8080,
             "name": "web-http",
             "protocol": "TCP"
           }
@@ -64,7 +64,7 @@
         },
         {
           "port": 8080,
-          "targetPort": 80,
+          "targetPort": 8080,
           "name": "web-challenge-http"
         }
       ]

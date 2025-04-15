@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: docker-daemon-config
+  namespace: kube-system
+data:
+  daemon.json: |
+    {
+      "registry-mirrors": ["http://registry-mirror.default.svc.cluster.local:5000"],
+      "max-concurrent-downloads": 10,
+      "max-concurrent-uploads": 5,
+      "insecure-registries": ["registry-mirror.default.svc.cluster.local:5000"]
+    } 

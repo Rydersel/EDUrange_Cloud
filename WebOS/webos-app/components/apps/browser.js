@@ -1,91 +1,90 @@
-import React, { Component } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 
-export class Browser extends Component {
-    constructor() {
-        super();
-        this.home_url = 'https://www.google.com/webhp?igu=1';
-        this.state = {
-            url: 'https://www.google.com/webhp?igu=1',
-            display_url: "https://www.google.com",
-        }
-    }
+const Browser = () => {
+    const home_url = 'https://www.google.com/webhp?igu=1';
+    const [url, setUrl] = useState(home_url);
+    const [display_url, setDisplayUrl] = useState('https://www.google.com');
 
-    componentDidMount() {
+    useEffect(() => {
         let lastVisitedUrl = localStorage.getItem("chrome-url");
         let lastDisplayedUrl = localStorage.getItem("chrome-display-url");
         if (lastVisitedUrl !== null && lastVisitedUrl !== undefined) {
-            this.setState({ url: lastVisitedUrl, display_url: lastDisplayedUrl }, this.refreshChrome);
+            setUrl(lastVisitedUrl);
+            setDisplayUrl(lastDisplayedUrl);
+            setTimeout(refreshChrome, 100); // Wait a bit for the state to update
         }
-    }
+    }, []);
 
-    storeVisitedUrl = (url, display_url) => {
-        localStorage.setItem("chrome-url", url);
-        localStorage.setItem("chrome-display-url", display_url);
-    }
+    const storeVisitedUrl = useCallback((newUrl, newDisplayUrl) => {
+        localStorage.setItem("chrome-url", newUrl);
+        localStorage.setItem("chrome-display-url", newDisplayUrl);
+    }, []);
 
-    refreshChrome = () => {
-        document.getElementById("chrome-screen").src += '';
-    }
+    const refreshChrome = useCallback(() => {
+        const chromeScreen = document.getElementById("chrome-screen");
+        if (chromeScreen) chromeScreen.src += '';
+    }, []);
 
-    goToHome = () => {
-        this.setState({ url: this.home_url, display_url: "https://www.google.com" });
-        this.refreshChrome();
-    }
+    const goToHome = useCallback(() => {
+        setUrl(home_url);
+        setDisplayUrl("https://www.google.com");
+        setTimeout(refreshChrome, 100);
+    }, [refreshChrome]);
 
-    checkKey = (e) => {
+    const checkKey = useCallback((e) => {
         if (e.key === "Enter") {
-            let url = e.target.value;
-            let display_url = "";
+            let newUrl = e.target.value;
+            let newDisplayUrl = "";
 
-            url = url.trim();
-            if (url.length === 0) return;
+            newUrl = newUrl.trim();
+            if (newUrl.length === 0) return;
 
-            if (url.indexOf("http://") !== 0 && url.indexOf("https://") !== 0) {
-                url = "https://" + url;
+            if (newUrl.indexOf("http://") !== 0 && newUrl.indexOf("https://") !== 0) {
+                newUrl = "https://" + newUrl;
             }
 
-            url = encodeURI(url);
-            display_url = url;
-            if (url.includes("google.com")) { // 😅
-                url = 'https://www.google.com/webhp?igu=1';
-                display_url = "https://www.google.com";
+            newUrl = encodeURI(newUrl);
+            newDisplayUrl = newUrl;
+            if (newUrl.includes("google.com")) { // 😅
+                newUrl = 'https://www.google.com/webhp?igu=1';
+                newDisplayUrl = "https://www.google.com";
             }
-            this.setState({ url, display_url: url });
-            this.storeVisitedUrl(url, display_url);
+            
+            setUrl(newUrl);
+            setDisplayUrl(newDisplayUrl);
+            storeVisitedUrl(newUrl, newDisplayUrl);
             document.getElementById("chrome-url-bar").blur();
         }
-    }
+    }, [storeVisitedUrl]);
 
-    handleDisplayUrl = (e) => {
-        this.setState({ display_url: e.target.value });
-    }
+    const handleDisplayUrl = useCallback((e) => {
+        setDisplayUrl(e.target.value);
+    }, []);
 
-    displayUrlBar = () => {
+    const displayUrlBar = () => {
         return (
             <div className="w-full pt-0.5 pb-1 flex justify-start items-center text-white text-sm border-b border-gray-900">
-                <div onClick={this.refreshChrome} className=" ml-2 mr-1 flex justify-center items-center rounded-full bg-gray-50 bg-opacity-0 hover:bg-opacity-10">
+                <div onClick={refreshChrome} className=" ml-2 mr-1 flex justify-center items-center rounded-full bg-gray-50 bg-opacity-0 hover:bg-opacity-10">
                     <img className="w-5" src="./themes/Yaru/status/chrome_refresh.svg" alt="Webos Browser Refresh" />
                 </div>
-                <div onClick={this.goToHome} className=" mr-2 ml-1 flex justify-center items-center rounded-full bg-gray-50 bg-opacity-0 hover:bg-opacity-10">
+                <div onClick={goToHome} className=" mr-2 ml-1 flex justify-center items-center rounded-full bg-gray-50 bg-opacity-0 hover:bg-opacity-10">
                     <img className="w-5" src="./themes/Yaru/status/chrome_home.svg" alt="Webos Browser Home" />
                 </div>
-                <input onKeyDown={this.checkKey} onChange={this.handleDisplayUrl} value={this.state.display_url} id="chrome-url-bar" className="outline-none bg-ub-grey rounded-full pl-3 py-0.5 mr-3 w-5/6 text-gray-300 focus:text-white" type="url" spellCheck={false} autoComplete="off" />
+                <input onKeyDown={checkKey} onChange={handleDisplayUrl} value={display_url} id="chrome-url-bar" className="outline-none bg-ub-grey rounded-full pl-3 py-0.5 mr-3 w-5/6 text-gray-300 focus:text-white" type="url" spellCheck={false} autoComplete="off" />
             </div>
         );
-    }
+    };
 
-    render() {
-        return (
-            <div className="h-full w-full flex flex-col bg-ub-cool-grey">
-                {this.displayUrlBar()}
-                <iframe src={this.state.url} className="flex-grow" id="chrome-screen" frameBorder="0" title="Webos Browser Url"></iframe>
-            </div>
-        )
-    }
-}
+    return (
+        <div className="h-full w-full flex flex-col bg-ub-cool-grey">
+            {displayUrlBar()}
+            <iframe src={url} className="flex-grow" id="chrome-screen" frameBorder="0" title="Webos Browser Url"></iframe>
+        </div>
+    );
+};
 
-export default Browser
+export default Browser;
 
 export const displayChrome = () => {
-    return <Browser> </Browser>;
-}
+    return <Browser />;
+};

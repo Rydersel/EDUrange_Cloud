@@ -1,0 +1,17 @@
+{
+  "id": "sql-injection-basics",
+  "name": "SQL Injection Basics",
+  "version": "1.0.0",
+  "description": "Learn the fundamentals of SQL injection vulnerabilities and exploitation techniques",
+  "author": "EDURange Team",
+  "license": "MIT",
+  "website": "https://edurange.org",
+  "challenges": [
+    "sql-injection-basic.cdf.json"
+  ],
+  "tags": [
+    "web security",
+    "sql injection",
+    "authentication bypass"
+  ]
+} 

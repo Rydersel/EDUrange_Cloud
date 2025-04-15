@@ -4,7 +4,7 @@
 # Usage: ./build-bandit-images.sh [registry_url]
 
 # Set default registry URL if not provided
-REGISTRY_URL=${1:-"registry.rydersel.cloud"}
+REGISTRY_URL=${1:-"registry.edurange.cloud/challenges"}
 
 # Colors for output
 GREEN='\033[0;32m'

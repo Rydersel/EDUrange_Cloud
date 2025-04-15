@@ -179,8 +179,8 @@ export const AppConfigModal: React.FC<AppConfigModalProps> = ({
                                                                 onChange={(e) => {
                                                                     if (app.pages) {
                                                                         const newPages = [...app.pages];
-                                                                        if (newPages[pageIndex] && newPages[pageIndex].questions && newPages[pageIndex].questions[questionIndex]) {
-                                                                            newPages[pageIndex].questions[questionIndex].content = e.target.value;
+                                                                        if (newPages[pageIndex] && newPages[pageIndex]?.questions?.[questionIndex]) {
+                                                                            newPages[pageIndex].questions![questionIndex]!.content = e.target.value;
                                                                             onInputChange(index, 'pages', newPages);
                                                                         }
                                                                     }
@@ -198,8 +198,8 @@ export const AppConfigModal: React.FC<AppConfigModalProps> = ({
                                                                 onChange={(e) => {
                                                                     if (app.pages) {
                                                                         const newPages = [...app.pages];
-                                                                        if (newPages[pageIndex] && newPages[pageIndex].questions && newPages[pageIndex].questions[questionIndex]) {
-                                                                            newPages[pageIndex].questions[questionIndex].points = parseInt(e.target.value, 10);
+                                                                        if (newPages[pageIndex] && newPages[pageIndex]?.questions?.[questionIndex]) {
+                                                                            newPages[pageIndex].questions![questionIndex]!.points = parseInt(e.target.value, 10);
                                                                             onInputChange(index, 'pages', newPages);
                                                                         }
                                                                     }

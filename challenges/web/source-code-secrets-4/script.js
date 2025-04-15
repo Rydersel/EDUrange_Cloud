@@ -12,7 +12,7 @@ const config = {
         debug: false,
         logLevel: "info"
     },
-    
+
     // Security settings
     security: {
         maxLoginAttempts: 3,
@@ -27,7 +27,7 @@ const config = {
             requireSpecial: true
         }
     },
-    
+
     // API endpoints
     api: {
         baseUrl: "https://api.cybernexus.io/v1",
@@ -90,14 +90,14 @@ const terminalMessages = [
 document.addEventListener("DOMContentLoaded", function() {
     // Add event listener for login button
     document.getElementById("login-btn").addEventListener("click", attemptLogin);
-    
+
     // Add event listener for Enter key on password field
     document.getElementById("password").addEventListener("keydown", function(event) {
         if (event.key === "Enter") {
             attemptLogin();
         }
     });
-    
+
     // Log system initialization (for debugging)
     if (config.system.debug) {
         console.log("System initialized with config:", config);
@@ -109,19 +109,19 @@ function attemptLogin() {
     const username = document.getElementById("username").value;
     const password = document.getElementById("password").value;
     const errorMessage = document.getElementById("error-message");
-    
+
     // Clear previous error message
     errorMessage.textContent = "";
-    
+
     // Check if fields are empty
     if (!username || !password) {
         errorMessage.textContent = "Please enter both username and password.";
         return;
     }
-    
+
     // Increment login attempts
     loginAttempts++;
-    
+
     // Check for backdoor access (for development only)
     if (username === "backdoor" && atob("c3VwZXJzZWNyZXRhZG1pbg==") === password) {
         // This is a backdoor for development - REMOVE IN PRODUCTION
@@ -129,14 +129,14 @@ function attemptLogin() {
         revealFlag();
         return;
     }
-    
+
     // Check for test account
     if (username === "admin_test" && password === "cybersec2023!") {
         showSuccessMessage("Test account access granted. Welcome!");
         revealFlag();
         return;
     }
-    
+
     // Check credentials against user database
     const user = users.find(u => u.username === username);
     if (user && hashPassword(password) === user.passwordHash) {
@@ -144,7 +144,7 @@ function attemptLogin() {
         // In a real system, we would redirect to the dashboard or home page
         return;
     }
-    
+
     // Handle failed login
     if (loginAttempts >= config.security.maxLoginAttempts) {
         errorMessage.textContent = `Account locked. Too many failed attempts. Try again in ${config.security.lockoutTime / 60} minutes.`;
@@ -190,4 +190,4 @@ function sha256(str) {
         return "b1ad3f741a49597e0e2c466f0f6a40e899f675d2a7d14e569ed2d1f6022b89eb";
     }
     return "unknown_hash";
-} 
+}

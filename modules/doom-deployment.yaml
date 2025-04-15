@@ -15,7 +15,7 @@ spec:
       serviceAccountName: default
       containers:
       - name: doom
-        image: registry.rydersel.cloud/doom
+        image: registry.edurange.cloud/edurange/doom
         ports:
         - containerPort: 8000
 

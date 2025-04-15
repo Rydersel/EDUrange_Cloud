@@ -1,19 +1,20 @@
-import { NextResponse, NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { getServerSession } from 'next-auth';
+import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
 import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { validateAndSanitize, validationSchemas } from '@/lib/validation';
 import rateLimit from '@/lib/rate-limit';
+import { createErrorResponse, createSuccessResponse, handleApiError } from '@/lib/utils';
 
-// Create a rate limiter for challenge-related operations
+// Rate limiter instance
 const challengesRateLimiter = rateLimit({
   interval: 60 * 1000, // 1 minute
-  limit: 30, // 30 requests per minute
+  limit: 50 // 50 requests per minute
 });
 
-type ChallengeWithDetails = Prisma.ChallengesGetPayload<{
+type ChallengeWithDetails = Prisma.ChallengeGetPayload<{
   include: {
     challengeType: true;
     questions: true;
@@ -32,7 +33,7 @@ function transformToWebOSFormat(challenge: ChallengeWithDetails) {
       points: number;
       answer?: string;
     }>;
-  }>, question) => {
+  }>, question: any) => {
     if (!acc.length) {
       acc.push({
         instructions: "Complete the following questions:",
@@ -72,7 +73,7 @@ function transformToWebOSFormat(challenge: ChallengeWithDetails) {
   // Transform app configs and add challenge prompt
   const appsConfig = [
     challengePromptApp,
-    ...challenge.appConfigs.map(app => ({
+    ...challenge.appConfigs.map((app: any) => ({
       id: app.appId,
       icon: app.icon,
       title: app.title,
@@ -91,8 +92,7 @@ function transformToWebOSFormat(challenge: ChallengeWithDetails) {
     id: challenge.id,
     name: challenge.name,
     description: challenge.description,
-    challengeImage: challenge.challengeImage,
-    difficulty: challenge.difficulty,
+    challengeType: challenge.challengeType.name,
     AppsConfig: appsConfig
   };
 }
@@ -106,10 +106,10 @@ export async function GET(req: NextRequest) {
     const session = await getServerSession(authOptions);
 
     if (!session) {
-      return new NextResponse('Unauthorized', { status: 401 });
+      return createErrorResponse('Unauthorized', 401);
     }
 
-    const challenges = await prisma.challenges.findMany({
+    const challenges = await prisma.challenge.findMany({
       include: {
         challengeType: true,
         questions: true,
@@ -117,10 +117,9 @@ export async function GET(req: NextRequest) {
       }
     });
 
-    return NextResponse.json(challenges);
+    return createSuccessResponse(challenges);
   } catch (error) {
-    console.error('Error fetching challenges:', error);
-    return NextResponse.json({ error: 'Failed to fetch challenges' }, { status: 500 });
+    return handleApiError(error);
   }
 }
 
@@ -150,12 +149,12 @@ export async function POST(req: NextRequest) {
     const session = await getServerSession(authOptions);
 
     if (!session) {
-      return new NextResponse('Unauthorized', { status: 401 });
+      return createErrorResponse('Unauthorized', 401);
     }
 
     // Check if user is admin directly from the session
     if (session.user.role !== 'ADMIN') {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      return createErrorResponse('Forbidden', 403);
     }
 
     // Parse request body
@@ -163,30 +162,25 @@ export async function POST(req: NextRequest) {
     try {
       body = await req.json();
     } catch (error) {
-      return NextResponse.json({ error: 'Invalid JSON in request body' }, { status: 400 });
+      return createErrorResponse('Invalid JSON in request body', 400);
     }
 
     // Validate request body
     const validationResult = validateAndSanitize(createChallengeSchema, body);
 
     if (!validationResult.success) {
-      return NextResponse.json({ 
-        error: 'Validation failed', 
-        details: validationResult.error 
-      }, { status: 400 });
+      return createErrorResponse('Validation failed', 400);
     }
 
     const { name, description, difficulty, challengeTypeId, challengeImage, questions } = validationResult.data;
 
     // Create the challenge
     try {
-      const challenge = await prisma.challenges.create({
+      const challenge = await prisma.challenge.create({
         data: {
           name,
           description,
-          difficulty,
           challengeTypeId,
-          challengeImage,
           questions: {
             create: questions.map((q, index) => ({
               content: q.content,
@@ -203,19 +197,11 @@ export async function POST(req: NextRequest) {
         }
       });
 
-      return NextResponse.json(challenge, { status: 201 });
+      return createSuccessResponse(challenge, 201);
     } catch (dbError) {
-      console.error('Database error creating challenge:', dbError);
-      return NextResponse.json({ 
-        error: 'Failed to create challenge in database',
-        details: dbError instanceof Error ? dbError.message : 'Unknown error'
-      }, { status: 500 });
+      return handleApiError(dbError);
     }
   } catch (error) {
-    console.error('Error creating challenge:', error);
-    return NextResponse.json({ 
-      error: 'Failed to create challenge',
-      details: error instanceof Error ? error.message : 'Unknown error'
-    }, { status: 500 });
+    return handleApiError(error);
   }
 }

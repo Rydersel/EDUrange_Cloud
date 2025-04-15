@@ -21,7 +21,13 @@ export async function fetchCurrentMetrics() {
     
     console.log('Fetching metrics using Monitoring Service URL:', monitoringServiceUrl);
     
-    const response = await fetch(`${monitoringServiceUrl}/metrics/current`, {
+    // The monitoring service uses '/current' endpoint
+    // The URL already contains /metrics, so just append /current to it
+    const url = ensureEndpointUrl(monitoringServiceUrl, 'current');
+    
+    console.log('Fetching current metrics from:', url);
+    
+    const response = await fetch(url, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
@@ -42,6 +48,27 @@ export async function fetchCurrentMetrics() {
 }
 
 /**
+ * Helper function to ensure the URL has the correct endpoint
+ */
+function ensureEndpointUrl(baseUrl: string, endpoint: string): string {
+  // If URL ends with /metrics, append the endpoint (legacy support)
+  if (baseUrl.endsWith('/metrics')) {
+    return `${baseUrl}/${endpoint}`;
+  }
+  
+  // If URL already includes the endpoint, return as is
+  if (baseUrl.includes(`/${endpoint}`)) {
+    return baseUrl;
+  }
+  
+  // Make sure the URL ends with a slash if needed
+  const normalizedUrl = baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`;
+  
+  // Simply join the base URL and endpoint
+  return `${normalizedUrl}${endpoint}`;
+}
+
+/**
  * Fetch historical metrics from the monitoring service
  * 
  * @param type - The type of metrics to fetch (cpu, memory, network, challenges)
@@ -58,7 +85,14 @@ export async function fetchMetricsHistory(type: string, period: string = '24h') 
     
     console.log('Fetching metrics history using Monitoring Service URL:', monitoringServiceUrl);
     
-    const response = await fetch(`${monitoringServiceUrl}/metrics/history?type=${type}&period=${period}`, {
+    // The monitoring service uses '/history' endpoint for metrics history
+    // and '/status-history' for system status history
+    const endpoint = type === 'status' ? 'status-history' : 'history';
+    const url = ensureEndpointUrl(monitoringServiceUrl, endpoint) + `?type=${type}&period=${period}`;
+    
+    console.log('Fetching metrics from:', url);
+    
+    const response = await fetch(url, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
@@ -68,6 +102,7 @@ export async function fetchMetricsHistory(type: string, period: string = '24h') 
     });
     
     if (!response.ok) {
+      console.error(`Failed to fetch metrics history: ${response.status} ${response.statusText}`);
       throw new Error(`Failed to fetch metrics history: ${response.statusText}`);
     }
     
@@ -85,6 +120,7 @@ export async function fetchMetricsHistory(type: string, period: string = '24h') 
       };
     }
     
+    console.log('No valid data returned from metrics history endpoint');
     return null;
   } catch (error) {
     console.error(`Error fetching ${type} metrics history from monitoring service:`, error);
@@ -188,7 +224,12 @@ export async function fetchSystemStatusHistory(period: string = '24h') {
     
     console.log('Fetching system status history using Monitoring Service URL:', monitoringServiceUrl);
     
-    const response = await fetch(`${monitoringServiceUrl}/metrics/status-history?period=${period}`, {
+    // The monitoring service uses '/status-history' endpoint
+    const url = ensureEndpointUrl(monitoringServiceUrl, 'status-history') + `?period=${period}`;
+    
+    console.log('Fetching status history from:', url);
+    
+    const response = await fetch(url, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
@@ -198,6 +239,7 @@ export async function fetchSystemStatusHistory(period: string = '24h') {
     });
     
     if (!response.ok) {
+      console.error(`Failed to fetch system status history: ${response.status} ${response.statusText}`);
       throw new Error(`Failed to fetch system status history: ${response.statusText}`);
     }
     
@@ -210,6 +252,7 @@ export async function fetchSystemStatusHistory(period: string = '24h') {
       return result;
     }
     
+    console.log('No valid data returned from status history endpoint');
     return null;
   } catch (error) {
     console.error(`Error fetching system status history from monitoring service:`, error);

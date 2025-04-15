@@ -155,7 +155,7 @@ async function getMetricsHistory(type: string, period: string) {
     console.log(`Falling back to default ${type} metrics history data`);
     return generateFallbackMetricsHistory(type, period);
   } catch (error) {
-    console.error(`Error getting ${type} metrics history:`, error);
+    console.error(`Error fetching ${type} metrics history from monitoring service:`, error);
     return generateFallbackMetricsHistory(type, period);
   }
 }

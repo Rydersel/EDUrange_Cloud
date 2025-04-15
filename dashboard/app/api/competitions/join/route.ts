@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import { ActivityLogger, ActivityEventType } from '@/lib/activity-logger';
+import { ActivityLogger, ActivityEventType, LogSeverity } from '@/lib/activity-logger';
 import { z } from 'zod';
 import { validateAndSanitize } from '@/lib/validation';
 import rateLimit from '@/lib/rate-limit';
@@ -11,7 +11,7 @@ import { NextRequest } from 'next/server';
 // Create a rate limiter for join operations
 const joinRateLimiter = rateLimit({
   interval: 60 * 1000, // 1 minute
-  limit: 10, // 10 requests per minute
+  limit: 15, 
 });
 
 // Define validation schema for join request
@@ -48,12 +48,15 @@ export async function POST(req: NextRequest) {
     }
     
     const { code } = validationResult.data;
+    
+    // Convert the access code to uppercase to make it case-insensitive
+    const normalizedCode = code.toUpperCase();
 
     // Find valid access code - only check if the code exists and is not expired
     // No role-based filtering to ensure all users can join with valid codes
     const accessCode = await prisma.competitionAccessCode.findFirst({
       where: {
-        code,
+        code: normalizedCode,
         OR: [
           { expiresAt: null },
           { expiresAt: { gt: new Date() } }
@@ -65,6 +68,11 @@ export async function POST(req: NextRequest) {
     });
 
     if (!accessCode) {
+      // Log the invalid access code attempt
+      await ActivityLogger.logInvalidAccessCode(session.user.id, {
+        code: code,
+        attemptTimestamp: new Date().toISOString()
+      });
       return new NextResponse('Invalid or expired access code', { status: 400 });
     }
 

@@ -1,0 +1,104 @@
+{
+  "$schema": "https://raw.githubusercontent.com/EDURange/schema/main/schemas/cdf.schema.json",
+  "metadata": {
+    "id": "hidden-flag",
+    "pack_id": "edurange-web-basics",
+    "name": "Hidden Flag Web Challenge",
+    "version": "1.0.0",
+    "description": "Find the hidden flag in this web application by exploring the source code and discovering hidden pages.",
+    "challenge_type": "web",
+    "difficulty": "beginner",
+    "author": "EDURange Team",
+    "learning_objectives": [
+      "Understand the purpose of robots.txt.",
+      "Inspect web page source code.",
+      "Identify hidden files or directories."
+    ]
+  },
+  "components": [
+    {
+      "type": "container",
+      "id": "webserver",
+      "config": {
+        "image": "registry.edurange.cloud/challenges/hidden-flag-challenge",
+        "ports": [
+          {
+            "containerPort": 80,
+            "protocol": "TCP"
+          }
+        ],
+        "resources": {
+          "cpu_limit": "500m",
+          "mem_limit": "512Mi"
+        }
+      }
+    },
+    {
+      "type": "webosApp",
+      "id": "chrome",
+      "config": {
+        "title": "Browser",
+        "icon": "./icons/browser.svg",
+        "width": 70,
+        "height": 80,
+        "screen": "displayChrome",
+        "disabled": false,
+        "favourite": true,
+        "desktop_shortcut": true,
+        "launch_on_startup": false,
+        "app_type": "browser"
+      }
+    },
+    {
+      "type": "webosApp",
+      "id": "web_chal",
+      "config": {
+        "title": "Web Challenge",
+        "icon": "./icons/browser.svg",
+        "width": 70,
+        "height": 80,
+        "screen": "displayWebChal",
+        "disabled": false,
+        "favourite": true,
+        "desktop_shortcut": true,
+        "launch_on_startup": true,
+        "app_type": "custom"
+      }
+    },
+    {
+      "type": "question",
+      "id": "q1_flag",
+      "config": {
+        "text": "What is the flag hidden in the web application?",
+        "type": "flag",
+        "points": 10,
+        "order": 0
+      }
+    },
+    {
+      "type": "question",
+      "id": "q2_file",
+      "config": {
+        "text": "What file did you check to discover the hidden page?",
+        "type": "text",
+        "points": 5,
+        "answer": "robots.txt",
+        "order": 1
+      }
+    },
+    {
+      "type": "question",
+      "id": "q3_page",
+      "config": {
+        "text": "What is the name of the hidden page that contains the flag?",
+        "type": "text",
+        "points": 5,
+        "answer": "secret.html",
+        "order": 2
+      }
+    }
+  ],
+  "typeConfig": {
+    "challengeImage": "registry.edurange.cloud/challenges/hidden-flag-challenge"
+  }
+}

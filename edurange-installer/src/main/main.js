@@ -5,6 +5,11 @@ const log = require('electron-log');
 const { spawn } = require('child_process');
 const fs = require('fs');
 const os = require('os');
+const { exec } = require('child_process');
+const { promisify } = require('util');
+const { writeFile, unlink } = require('fs/promises');
+
+const execAsync = promisify(exec);
 
 // Store custom tool paths
 let customToolPaths = {
@@ -283,182 +288,12 @@ ipcMain.handle('check-command', async (event, command) => {
 
 // Execute a shell command
 ipcMain.handle('execute-command', async (event, command, args) => {
-  log.info(`Executing command: ${command} ${args.join(' ')}`);
-  
-  // Check if this is a custom path for a known tool
-  const isKnownTool = ['kubectl', 'helm', 'docker'].includes(command);
-  
-  // If this is a direct path to an executable, store it for future use if it's a known tool name
-  if (path.isAbsolute(command)) {
-    const toolName = path.basename(command).replace(/\.exe$/i, '');
-    if (['kubectl', 'helm', 'docker'].includes(toolName)) {
-      customToolPaths[toolName] = command;
-      log.info(`Storing custom path for ${toolName}: ${command}`);
-    }
+  try {
+    const { stdout, stderr } = await execAsync(`${command} ${args.join(' ')}`);
+    return { code: 0, stdout, stderr };
+  } catch (error) {
+    return { code: 1, stdout: '', stderr: error.message };
   }
-  
-  // Get the system PATH
-  const envPath = process.env.PATH || '';
-  log.info(`Current PATH: ${envPath}`);
-  
-  // Find the command in the PATH
-  let commandPath = command;
-  
-  // Only search for the command in PATH if it's not an absolute path
-  if (!path.isAbsolute(command)) {
-    // Check if we have a stored custom path for this tool
-    if (isKnownTool && customToolPaths[command]) {
-      commandPath = customToolPaths[command];
-      log.info(`Using stored custom path for ${command}: ${commandPath}`);
-    } else {
-      try {
-        // Check if command exists directly
-        const checkCommand = process.platform === 'win32'
-          ? await new Promise(resolve => {
-              const proc = spawn('where', [command]);
-              let output = '';
-              proc.stdout.on('data', data => { output += data.toString(); });
-              proc.on('close', code => {
-                resolve(code === 0 ? output.trim().split('\r\n')[0] : null);
-              });
-            })
-          : await new Promise(resolve => {
-              const proc = spawn('which', [command]);
-              let output = '';
-              proc.stdout.on('data', data => { output += data.toString(); });
-              proc.on('close', code => {
-                resolve(code === 0 ? output.trim() : null);
-              });
-            });
-        
-        if (checkCommand) {
-          commandPath = checkCommand;
-          log.info(`Found command at: ${commandPath}`);
-          
-          // Store this path for future use if it's a known tool
-          if (isKnownTool) {
-            customToolPaths[command] = commandPath;
-            log.info(`Storing path for ${command}: ${commandPath}`);
-          }
-        } else {
-          log.warn(`Command not found in PATH: ${command}`);
-          
-          // Check common locations for known tools
-          if (isKnownTool && commonToolPaths[process.platform] && commonToolPaths[process.platform][command]) {
-            log.info(`Checking common locations for ${command}...`);
-            
-            for (const commonPath of commonToolPaths[process.platform][command]) {
-              log.info(`Checking ${commonPath}...`);
-              
-              if (fileExists(commonPath)) {
-                log.info(`Found ${command} at common location: ${commonPath}`);
-                commandPath = commonPath;
-                
-                // Store this path for future use
-                customToolPaths[command] = commandPath;
-                
-                break;
-              }
-            }
-            
-            // If we still haven't found the command, show error
-            if (commandPath === command) {
-              log.warn(`${command} not found in common locations`);
-              
-              // For common commands, suggest installation instructions
-              if (command === 'kubectl') {
-                return {
-                  code: 1,
-                  stdout: '',
-                  stderr: `kubectl command not found. Please install kubectl and make sure it's in your PATH, or specify the path manually.\n
-                  Installation instructions: https://kubernetes.io/docs/tasks/tools/`
-                };
-              } else if (command === 'helm') {
-                return {
-                  code: 1,
-                  stdout: '',
-                  stderr: `helm command not found. Please install Helm and make sure it's in your PATH, or specify the path manually.\n
-                  Installation instructions: https://helm.sh/docs/intro/install/`
-                };
-              } else if (command === 'docker') {
-                return {
-                  code: 1,
-                  stdout: '',
-                  stderr: `docker command not found. Please install Docker and make sure it's in your PATH, or specify the path manually.\n
-                  Installation instructions: https://docs.docker.com/get-docker/`
-                };
-              }
-            }
-          } else {
-            // For common commands, suggest installation instructions
-            if (command === 'kubectl') {
-              return {
-                code: 1,
-                stdout: '',
-                stderr: `kubectl command not found. Please install kubectl and make sure it's in your PATH, or specify the path manually.\n
-                Installation instructions: https://kubernetes.io/docs/tasks/tools/`
-              };
-            } else if (command === 'helm') {
-              return {
-                code: 1,
-                stdout: '',
-                stderr: `helm command not found. Please install Helm and make sure it's in your PATH, or specify the path manually.\n
-                Installation instructions: https://helm.sh/docs/intro/install/`
-              };
-            } else if (command === 'docker') {
-              return {
-                code: 1,
-                stdout: '',
-                stderr: `docker command not found. Please install Docker and make sure it's in your PATH, or specify the path manually.\n
-                Installation instructions: https://docs.docker.com/get-docker/`
-              };
-            }
-          }
-        }
-      } catch (error) {
-        log.error(`Error finding command: ${error.message}`);
-      }
-    }
-  }
-  
-  return new Promise((resolve) => {
-    // Set up environment with PATH
-    const env = { ...process.env };
-    
-    // Log the command being executed
-    log.info(`Spawning process: ${commandPath} ${args.join(' ')}`);
-    
-    const childProcess = spawn(commandPath, args, { env });
-    
-    let stdout = '';
-    let stderr = '';
-    
-    childProcess.stdout.on('data', (data) => {
-      const chunk = data.toString();
-      stdout += chunk;
-      log.info(`[STDOUT] ${chunk}`);
-    });
-    
-    childProcess.stderr.on('data', (data) => {
-      const chunk = data.toString();
-      stderr += chunk;
-      log.warn(`[STDERR] ${chunk}`);
-    });
-    
-    childProcess.on('error', (error) => {
-      log.error(`Process error: ${error.message}`);
-      stderr += `Process error: ${error.message}\n`;
-    });
-    
-    childProcess.on('close', (code) => {
-      log.info(`Process exited with code: ${code}`);
-      resolve({
-        code,
-        stdout,
-        stderr
-      });
-    });
-  });
 });
 
 // Save configuration to a file
@@ -550,75 +385,21 @@ ipcMain.handle('execute-step', async (event, step) => {
 });
 
 // Apply manifest from string
-ipcMain.handle('apply-manifest-from-string', async (event, manifestContent) => {
-  log.info('Applying manifest from string');
-  
+ipcMain.handle('apply-manifest-from-string', async (event, manifestYaml) => {
   try {
-    const tempDir = app.getPath('temp');
-    const manifestPath = path.join(tempDir, `manifest-${Date.now()}.yaml`);
-    
-    fs.writeFileSync(manifestPath, manifestContent);
-    
-    // Find kubectl path - use stored path if available
-    let kubectlPath = 'kubectl';
-    if (customToolPaths['kubectl']) {
-      kubectlPath = customToolPaths['kubectl'];
-      log.info(`Using stored kubectl path: ${kubectlPath}`);
-    } else {
-      // Try to find kubectl in common locations
-      log.info('No stored kubectl path, checking common locations...');
-      if (commonToolPaths[process.platform] && commonToolPaths[process.platform]['kubectl']) {
-        for (const commonPath of commonToolPaths[process.platform]['kubectl']) {
-          if (fileExists(commonPath)) {
-            kubectlPath = commonPath;
-            customToolPaths['kubectl'] = kubectlPath;
-            log.info(`Found kubectl at common location: ${kubectlPath}`);
-            break;
-          }
-        }
-      }
-    }
-    
-    log.info(`Applying manifest with kubectl at: ${kubectlPath}`);
-    const result = await new Promise((resolve) => {
-      const childProcess = spawn(kubectlPath, ['apply', '-f', manifestPath]);
-      
-      let stdout = '';
-      let stderr = '';
-      
-      childProcess.stdout.on('data', (data) => {
-        stdout += data.toString();
-      });
-      
-      childProcess.stderr.on('data', (data) => {
-        stderr += data.toString();
-      });
-      
-      childProcess.on('error', (error) => {
-        log.error(`Process error: ${error.message}`);
-        stderr += `Process error: ${error.message}\n`;
-      });
-      
-      childProcess.on('close', (code) => {
-        resolve({
-          code,
-          stdout,
-          stderr
-        });
-      });
-    });
+    // Create a temporary file for the manifest
+    const tempFile = path.join(os.tmpdir(), `manifest-${Date.now()}.yaml`);
+    await writeFile(tempFile, manifestYaml);
+
+    // Apply the manifest using kubectl
+    const { stdout, stderr } = await execAsync(`kubectl apply -f ${tempFile}`);
     
     // Clean up the temporary file
-    fs.unlinkSync(manifestPath);
-    
-    return result;
+    await unlink(tempFile);
+
+    return { code: 0, stdout, stderr };
   } catch (error) {
-    log.error('Error applying manifest from string:', error);
-    return { 
-      code: 1, 
-      stdout: '', 
-      stderr: error.message 
-    };
+    return { code: 1, stdout: '', stderr: error.message };
   }
 });
 

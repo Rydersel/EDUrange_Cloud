@@ -9,6 +9,7 @@ import IngressSetup from './pages/IngressSetup/index';
 import CertManagerSetup from './pages/CertManagerSetup/index';
 import DatabaseSetup from './pages/DatabaseSetup/index';
 import ComponentsSetup from './pages/ComponentsSetup/index';
+import RedisService from './pages/ComponentsSetup/RedisService';
 import OAuthSetup from './pages/OAuthSetup/index';
 import DashboardSetup from './pages/DashboardSetup/index';
 import UserManagement from './pages/UserManagement/index';
@@ -66,8 +67,12 @@ function App() {
           setInstallationStatus('monitoringService', 'installed');
         }
 
+        if (results.redisService) {
+          setInstallationStatus('redisService', 'installed');
+        }
+
         // If all components are installed, mark the components-setup step as completed
-        if (results.databaseController && results.instanceManager && results.monitoringService) {
+        if (results.databaseController && results.instanceManager && results.monitoringService && results.redisService) {
           markStepCompleted('components-setup');
         }
 
@@ -114,6 +119,7 @@ function App() {
           <Route path="/cert-manager-setup" element={<CertManagerSetup />} />
           <Route path="/database-setup" element={<DatabaseSetup />} />
           <Route path="/components-setup" element={<ComponentsSetup />} />
+          <Route path="/redis-service" element={<RedisService />} />
           <Route path="/oauth-setup" element={<OAuthSetup />} />
           <Route path="/dashboard-setup" element={<DashboardSetup />} />
           <Route path="/user-management" element={<UserManagement />} />

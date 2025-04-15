@@ -1,4 +1,4 @@
-import React, { Component } from 'react';
+import React, { useState, useCallback } from 'react';
 const Parser = require('expr-eval').Parser;
 
 const parser = new Parser({
@@ -19,82 +19,73 @@ const parser = new Parser({
     }
 });
 
-export class Calc extends Component {
-    constructor() {
-        super();
-        this.state = {
-            display: ''
-        };
-    }
+const Calc = () => {
+    const [display, setDisplay] = useState('');
 
-    handleButtonClick = (value) => {
+    const handleButtonClick = useCallback((value) => {
         if (value === '=') {
-            this.calculateResult();
+            calculateResult();
         } else if (value === 'C') {
-            this.clearDisplay();
+            clearDisplay();
         } else {
-            this.setState((prevState) => ({
-                display: prevState.display + value
-            }));
+            setDisplay(prevDisplay => prevDisplay + value);
         }
-    };
+    }, []);
 
-    calculateResult = () => {
+    const calculateResult = useCallback(() => {
         try {
-            const result = parser.evaluate(this.state.display);
-            this.setState({ display: String(result) });
+            const result = parser.evaluate(display);
+            setDisplay(String(result));
         } catch (e) {
-            this.setState({ display: 'Error' });
+            setDisplay('Error');
         }
-    };
+    }, [display]);
 
-    clearDisplay = () => {
-        this.setState({ display: '' });
-    };
+    const clearDisplay = useCallback(() => {
+        setDisplay('');
+    }, []);
 
-    renderButton = (value) => (
-        <button onClick={() => this.handleButtonClick(value)} className="calculator-button">
+    const renderButton = useCallback((value) => (
+        <button onClick={() => handleButtonClick(value)} className="calculator-button">
             {value}
         </button>
-    );
+    ), [handleButtonClick]);
 
-    render() {
-        return (
-            <div className="calculator">
-                <div className="calculator-display">{this.state.display}</div>
-                <div className="calculator-buttons">
-                    <div className="calculator-row">
-                        {this.renderButton('1')}
-                        {this.renderButton('2')}
-                        {this.renderButton('3')}
-                        {this.renderButton('+')}
-                    </div>
-                    <div className="calculator-row">
-                        {this.renderButton('4')}
-                        {this.renderButton('5')}
-                        {this.renderButton('6')}
-                        {this.renderButton('-')}
-                    </div>
-                    <div className="calculator-row">
-                        {this.renderButton('7')}
-                        {this.renderButton('8')}
-                        {this.renderButton('9')}
-                        {this.renderButton('*')}
-                    </div>
-                    <div className="calculator-row">
-                        {this.renderButton('0')}
-                        {this.renderButton('.')}
-                        {this.renderButton('=')}
-                        {this.renderButton('/')}
-                    </div>
-                    <div className="calculator-row">
-                        {this.renderButton('C')}
-                    </div>
+    return (
+        <div className="calculator">
+            <div className="calculator-display">{display}</div>
+            <div className="calculator-buttons">
+                <div className="calculator-row">
+                    {renderButton('1')}
+                    {renderButton('2')}
+                    {renderButton('3')}
+                    {renderButton('+')}
+                </div>
+                <div className="calculator-row">
+                    {renderButton('4')}
+                    {renderButton('5')}
+                    {renderButton('6')}
+                    {renderButton('-')}
+                </div>
+                <div className="calculator-row">
+                    {renderButton('7')}
+                    {renderButton('8')}
+                    {renderButton('9')}
+                    {renderButton('*')}
+                </div>
+                <div className="calculator-row">
+                    {renderButton('0')}
+                    {renderButton('.')}
+                    {renderButton('=')}
+                    {renderButton('/')}
+                </div>
+                <div className="calculator-row">
+                    {renderButton('C')}
                 </div>
             </div>
-        );
-    }
-}
+        </div>
+    );
+};
 
 export default Calc;
 

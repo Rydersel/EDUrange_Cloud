@@ -9,15 +9,15 @@ class ActivityLogger {
   static async logQuestionAttempt(userId, challengeId, groupId, metadata, databaseApiUrl) {
     try {
       // Use the proxy URL if we're in a browser environment
-      const apiUrl = typeof window !== 'undefined' && window.location.protocol === 'https:' 
-        ? `/api/database-proxy?path=activity/log` 
+      const apiUrl = typeof window !== 'undefined' && window.location.protocol === 'https:'
+        ? `/api/database-proxy?path=activity/log`
         : `${databaseApiUrl}/activity/log`;
-      
+
       console.log('🔄 Logging question attempt via:', apiUrl);
-      
+
       // Ensure metadata is properly formatted
       const formattedMetadata = typeof metadata === 'string' ? metadata : JSON.stringify(metadata);
-      
+
       const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
@@ -43,15 +43,15 @@ class ActivityLogger {
   static async logQuestionCompletion(userId, challengeId, groupId, metadata, databaseApiUrl) {
     try {
       // Use the proxy URL if we're in a browser environment
-      const apiUrl = typeof window !== 'undefined' && window.location.protocol === 'https:' 
-        ? `/api/database-proxy?path=activity/log` 
+      const apiUrl = typeof window !== 'undefined' && window.location.protocol === 'https:'
+        ? `/api/database-proxy?path=activity/log`
         : `${databaseApiUrl}/activity/log`;
-      
+
       console.log('🔄 Logging question completion via:', apiUrl);
-      
+
       // Ensure metadata is properly formatted
       const formattedMetadata = typeof metadata === 'string' ? metadata : JSON.stringify(metadata);
-      
+
       const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
@@ -124,10 +124,10 @@ function getChallengeInstanceId() {
   if (typeof window !== 'undefined') {
     const hostname = window.location.hostname;
     console.log('🔍 Falling back to extracting challenge instance ID from hostname:', hostname);
-    
+
     // Get domain from environment variable or use a default
     const domain = process.env.NEXT_PUBLIC_DOMAIN_NAME || '';
-    
+
     if (domain) {
       // Extract everything before the domain
       const match = hostname.split(`.${domain}`)[0];
@@ -143,7 +143,7 @@ function getChallengeInstanceId() {
         return match;
       }
     }
-    
+
     console.error("❌ Failed to extract challenge instance ID from hostname:", hostname);
   }
   console.error("❌ Could not determine challenge instance ID");
@@ -155,20 +155,20 @@ async function fetchWithRetry(url, options = {}, retries = MAX_RETRIES) {
     try {
       console.log(`📡 Attempt ${i + 1}/${retries} - Fetching:`, url);
       const response = await fetch(url, options);
-      
+
       if (response.ok) {
         const data = await response.json();
         console.log('✅ Fetch successful:', { url, data });
         return { ok: true, data };
       }
-      
+
       const errorText = await response.text();
       console.warn(`⚠️ Attempt ${i + 1}/${retries} failed:`, {
         status: response.status,
         statusText: response.statusText,
         errorText
       });
-      
+
       if (i < retries - 1) {
         console.log(`🔄 Retrying in ${RETRY_DELAY}ms...`);
         await sleep(RETRY_DELAY);
@@ -181,7 +181,7 @@ async function fetchWithRetry(url, options = {}, retries = MAX_RETRIES) {
       }
     }
   }
-  
+
   return { ok: false };
 }
 
@@ -190,7 +190,7 @@ export default function ChallengePrompt() {
   const databaseApiUrl = config.urls.databaseApi;
   const databaseApiProxyUrl = config.urls.databaseApiProxy;
   const instanceManagerProxyUrl = config.urls.instanceManagerProxy;
-  
+
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
@@ -208,6 +208,10 @@ export default function ChallengePrompt() {
   const [groupId, setGroupId] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState(null);
+  const [rateLimited, setRateLimited] = useState(false);
+  const [rateLimitResetTime, setRateLimitResetTime] = useState(null);
+  const [rateLimitStartTime, setRateLimitStartTime] = useState(null);
+  const [initialWaitTime, setInitialWaitTime] = useState(0);
 
   // If the config is still loading, show a loading state
   useEffect(() => {
@@ -220,7 +224,7 @@ export default function ChallengePrompt() {
     const fetchChallengeData = async () => {
       // Don't fetch if the config is still loading
       if (config.isLoading) return;
-      
+
       setIsLoading(true);
       setLoadError(false);
       setErrorMessage("");
@@ -234,11 +238,11 @@ export default function ChallengePrompt() {
         }
 
         console.log('📡 Fetching challenge instance details...', { challengeInstanceId });
-        
+
         // Try proxy first, then fall back to direct API calls
         let instanceData = null;
         let lastError = null;
-        
+
         // Try using the proxy endpoint
         if (databaseApiProxyUrl) {
           try {
@@ -258,7 +262,7 @@ export default function ChallengePrompt() {
             lastError = error;
           }
         }
-        
+
         // Fall back to direct API calls if proxy failed
         if (!instanceData && databaseApiUrl) {
           console.log('🔄 Falling back to direct API calls');
@@ -286,7 +290,7 @@ export default function ChallengePrompt() {
         }
 
         console.log('✅ Received challenge instance data:', instanceData);
-        
+
         setUserId(instanceData.userId);
         setGroupChallengeId(instanceData.groupChallengeId);
         setGroupId(instanceData.groupId);
@@ -308,13 +312,13 @@ export default function ChallengePrompt() {
         if (instanceData.userId && instanceData.groupChallengeId) {
           // Try to fetch completed questions via proxy first
           let completedQuestionData = null;
-          
+
           if (databaseApiProxyUrl) {
             try {
               const proxyUrl = `${databaseApiProxyUrl}?path=question/completed&user_id=${instanceData.userId}&group_challenge_id=${instanceData.groupChallengeId}`;
               console.log('🔄 Fetching completed questions via proxy:', proxyUrl);
               const completedProxyResult = await fetchWithRetry(proxyUrl);
-              
+
               if (completedProxyResult.ok) {
                 completedQuestionData = completedProxyResult.data.completed_questions;
                 console.log('✅ Fetched completed questions via proxy:', completedQuestionData);
@@ -323,14 +327,14 @@ export default function ChallengePrompt() {
               console.warn('⚠️ Error fetching completed questions via proxy:', error);
             }
           }
-          
+
           // Fall back to direct API call if proxy failed
           if (completedQuestionData === null && databaseApiUrl) {
             try {
               const directUrl = `${databaseApiUrl}/question/completed?user_id=${instanceData.userId}&group_challenge_id=${instanceData.groupChallengeId}`;
               console.log('🔄 Falling back to direct API for completed questions:', directUrl);
               const completedResult = await fetchWithRetry(directUrl);
-              
+
               if (completedResult.ok) {
                 completedQuestionData = completedResult.data.completed_questions;
                 console.log('✅ Fetched completed questions directly:', completedQuestionData);
@@ -339,20 +343,20 @@ export default function ChallengePrompt() {
               console.warn('⚠️ Error fetching completed questions directly:', error);
             }
           }
-          
+
           if (completedQuestionData) {
             setCompletedQuestions(completedQuestionData);
           }
 
           // Try to fetch user points via proxy first
           let userPointsData = null;
-          
+
           if (databaseApiProxyUrl) {
             try {
               const proxyUrl = `${databaseApiProxyUrl}?path=get_points&user_id=${instanceData.userId}&group_id=${instanceData.groupId}`;
               console.log('🔄 Fetching user points via proxy:', proxyUrl);
               const pointsProxyResult = await fetchWithRetry(proxyUrl);
-              
+
               if (pointsProxyResult.ok) {
                 userPointsData = pointsProxyResult.data.points;
                 console.log('✅ Fetched user points via proxy:', userPointsData);
@@ -361,14 +365,14 @@ export default function ChallengePrompt() {
               console.warn('⚠️ Error fetching user points via proxy:', error);
             }
           }
-          
+
           // Fall back to direct API call if proxy failed
           if (userPointsData === null && databaseApiUrl) {
             try {
               const directUrl = `${databaseApiUrl}/get_points?user_id=${instanceData.userId}&group_id=${instanceData.groupId}`;
               console.log('🔄 Falling back to direct API for user points:', directUrl);
               const pointsResult = await fetchWithRetry(directUrl);
-              
+
               if (pointsResult.ok) {
                 userPointsData = pointsResult.data.points;
                 console.log('✅ Fetched user points directly:', userPointsData);
@@ -377,7 +381,7 @@ export default function ChallengePrompt() {
               console.warn('⚠️ Error fetching user points directly:', error);
             }
           }
-          
+
           if (userPointsData !== null) {
             setUserPoints(userPointsData);
           }
@@ -387,26 +391,26 @@ export default function ChallengePrompt() {
         const configResult = await fetchWithRetry('/api/config');
         if (configResult.ok) {
           console.log('✅ Received config data:', configResult.data);
-          
+
           // Handle both new format (object with apps array) and old format (direct array)
-          const appsArray = Array.isArray(configResult.data) 
-            ? configResult.data 
+          const appsArray = Array.isArray(configResult.data)
+            ? configResult.data
             : (configResult.data && Array.isArray(configResult.data.apps) ? configResult.data.apps : []);
-          
+
           // Find the challenge app in the apps array
           const challengeApp = appsArray.find(app => app.id === 'challenge-prompt');
           if (challengeApp && challengeApp.challenge) {
             console.log('📝 Setting challenge data and initial question');
             setChallengeData(challengeApp.challenge);
-            
+
             // Check if all questions are completed
             const allQuestions = challengeApp.challenge.pages.flatMap(page => page.questions) || [];
             const allQuestionsCompleted = allQuestions.length > 0 && completedQuestions.length >= allQuestions.length;
-            
+
             // If all questions are completed, set the first question as current
             // The rendering logic will show the completion page
             setCurrentQuestionId(allQuestions[0]?.id);
-            
+
             // Set the groupChallengeId from the challenge config
             if (challengeApp.challenge.groupChallengeId) {
               setGroupChallengeId(challengeApp.challenge.groupChallengeId);
@@ -431,15 +435,34 @@ export default function ChallengePrompt() {
     fetchChallengeData();
   }, [config, databaseApiUrl, databaseApiProxyUrl]);
 
+  // Calculate remaining time for the rate limit
+  const getRemainingTime = () => {
+    if (!rateLimitResetTime) return null;
+    
+    const diff = Math.max(0, rateLimitResetTime.getTime() - currentTime.getTime());
+    const minutes = Math.floor(diff / (60 * 1000));
+    const seconds = Math.floor((diff % (60 * 1000)) / 1000);
+    
+    return { minutes, seconds, total: diff };
+  };
+  
+  // Update current time every second
   useEffect(() => {
-    const timer = setInterval(() => {
+    const interval = setInterval(() => {
       setCurrentTime(new Date());
     }, 1000);
-
-    return () => {
-      clearInterval(timer);
-    };
+    return () => clearInterval(interval);
   }, []);
+  
+  // Automatically clear rate limit when time has expired
+  useEffect(() => {
+    if (rateLimited && rateLimitResetTime && currentTime >= rateLimitResetTime) {
+      console.log('🔄 Rate limit period has expired, enabling form');
+      setRateLimited(false);
+      setRateLimitResetTime(null);
+      setSubmitError(null);
+    }
+  }, [currentTime, rateLimited, rateLimitResetTime]);
 
   // Add a new useEffect to automatically complete the challenge when all questions are completed
   useEffect(() => {
@@ -449,10 +472,10 @@ export default function ChallengePrompt() {
     }
 
     const allQuestions = challengeData.pages.flatMap(page => page.questions) || [];
-    
+
     // Check if all questions are completed
     const allQuestionsCompleted = allQuestions.every(question =>
-      completedQuestions.some(q => 
+      completedQuestions.some(q =>
         q.questionId === question.id && q.groupChallengeId === groupChallengeId
       )
     );
@@ -467,15 +490,15 @@ export default function ChallengePrompt() {
             challengeId: challengeData.id,
             groupId
           });
-          
+
           // Calculate total points earned
           const pointsEarned = allQuestions.reduce((total, q) => {
-            const completed = completedQuestions.some(cq => 
+            const completed = completedQuestions.some(cq =>
               cq.questionId === q.id && cq.groupChallengeId === groupChallengeId
             );
             return completed ? total + q.points : total;
           }, 0);
-          
+
           // Call the API to complete the challenge
           const response = await fetch(`${databaseApiUrl}/competition/complete-challenge`, {
             method: 'POST',
@@ -528,27 +551,27 @@ export default function ChallengePrompt() {
 
   const submitAnswer = async (questionId, answer) => {
     if (!challengeData) return false;
-    
+
     setIsSubmitting(true);
     setSubmitError(null);
-    
+
     try {
       console.log('🔄 Submitting answer for question:', questionId);
-      
+
       // Find the question in the challenge data
       const question = allQuestions.find(q => q.id === questionId);
       if (!question) {
         console.error('❌ Question not found:', questionId);
         throw new Error('Question not found');
       }
-      
+
       let isCorrect = false;
-      
+
       if (question.type === 'flag') {
         try {
           // Try to verify flag via proxy first
           let flagVerified = null;
-          
+
           if (instanceManagerProxyUrl) {
             try {
               console.log('🔄 Verifying flag via proxy:', instanceManagerProxyUrl);
@@ -562,12 +585,12 @@ export default function ChallengePrompt() {
                   namespace: 'default'
                 })
               });
-              
+
               // Handle the response more thoroughly
               if (response.ok) {
                 const data = await response.json();
                 console.log('✅ Proxy response received:', JSON.stringify(data).substring(0, 100));
-                
+
                 if (data && typeof data.secret_value !== 'undefined') {
                   console.log('✅ Flag verification via proxy successful');
                   flagVerified = answer === data.secret_value;
@@ -588,7 +611,7 @@ export default function ChallengePrompt() {
           } else {
             console.warn('⚠️ No instanceManagerProxyUrl available for flag verification');
           }
-          
+
           // Fall back to direct API call if proxy failed
           if (flagVerified === null) {
             try {
@@ -603,15 +626,20 @@ export default function ChallengePrompt() {
                   answer
                 })
               });
-              
+
               // Handle the response thoroughly
               if (response.ok) {
                 const data = await response.json();
-                
+
                 if (data && typeof data.isCorrect !== 'undefined') {
                   console.log('✅ Flag verification via config API successful');
                   flagVerified = data.isCorrect;
                   console.log(`🏁 Flag verification result: ${flagVerified ? 'CORRECT' : 'INCORRECT'}`);
+                  
+                  // Check if there's a note field in the response (from fallback verification)
+                  if (data.note) {
+                    console.log('ℹ️ Verification note:', data.note);
+                  }
                 } else {
                   console.warn('⚠️ Flag verification via config API returned invalid format:', data);
                   throw new Error('Invalid response format from config API');
@@ -626,11 +654,11 @@ export default function ChallengePrompt() {
               throw error;
             }
           }
-          
+
           if (flagVerified === null) {
             throw new Error('Failed to verify flag after all attempts');
           }
-          
+
           isCorrect = flagVerified;
         } catch (error) {
           console.error('❌ Error verifying flag:', error);
@@ -640,7 +668,7 @@ export default function ChallengePrompt() {
         // For non-flag questions, check against the hardcoded answer
         isCorrect = answer === question.answer;
       }
-      
+
       // ... rest of the function ...
     } catch (error) {
       // ... error handling ...
@@ -670,6 +698,10 @@ export default function ChallengePrompt() {
 
     try {
       console.log('📡 Verifying answer...');
+      // Reset rate limit state when trying a new submission
+      setRateLimited(false);
+      setRateLimitResetTime(null);
+      
       // First verify answer is correct
       const verifyResponse = await fetch('/api/config', {
         method: 'POST',
@@ -681,6 +713,32 @@ export default function ChallengePrompt() {
           answer: answers[currentQuestionId].trim()
         }),
       });
+
+      // Handle rate limiting (HTTP 429)
+      if (verifyResponse.status === 429) {
+        const rateData = await verifyResponse.json();
+        console.warn('⚠️ Rate limit exceeded:', rateData);
+        
+        // Extract reset time
+        const resetTime = new Date(rateData.resetTime);
+        const now = new Date();
+        
+        // Get wait minutes from API or calculate if not provided
+        const waitMinutes = rateData.waitMinutes || Math.ceil((resetTime - now) / (60 * 1000));
+        
+        // Calculate the total wait time in milliseconds
+        const totalWaitMs = resetTime.getTime() - now.getTime();
+        
+        // Set rate limit state
+        setRateLimited(true);
+        setRateLimitResetTime(resetTime);
+        setRateLimitStartTime(now);
+        setInitialWaitTime(totalWaitMs);
+        
+        // Set user-friendly error message
+        setSubmitError(`Too many attempts. Please wait ${waitMinutes} minute${waitMinutes !== 1 ? 's' : ''} before trying again.`);
+        return;
+      }
 
       if (!verifyResponse.ok) {
         console.error('❌ Failed to verify answer:', {
@@ -713,13 +771,13 @@ export default function ChallengePrompt() {
       if (verifyData.isCorrect) {
         console.log('📡 Fetching question details...');
         // Get question details for points
-        const questionDetailsUrl = typeof window !== 'undefined' && window.location.protocol === 'https:' 
+        const questionDetailsUrl = typeof window !== 'undefined' && window.location.protocol === 'https:'
           ? `${databaseApiProxyUrl}?path=question/details&question_id=${currentQuestionId}`
           : `${databaseApiUrl}/question/details?question_id=${currentQuestionId}`;
-        
+
         console.log('🔄 Fetching question details via:', questionDetailsUrl);
         const questionResponse = await fetch(questionDetailsUrl);
-        
+
         if (!questionResponse.ok) {
           console.error('❌ Failed to get question details:', {
             status: questionResponse.status,
@@ -730,19 +788,19 @@ export default function ChallengePrompt() {
         }
         const questionData = await questionResponse.json();
         console.log('✅ Received question details:', questionData);
-        
+
         console.log('📡 Completing question...', {
           userId,
           questionId: currentQuestionId,
           groupId,
           points: questionData.points
         });
-        
+
         // Complete question and award points
-        const completeQuestionUrl = typeof window !== 'undefined' && window.location.protocol === 'https:' 
+        const completeQuestionUrl = typeof window !== 'undefined' && window.location.protocol === 'https:'
           ? `${databaseApiProxyUrl}?path=question/complete`
           : `${databaseApiUrl}/question/complete`;
-        
+
         console.log('🔄 Completing question via:', completeQuestionUrl);
         const completeResponse = await fetch(completeQuestionUrl, {
           method: 'POST',
@@ -784,12 +842,12 @@ export default function ChallengePrompt() {
           },
           databaseApiUrl
         );
-        
+
         setUserPoints(completionData.points.points);
         setCompletedQuestions(prev => [...prev, { questionId: currentQuestionId, groupChallengeId }]);
         setShowCorrectAnimation(true);
         setTimeout(() => setShowCorrectAnimation(false), 2000);
-        
+
         console.log('📝 Updated state after completion:', {
           newPoints: completionData.points.points,
           completedQuestions: [...completedQuestions, { questionId: currentQuestionId, groupChallengeId }]
@@ -809,9 +867,13 @@ export default function ChallengePrompt() {
 
   const renderQuestion = () => {
     if (!currentQuestion) return null;
-    const isCompleted = completedQuestions.some(q => 
+    const isCompleted = completedQuestions.some(q =>
       q.questionId === currentQuestionId && q.groupChallengeId === groupChallengeId
     );
+    
+    // Get remaining time for rate limit countdown
+    const remainingTime = getRemainingTime();
+    
     return (
       <div className="mb-4">
         <div className="flex items-center mb-2">
@@ -820,6 +882,39 @@ export default function ChallengePrompt() {
             {currentQuestion.points} pts
           </span>
         </div>
+        
+        {rateLimited && remainingTime && (
+          <div className="mb-4 p-3 rounded bg-yellow-900 text-yellow-200">
+            <p className="mb-2">Too many attempts. Please wait before trying again.</p>
+            <div className="flex items-center justify-between mb-2">
+              <div className="font-mono bg-black bg-opacity-30 px-3 py-1 rounded">
+                <span className="font-bold text-lg">
+                  {String(remainingTime.minutes).padStart(2, '0')}:{String(remainingTime.seconds).padStart(2, '0')}
+                </span>
+              </div>
+              <span className="text-sm opacity-80">Time remaining until next attempt</span>
+            </div>
+            
+            {/* Progress bar - calculate percentage based on actual elapsed time */}
+            {rateLimitResetTime && rateLimitStartTime && initialWaitTime > 0 && (
+              <div className="w-full h-2 bg-black bg-opacity-30 rounded overflow-hidden">
+                <div
+                  className="h-full bg-yellow-400 transition-all duration-1000 ease-linear"
+                  style={{
+                    width: `${Math.max(0, Math.min(100, 100 - ((remainingTime.total / initialWaitTime) * 100)))}%`,
+                  }}
+                />
+              </div>
+            )}
+          </div>
+        )}
+        
+        {submitError && !rateLimited && (
+          <div className="mb-4 p-3 rounded bg-red-900 text-red-200">
+            <p>{submitError}</p>
+          </div>
+        )}
+        
         <form onSubmit={handleSubmit} className="flex">
           <input
             type="text"
@@ -828,12 +923,14 @@ export default function ChallengePrompt() {
             className={`flex-grow px-3 py-2 bg-black border rounded-md focus:outline-none focus:ring-2 transition-all duration-300 ${
               showIncorrectAnimation
                 ? 'border-red-500 focus:ring-red-500 shake'
-                : 'border-green-700 focus:ring-green-600'
+                : rateLimited
+                  ? 'border-yellow-500 focus:ring-yellow-500'
+                  : 'border-green-700 focus:ring-green-600'
             } text-green-100`}
             placeholder="Enter your answer..."
-            disabled={isCompleted}
+            disabled={isCompleted || rateLimited}
           />
-          {!isCompleted && (
+          {!isCompleted && !rateLimited && (
             <button
               type="submit"
               className="ml-2 bg-green-800 text-green-100 px-4 py-2 rounded-md hover:bg-green-700 transition duration-300 ease-in-out"
@@ -854,18 +951,18 @@ export default function ChallengePrompt() {
 
   const renderCompletionPage = () => {
     const allQuestionsCompleted = allQuestions.every(question =>
-      completedQuestions.some(q => 
+      completedQuestions.some(q =>
         q.questionId === question.id && q.groupChallengeId === groupChallengeId
       )
     );
-    
+
     return (
       <div className="text-center">
         <Trophy className="w-16 h-16 text-green-400 mx-auto mb-4" />
         <h2 className="text-2xl font-bold text-green-300 mb-4">Challenge Completed!</h2>
         <div className="mb-6">
           {allQuestions.map((question, index) => {
-            const isCompleted = completedQuestions.some(q => 
+            const isCompleted = completedQuestions.some(q =>
               q.questionId === question.id && q.groupChallengeId === groupChallengeId
             );
             return (

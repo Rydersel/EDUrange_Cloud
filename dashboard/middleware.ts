@@ -8,9 +8,10 @@ const CONNECT_SRC_DOMAIN = process.env.CONNECT_SRC_DOMAIN || '*.localhost';
 
 // Define protected routes
 const ADMIN_ROUTES = [
-  '/dashboard', // This will match all paths that start with /dashboard
+  '/admin', // This will match all paths that start with /admin
 ];
 
+// Authenticated routes that require login
 const AUTHENTICATED_ROUTES = [
   '/profile',
   '/competitions',
@@ -35,8 +36,8 @@ export async function middleware(request: NextRequest) {
   }
 
   // Check if the path is protected
-  // For /dashboard paths, we'll check if it starts with /dashboard
-  const isAdminRoute = path.startsWith('/dashboard') || ADMIN_ROUTES;
+  // For /admin paths, we'll check if it starts with /admin
+  const isAdminRoute = path.startsWith('/admin') || ADMIN_ROUTES;
   const isAuthenticatedRoute = AUTHENTICATED_ROUTES.some(route => path.startsWith(route)) || isAdminRoute;
 
   // If it's a protected route, verify the token

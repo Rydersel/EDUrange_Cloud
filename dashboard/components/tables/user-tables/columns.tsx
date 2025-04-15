@@ -117,7 +117,7 @@ const GroupsCell = ({ groups }: { groups: { id: string; name: string }[] }) => {
                   key={group.id}
                   variant="ghost"
                   className="w-full justify-start h-7 px-2 text-xs font-normal"
-                  onClick={() => router.push(`/dashboard/competitions/${group.id}`)}
+                  onClick={() => router.push(`/admin/competitions/${group.id}`)}
                 >
                   <span>{group.name}</span>
                 </Button>

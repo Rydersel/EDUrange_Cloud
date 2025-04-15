@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react';
+import { isDevMode, devConfig } from './dev-config';
 
 /**
  * Custom hook to fetch WebOS configuration from the server
  * This allows components to access configuration values without directly accessing environment variables
+ * In development mode, it directly returns the development configuration without making API calls
  */
 export function useWebOSConfig() {
   const [config, setConfig] = useState({
@@ -27,7 +29,18 @@ export function useWebOSConfig() {
   useEffect(() => {
     async function fetchConfig() {
       try {
-        // Using the enhanced config endpoint that now includes all system URLs
+        // If in development mode, directly use the development configuration
+        if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
+          console.log('Development mode detected - using development configuration');
+          setConfig({
+            ...devConfig,
+            isLoading: false,
+            error: null
+          });
+          return;
+        }
+
+        // Otherwise fetch configuration from the API
         const response = await fetch('/api/config');
         
         if (!response.ok) {

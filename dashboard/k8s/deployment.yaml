@@ -26,6 +26,11 @@ spec:
             secretKeyRef:
               name: dashboard-secrets
               key: database-url
+        - name: DIRECT_DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: dashboard-secrets
+              key: direct-database-url
         - name: NEXTAUTH_URL
           value: "https://dashboard.rydersel.cloud"
         - name: NEXTAUTH_SECRET

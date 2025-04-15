@@ -1,0 +1,11 @@
+jsonschema
+PyYAML
+gunicorn==23.0.0
+gevent
+python-dotenv
+kubernetes
+requests
+Flask
+Flask-Cors
+psutil
+redis

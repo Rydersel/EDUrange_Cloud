@@ -1,0 +1,90 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: image-puller
+  namespace: default
+spec:
+  selector:
+    matchLabels:
+      app: image-puller
+  template:
+    metadata:
+      labels:
+        app: image-puller
+    spec:
+      # Only run on worker nodes, not control plane nodes
+      tolerations:
+      - key: node-role.kubernetes.io/control-plane
+        operator: Exists
+        effect: NoSchedule
+      - key: node-role.kubernetes.io/master
+        operator: Exists
+        effect: NoSchedule
+      # Prefer nodes with SSD storage for better pull performance
+      affinity:
+        nodeAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 1
+            preference:
+              matchExpressions:
+              - key: storage-type
+                operator: In
+                values:
+                - ssd
+      initContainers:
+        # Pre-pull common challenge images
+        - name: pull-webos
+          image: registry.edurange.cloud/edurange/webos
+          command: ["echo", "WebOS image pulled"]
+          imagePullPolicy: Always
+          resources:
+            limits:
+              memory: "100Mi"
+              cpu: "200m"
+        - name: pull-terminal
+          image: registry.edurange.cloud/edurange/terminal
+          command: ["echo", "Terminal image pulled"]
+          imagePullPolicy: Always
+          resources:
+            limits:
+              memory: "100Mi"
+              cpu: "200m"
+      containers:
+        - name: pause
+          image: k8s.gcr.io/pause:3.6
+          resources:
+            limits:
+              memory: "32Mi"
+              cpu: "20m"
+---
+# CronJob to refresh the image cache every hour
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: refresh-image-cache
+  namespace: default
+spec:
+  schedule: "0 * * * *"  # Run every hour at minute 0
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      template:
+        spec:
+          containers:
+          - name: kubectl
+            image: bitnami/kubectl:latest
+            command:
+            - /bin/sh
+            - -c
+            - |
+              # Delete pods to force recreating them
+              kubectl delete pods -l app=image-puller --force
+            resources:
+              limits:
+                memory: "128Mi"
+                cpu: "100m"
+          restartPolicy: OnFailure
+          terminationGracePeriodSeconds: 30 

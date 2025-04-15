@@ -1,4 +1,4 @@
-# docker buildx build --platform linux/amd64 -t registry.rydersel.cloud/dashboard . --push
+# docker buildx build --platform linux/amd64 -t registry.edurange.cloud/edurange/dashboard . --push
 
 FROM node:20-alpine AS base
 
@@ -19,23 +19,28 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-# Set environment variables for Prisma
-ENV PRISMA_ENGINES_CHECKSUM_IGNORE_MISSING=1
-ENV PRISMA_CLIENT_ENGINE_TYPE=binary
+# Set only non-sensitive build-time configurations
+ARG PRISMA_ENGINES_CHECKSUM_IGNORE_MISSING=1
+ARG NEXT_TELEMETRY_DISABLED=1
 
 # Generate Prisma client
 RUN npx prisma generate
 
-# Set Next.js telemetry to disabled
-ENV NEXT_TELEMETRY_DISABLED=1
+# Use build arguments for build-time configuration (not sensitive values)
+ARG BUILD_DATABASE_URL=postgresql://postgres:postgres@localhost:5432/postgres
+# Add build arguments for required environment variables
+ARG GITHUB_CLIENT_ID=build-placeholder
+ARG GITHUB_CLIENT_SECRET=build-placeholder
+ARG NEXT_PUBLIC_APP_URL=http://localhost:3000
 
-# Set build-time environment variables directly (minimal set needed just for build)
-ENV NEXTAUTH_SECRET=temporary-build-secret-not-used-in-production
-ENV NEXTAUTH_URL=http://localhost:3000
-ENV DATABASE_URL=postgresql://postgres:postgres@localhost:5432/postgres
-
-# Build the application
-RUN npm run build
+# Build the application - using only essential build-time variables
+RUN NEXT_TELEMETRY_DISABLED=1 \
+    PRISMA_ENGINES_CHECKSUM_IGNORE_MISSING=1 \
+    DATABASE_URL=${BUILD_DATABASE_URL} \
+    NEXTAUTH_SECRET=build-time-only-not-saved-in-image \
+    NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL} \
+    SKIP_ENV_VALIDATION=1 \
+    npm run build
 
 # Production image, copy all the files and run next
 FROM base AS runner
@@ -44,11 +49,16 @@ WORKDIR /app
 # Install dependencies required for Prisma with specific OpenSSL version
 RUN apk add --no-cache openssl libc6-compat
 
-# Set environment variables for Prisma
-ENV PRISMA_ENGINES_CHECKSUM_IGNORE_MISSING=1
-ENV PRISMA_CLIENT_ENGINE_TYPE=binary
+# Set only non-sensitive configuration
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
+
+# Note: All sensitive environment variables must be provided at runtime
+# via Kubernetes deployment config or secrets, including:
+# - DATABASE_URL
+# - NEXTAUTH_SECRET
+# - NEXTAUTH_URL
+# - Other sensitive configuration values
 
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
@@ -66,6 +76,8 @@ RUN chown nextjs:nodejs .next
 # This is optimized for Next.js 15.2.1 with the standalone output format
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+# Copy the featured packs needed by the API route
+COPY --from=builder --chown=nextjs:nodejs /app/featured-packs ./featured-packs
 
 USER nextjs
 
@@ -73,7 +85,5 @@ EXPOSE 3000
 
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
-
-
 
 CMD ["node", "server.js"]

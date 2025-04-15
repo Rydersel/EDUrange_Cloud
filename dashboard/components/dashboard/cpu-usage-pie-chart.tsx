@@ -41,20 +41,34 @@ export function CPUUsagePieChart() {
         }
         
         const result = await response.json();
+        console.log('CPU Usage Data:', result);
         
         if (result && typeof result.cpu === 'number') {
-          const cpuUsage = Math.min(100, Math.max(0, result.cpu));
+          // The monitoring service returns CPU usage as a percentage value already
+          // We just need to ensure it's a valid number between 0 and 100
+          let cpuUsage = result.cpu;
+          
+          // Ensure it's within valid range and rounded to an integer for display
+          cpuUsage = Math.min(100, Math.max(0, Math.round(cpuUsage * 10) / 10));
+          
+          console.log('Processed CPU usage for pie chart:', cpuUsage);
+          
           setCpuData([
             { name: 'Used', value: cpuUsage, color: '#8884d8' },
             { name: 'Free', value: 100 - cpuUsage, color: '#82ca9d' }
           ]);
+        } else if (result.error) {
+          throw new Error(result.error);
         } else {
           throw new Error('Invalid CPU usage data format');
         }
       } catch (err) {
         console.error('Error fetching CPU usage data:', err);
         setError('Failed to load CPU usage data');
-        setCpuData([]);
+        setCpuData([
+          { name: 'Used', value: 0, color: '#8884d8' },
+          { name: 'Free', value: 100, color: '#82ca9d' }
+        ]);
       } finally {
         setLoading(false);
       }
@@ -68,11 +82,11 @@ export function CPUUsagePieChart() {
     return () => clearInterval(intervalId);
   }, []);
 
-  if (loading) {
+  if (loading && cpuData.length === 0) {
     return <div className="flex items-center justify-center h-[250px]">Loading CPU usage data...</div>;
   }
 
-  if (error || cpuData.length === 0) {
+  if (error && cpuData.length === 0) {
     return <div className="flex items-center justify-center h-[250px] text-muted-foreground">No data available</div>;
   }
 

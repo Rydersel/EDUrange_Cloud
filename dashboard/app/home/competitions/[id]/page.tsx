@@ -11,7 +11,7 @@ import {
   CardTitle
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+import { StatusBadge } from "@/components/ui/status-badge";
 import { Progress } from "@/components/ui/progress";
 import {
   Table,
@@ -26,6 +26,9 @@ import { Trophy, Medal, Award } from "lucide-react";
 
 export default function CompetitionDetailsPage() {
   const params = useParams();
+  if (!params) {
+    return <div>Loading...</div>;
+  }
   const id = params.id as string;
 
   // TODO: Fetch competition data
@@ -76,53 +79,7 @@ export default function CompetitionDetailsPage() {
             <h2 className="text-3xl font-bold tracking-tight">{competition.name}</h2>
             <p className="text-muted-foreground">{competition.description}</p>
           </div>
-          <Badge
-            className={
-              competition.status === "active"
-                ? "bg-green-500"
-                : competition.status === "upcoming"
-                ? "bg-yellow-500"
-                : "bg-gray-500"
-            }
-          >
-            {competition.status.charAt(0).toUpperCase() + competition.status.slice(1)}
-          </Badge>
-        </div>
-
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Participants</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{competition.participantCount}</div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Challenges</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{competition.challengeCount}</div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Points</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{competition.totalPoints}</div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Your Progress</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{competition.userProgress}%</div>
-              <Progress value={competition.userProgress} className="mt-2" />
-            </CardContent>
-          </Card>
+          <StatusBadge status={competition.status} />
         </div>
 
         <Tabs defaultValue="overview" className="space-y-4">
@@ -132,41 +89,66 @@ export default function CompetitionDetailsPage() {
             <TabsTrigger value="leaderboard">Leaderboard</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="overview" className="space-y-4">
+          <TabsContent value="overview">
             <Card>
               <CardHeader>
-                <CardTitle>Competition Details</CardTitle>
+                <CardTitle>Competition Overview</CardTitle>
                 <CardDescription>
-                  Important information about the competition
+                  Your progress in this competition
                 </CardDescription>
               </CardHeader>
-              <CardContent className="space-y-2">
-                <div className="flex justify-between">
-                  <span className="font-medium">Start Date</span>
-                  <span>{competition.startDate.toLocaleDateString()}</span>
+              <CardContent className="space-y-6">
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-sm">
+                    <span>Progress</span>
+                    <span className="font-medium">{competition.userProgress}%</span>
+                  </div>
+                  <Progress value={competition.userProgress} />
                 </div>
-                <div className="flex justify-between">
-                  <span className="font-medium">End Date</span>
-                  <span>{competition.endDate.toLocaleDateString()}</span>
+
+                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                  <div className="bg-muted rounded-lg p-3">
+                    <div className="text-muted-foreground text-sm">Start Date</div>
+                    <div className="font-medium">
+                      {competition.startDate.toLocaleDateString()}
+                    </div>
+                  </div>
+                  <div className="bg-muted rounded-lg p-3">
+                    <div className="text-muted-foreground text-sm">End Date</div>
+                    <div className="font-medium">
+                      {competition.endDate.toLocaleDateString()}
+                    </div>
+                  </div>
+                  <div className="bg-muted rounded-lg p-3">
+                    <div className="text-muted-foreground text-sm">
+                      Participants
+                    </div>
+                    <div className="font-medium">{competition.participantCount}</div>
+                  </div>
+                  <div className="bg-muted rounded-lg p-3">
+                    <div className="text-muted-foreground text-sm">
+                      Total Points
+                    </div>
+                    <div className="font-medium">{competition.totalPoints}</div>
+                  </div>
                 </div>
-                {/* Add more competition details as needed */}
               </CardContent>
             </Card>
           </TabsContent>
 
-          <TabsContent value="challenges" className="space-y-4">
+          <TabsContent value="challenges">
             <Card>
               <CardHeader>
-                <CardTitle>Available Challenges</CardTitle>
+                <CardTitle>Challenges</CardTitle>
                 <CardDescription>
-                  Complete challenges to earn points
+                  All available challenges for this competition
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Challenge</TableHead>
+                      <TableHead>Name</TableHead>
                       <TableHead>Points</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead className="text-right">Action</TableHead>
@@ -180,15 +162,7 @@ export default function CompetitionDetailsPage() {
                         </TableCell>
                         <TableCell>{challenge.points}</TableCell>
                         <TableCell>
-                          <Badge
-                            className={
-                              challenge.completed
-                                ? "bg-green-500"
-                                : "bg-yellow-500"
-                            }
-                          >
-                            {challenge.completed ? "Completed" : "Available"}
-                          </Badge>
+                          <StatusBadge status={challenge.completed ? "completed" : "pending"} />
                         </TableCell>
                         <TableCell className="text-right">
                           <Button
@@ -207,10 +181,10 @@ export default function CompetitionDetailsPage() {
             </Card>
           </TabsContent>
 
-          <TabsContent value="leaderboard" className="space-y-4">
+          <TabsContent value="leaderboard">
             <Card>
               <CardHeader>
-                <CardTitle>Competition Leaderboard</CardTitle>
+                <CardTitle>Leaderboard</CardTitle>
                 <CardDescription>
                   Top performers in this competition
                 </CardDescription>
@@ -219,34 +193,38 @@ export default function CompetitionDetailsPage() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead className="w-[100px]">Rank</TableHead>
-                      <TableHead>Player</TableHead>
+                      <TableHead>Rank</TableHead>
+                      <TableHead>User</TableHead>
                       <TableHead>Points</TableHead>
-                      <TableHead>Challenges Completed</TableHead>
+                      <TableHead className="text-right">Completions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {leaderboard.map((player) => (
-                      <TableRow key={player.rank}>
-                        <TableCell className="font-medium">
-                          {getRankIcon(player.rank)}
+                    {leaderboard.map((user) => (
+                      <TableRow key={user.rank}>
+                        <TableCell>
+                          <div className="flex items-center justify-center w-8 h-8 rounded-full">
+                            {getRankIcon(user.rank)}
+                          </div>
                         </TableCell>
                         <TableCell>
-                          <div className="flex items-center space-x-2">
-                            <Avatar className="h-8 w-8">
-                              <AvatarImage src={player.avatar} />
+                          <div className="flex items-center gap-3">
+                            <Avatar>
+                              <AvatarImage src={user.avatar} />
                               <AvatarFallback>
-                                {player.name
+                                {user.name
                                   .split(" ")
                                   .map((n) => n[0])
                                   .join("")}
                               </AvatarFallback>
                             </Avatar>
-                            <span>{player.name}</span>
+                            <div className="font-medium">{user.name}</div>
                           </div>
                         </TableCell>
-                        <TableCell>{player.points}</TableCell>
-                        <TableCell>{player.completions}</TableCell>
+                        <TableCell className="font-medium">{user.points}</TableCell>
+                        <TableCell className="text-right">
+                          {user.completions}/{competition.challengeCount}
+                        </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -258,4 +236,4 @@ export default function CompetitionDetailsPage() {
       </div>
     </ScrollArea>
   );
-} 
+}

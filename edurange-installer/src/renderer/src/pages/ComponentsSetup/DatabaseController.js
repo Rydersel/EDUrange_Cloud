@@ -290,12 +290,29 @@ spec:
             secretKeyRef:
               name: database-secrets
               key: database-url
+        - name: INSTANCE_MANAGER_URL
+          value: "http://instance-manager.default.svc.cluster.local/api"
+        - name: REDIS_URL
+          value: "redis://:$(REDIS_PASSWORD)@redis:6379/0"
+        - name: REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: redis-credentials
+              key: redis-password
         - name: DATABASE_CONNECTION_LIMIT
           value: "10"
         - name: DATABASE_CONNECTION_RETRY_INTERVAL
           value: "5"
         - name: DATABASE_CONNECTION_MAX_RETRIES
           value: "10"
+        - name: PYTHONUNBUFFERED
+          value: "1"
+        - name: PYTHONTRACEMALLOC
+          value: "1"
+        - name: PYTHONMALLOCSTATS
+          value: "1"
+        - name: PYTHONDEVMODE
+          value: "1"
         resources:
           requests:
             memory: "256Mi"
@@ -322,6 +339,17 @@ spec:
       - name: database-sync
         image: ${registry.url}/database-sync:latest
         imagePullPolicy: Always
+        workingDir: /app
+        command: ["/bin/bash", "-c"]
+        args:
+          - |
+            # Limit Python's memory usage
+            export PYTHONMEMORY=368435456
+            
+            while true; do
+              python main.py || true
+              sleep 10
+            done
         env:
         - name: POSTGRES_HOST
           valueFrom:
@@ -350,18 +378,32 @@ spec:
               key: database-url
         - name: INSTANCE_MANAGER_URL
           value: "http://instance-manager.default.svc.cluster.local/api"
+        - name: REDIS_URL
+          value: "redis://:$(REDIS_PASSWORD)@redis:6379/0"
+        - name: REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: redis-credentials
+              key: redis-password
         - name: DATABASE_CONNECTION_LIMIT
           value: "10"
         - name: DATABASE_CONNECTION_RETRY_INTERVAL
           value: "5"
         - name: DATABASE_CONNECTION_MAX_RETRIES
           value: "10"
+        - name: PYTHONUNBUFFERED
+          value: "1"
+        - name: PYTHONTRACEMALLOC
+          value: "1"
+        - name: PYTHONMALLOCSTATS
+          value: "1"
+        - name: PYTHONDEVMODE
+          value: "1"
         resources:
           requests:
-            memory: "128Mi"
+            memory: "400Mi"
             cpu: "50m"
           limits:
-            memory: "256Mi"
             cpu: "200m"
 `;
 
@@ -437,7 +479,63 @@ spec:
       addComponentLog('You may need to restart the Database Controller after all issues are resolved.');
     }
 
-    addComponentLog('Database Controller pod is ready.');
+    if (containerReadyResult.stdout === 'true') {
+      addComponentLog('Database API container is ready.');
+    } else {
+      throw new Error('Database API container is not ready.');
+    }
+
+    // Create Horizontal Pod Autoscaler for database-controller
+    addComponentLog('Creating Horizontal Pod Autoscaler for Database Controller...');
+    const hpaYaml = `
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: database-controller-hpa
+  namespace: default
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: database-controller
+  minReplicas: 1
+  maxReplicas: 6
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 75
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+      - type: Percent
+        value: 25
+        periodSeconds: 60
+    scaleUp:
+      stabilizationWindowSeconds: 60
+      policies:
+      - type: Percent
+        value: 100
+        periodSeconds: 60
+`;
+
+    const hpaResult = await applyManifestFromString(hpaYaml, 'hpa');
+    if (!hpaResult.success) {
+      addComponentLog(`Warning: Failed to create HPA for Database Controller: ${hpaResult.error}`);
+      addComponentLog('Continuing with installation. You can manually add HPA later.');
+    } else {
+      addComponentLog('Horizontal Pod Autoscaler for Database Controller created successfully.');
+    }
+
     addComponentLog('Database Controller installation completed successfully.');
     setInstallationStatus('databaseController', 'installed');
 

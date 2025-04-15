@@ -3,6 +3,18 @@
 @tailwind utilities;
 
 
+@layer components {
+  /* Add container-fluid class for full-width containers with minimal padding */
+  .container-fluid {
+    @apply w-full max-w-full mx-auto;
+  }
+
+  /* Add aspect-preserve class to maintain aspect ratio */
+  .aspect-preserve {
+    @apply flex items-center justify-center;
+  }
+}
+
 @layer base {
 
 :root  {
@@ -58,7 +70,7 @@
     @apply border-border;
   }
   body {
-    @apply box-border bg-background text-foreground;
+    @apply bg-background text-foreground;
   }
 }
 
@@ -81,7 +93,7 @@
   .text-gray-400 {
     color: rgb(31, 41, 55) !important; /* Darker grey for light mode */
   }
-  
+
   /* Specific fix for card text on home page */
   .group p.text-gray-400 {
     color: rgb(31, 41, 55) !important; /* Ensure card text is dark in light mode */

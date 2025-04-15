@@ -61,6 +61,15 @@ export const installDashboard = async ({
     const { databaseUrl, postgresPassword } = await verifyDatabaseCredentials({
       componentLog
     });
+    
+    // Create a direct database URL based on the databaseUrl
+    // If it contains pgbouncer:6432, replace with postgres:5432
+    let directDatabaseUrl = '';
+    if (databaseUrl.includes('pgbouncer:6432')) {
+      directDatabaseUrl = databaseUrl.replace(/pgbouncer:6432/, 'postgres:5432');
+    } else {
+      directDatabaseUrl = databaseUrl; // Just use the same URL
+    }
 
     // Create or update dashboard-secrets
     componentLog('Creating or updating dashboard-secrets...');
@@ -89,6 +98,7 @@ type: Opaque
 data:
   nextauth-secret: "${safeBase64Encode(nextAuthSecret)}"
   database-url: "${safeBase64Encode(databaseUrl)}"
+  direct-database-url: "${safeBase64Encode(directDatabaseUrl)}"
   github-client-id: "${safeBase64Encode('placeholder')}"
   github-client-secret: "${safeBase64Encode('placeholder')}"
 `;
@@ -99,7 +109,7 @@ data:
       }
     } else {
       // Update existing secret with database URL
-      componentLog('Updating existing dashboard-secrets with database URL...');
+      componentLog('Updating existing dashboard-secrets with database URLs...');
 
       // Get existing nextauth-secret
       const getNextAuthSecretCmd = await window.api.executeCommand('kubectl', [
@@ -147,6 +157,7 @@ type: Opaque
 data:
   nextauth-secret: "${encodedNextAuthSecret}"
   database-url: "${safeBase64Encode(databaseUrl)}"
+  direct-database-url: "${safeBase64Encode(directDatabaseUrl)}"
   github-client-id: "${encodedGithubClientId}"
   github-client-secret: "${encodedGithubClientSecret}"
 `;
@@ -197,6 +208,22 @@ spec:
             secretKeyRef:
               name: dashboard-secrets
               key: database-url
+        - name: DIRECT_DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: dashboard-secrets
+              key: direct-database-url
+              optional: true
+        - name: REDIS_URL
+          valueFrom:
+            secretKeyRef:
+              name: redis-credentials
+              key: redis-url
+        - name: REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: redis-credentials
+              key: redis-password
         - name: AUTH_GITHUB_ID
           valueFrom:
             secretKeyRef:
@@ -224,9 +251,6 @@ spec:
         - name: HEALTH_CHECK_MONITORING_URL
           value: "https://${domain.monitoringSubdomain}.${domain.name}/metrics/health"
         resources:
-          limits:
-            cpu: 500m
-            memory: 512Mi
           requests:
             cpu: 100m
             memory: 256Mi
@@ -323,6 +347,57 @@ spec:
       componentLog('You can check the status again later from the dashboard page.');
     } else {
       componentLog('Dashboard URL is accessible and ready to use.');
+    }
+
+    // Create Horizontal Pod Autoscaler for Dashboard
+    componentLog('Creating Horizontal Pod Autoscaler for Dashboard...');
+    const hpaYaml = `
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: dashboard-hpa
+  namespace: default
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: dashboard
+  minReplicas: 1
+  maxReplicas: 5
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+      - type: Percent
+        value: 25
+        periodSeconds: 60
+    scaleUp:
+      stabilizationWindowSeconds: 60
+      policies:
+      - type: Percent
+        value: 100
+        periodSeconds: 60
+`;
+
+    const hpaResult = await window.api.applyManifestFromString(hpaYaml);
+    if (hpaResult.code !== 0) {
+      componentLog(`Warning: Failed to create HPA for Dashboard: ${hpaResult.stderr}`);
+      componentLog('Continuing with installation. You can manually add HPA later.');
+    } else {
+      componentLog('Horizontal Pod Autoscaler for Dashboard created successfully.');
     }
 
     componentLog('Dashboard installation completed successfully.');

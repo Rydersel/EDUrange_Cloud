@@ -58,7 +58,7 @@ const ChallengeModulePreview = ({
   };
 
   const totalQuestions = challengeModule.challenges.reduce(
-    (sum, challenge) => sum + challenge.questions.length,
+    (sum, challenge) => sum + (challenge.questions?.length || 0),
     0
   );
 
@@ -91,7 +91,13 @@ const ChallengeModulePreview = ({
     if (selectedChallengeIndex === null) return;
     
     const updatedChallenges = [...challengeModule.challenges];
-    const updatedQuestions = [...updatedChallenges[selectedChallengeIndex].questions];
+    const selectedChallenge = updatedChallenges[selectedChallengeIndex];
+    
+    if (!selectedChallenge.questions) {
+      selectedChallenge.questions = [];
+    }
+    
+    const updatedQuestions = [...selectedChallenge.questions];
     
     updatedQuestions[questionIndex] = {
       ...updatedQuestions[questionIndex],
@@ -99,7 +105,7 @@ const ChallengeModulePreview = ({
     };
     
     updatedChallenges[selectedChallengeIndex] = {
-      ...updatedChallenges[selectedChallengeIndex],
+      ...selectedChallenge,
       questions: updatedQuestions
     };
     
@@ -198,7 +204,7 @@ const ChallengeModulePreview = ({
             <div className="bg-primary/10 p-4 rounded-lg flex flex-col items-center justify-center">
               <span className="text-2xl font-bold text-foreground">
                 {challengeModule.challenges.reduce((sum, challenge) => {
-                  return sum + challenge.questions.reduce((qSum, q) => qSum + q.points, 0);
+                  return sum + (challenge.questions?.reduce((qSum, q) => qSum + q.points, 0) || 0);
                 }, 0)}
               </span>
               <span className="text-sm text-muted-foreground">Total Points</span>
@@ -259,11 +265,11 @@ const ChallengeModulePreview = ({
                       <div className="flex items-center space-x-2">
                         <Badge variant="outline" className="flex items-center gap-1">
                           <FileQuestion className="h-3 w-3" />
-                          {challenge.questions.length}
+                          {challenge.questions?.length || 0}
                         </Badge>
                         <Badge variant="outline" className="flex items-center gap-1">
                           <Server className="h-3 w-3" />
-                          {challenge.appConfigs.length}
+                          {challenge.appConfigs?.length || 0} apps
                         </Badge>
                       </div>
                     </div>
@@ -433,156 +439,146 @@ const ChallengeModulePreview = ({
                 <AccordionTrigger>
                   <div className="flex items-center gap-2">
                     <FileQuestion className="h-4 w-4" />
-                    Questions ({selectedChallenge.questions.length})
+                    Questions ({selectedChallenge.questions?.length || 0})
                   </div>
                 </AccordionTrigger>
                 <AccordionContent>
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Order</TableHead>
-                        <TableHead>Type</TableHead>
-                        <TableHead>Content</TableHead>
-                        <TableHead>Points</TableHead>
-                        <TableHead>Answer</TableHead>
-                        <TableHead className="w-[80px]">Actions</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {selectedChallenge.questions.map((question, index) => (
-                        <TableRow key={index}>
-                          {editingQuestion === index ? (
-                            <>
-                              <TableCell>
-                                <Input 
-                                  type="number" 
-                                  value={question.order} 
-                                  onChange={(e) => handleQuestionChange(index, 'order', e.target.value)}
-                                  className="w-16"
-                                />
-                              </TableCell>
-                              <TableCell>
-                                <select
-                                  value={question.type}
-                                  onChange={(e) => handleQuestionChange(index, 'type', e.target.value)}
-                                  className="w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                                >
-                                  <option value="text">Text</option>
-                                  <option value="flag">Flag</option>
-                                </select>
-                              </TableCell>
-                              <TableCell>
-                                <Input 
-                                  value={question.content} 
-                                  onChange={(e) => handleQuestionChange(index, 'content', e.target.value)}
-                                />
-                              </TableCell>
-                              <TableCell>
-                                <Input 
-                                  type="number" 
-                                  value={question.points} 
-                                  onChange={(e) => handleQuestionChange(index, 'points', e.target.value)}
-                                  className="w-16"
-                                />
-                              </TableCell>
-                              <TableCell>
-                                <TooltipProvider>
-                                  <Tooltip>
-                                    <TooltipTrigger asChild>
-                                      <div>
-                                        <Input 
-                                          value={question.answer} 
-                                          onChange={(e) => handleQuestionChange(index, 'answer', e.target.value)}
-                                          className={question.type === 'flag' ? 'bg-muted cursor-not-allowed' : ''}
-                                          disabled={question.type === 'flag'}
-                                        />
-                                      </div>
-                                    </TooltipTrigger>
-                                    {question.type === 'flag' && (
-                                      <TooltipContent>
-                                        <p>Flag answers are predefined in the challenge and should not be modified.</p>
-                                      </TooltipContent>
-                                    )}
-                                  </Tooltip>
-                                </TooltipProvider>
-                              </TableCell>
-                              <TableCell>
-                                <Button 
-                                  variant="ghost" 
-                                  size="sm" 
-                                  onClick={() => setEditingQuestion(null)}
-                                >
-                                  <Save className="h-4 w-4" />
-                                </Button>
-                              </TableCell>
-                            </>
-                          ) : (
-                            <>
-                              <TableCell>{question.order}</TableCell>
-                              <TableCell>
-                                <Badge variant="outline">{question.type}</Badge>
-                              </TableCell>
-                              <TableCell className="max-w-xs truncate">{question.content}</TableCell>
-                              <TableCell>{question.points}</TableCell>
-                              <TableCell className="max-w-xs truncate">{question.answer}</TableCell>
-                              <TableCell>
-                                <Button 
-                                  variant="ghost" 
-                                  size="sm" 
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setEditingQuestion(index);
-                                  }}
-                                  disabled={isInstalling || installSuccess}
-                                >
-                                  <Pencil className="h-4 w-4" />
-                                </Button>
-                              </TableCell>
-                            </>
-                          )}
+                  {!selectedChallenge.questions || selectedChallenge.questions.length === 0 ? (
+                    <div className="p-4 text-center text-muted-foreground">
+                      No questions defined for this challenge
+                    </div>
+                  ) : (
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Question</TableHead>
+                          <TableHead>Type</TableHead>
+                          <TableHead>Points</TableHead>
+                          <TableHead>Actions</TableHead>
                         </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
+                      </TableHeader>
+                      <TableBody>
+                        {selectedChallenge.questions?.map((question, index) => (
+                          <TableRow key={index}>
+                            {editingQuestion === index ? (
+                              // Edit mode
+                              <>
+                                <TableCell>
+                                  <Textarea 
+                                    value={question.content} 
+                                    onChange={(e) => handleQuestionChange(index, 'content', e.target.value)}
+                                    rows={2}
+                                    className="min-w-[200px]"
+                                  />
+                                </TableCell>
+                                <TableCell>
+                                  <select 
+                                    value={question.type}
+                                    onChange={(e) => handleQuestionChange(index, 'type', e.target.value)}
+                                    className="border p-1 rounded-md"
+                                  >
+                                    <option value="text">Text</option>
+                                    <option value="multiple_choice">Multiple Choice</option>
+                                    <option value="flag">Flag</option>
+                                  </select>
+                                </TableCell>
+                                <TableCell>
+                                  <Input 
+                                    type="number" 
+                                    value={question.points}
+                                    onChange={(e) => handleQuestionChange(index, 'points', e.target.value)}
+                                    className="w-20"
+                                  />
+                                </TableCell>
+                                <TableCell>
+                                  <Button 
+                                    variant="ghost" 
+                                    size="sm" 
+                                    onClick={() => setEditingQuestion(null)}
+                                  >
+                                    <Save className="h-4 w-4" />
+                                  </Button>
+                                </TableCell>
+                              </>
+                            ) : (
+                              // View mode
+                              <>
+                                <TableCell>
+                                  <div className="font-medium">{question.content}</div>
+                                </TableCell>
+                                <TableCell>{question.type}</TableCell>
+                                <TableCell>{question.points} pts</TableCell>
+                                <TableCell>
+                                  <Button 
+                                    variant="ghost" 
+                                    size="sm" 
+                                    onClick={() => setEditingQuestion(index)}
+                                    disabled={isInstalling || installSuccess}
+                                  >
+                                    <Edit className="h-4 w-4" />
+                                  </Button>
+                                </TableCell>
+                              </>
+                            )}
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  )}
                 </AccordionContent>
               </AccordionItem>
               <AccordionItem value="appConfigs">
                 <AccordionTrigger>
                   <div className="flex items-center gap-2">
                     <Server className="h-4 w-4" />
-                    App Configurations ({selectedChallenge.appConfigs.length})
+                    App Configurations ({selectedChallenge.appConfigs?.length || 0})
                   </div>
                 </AccordionTrigger>
                 <AccordionContent>
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>App ID</TableHead>
-                        <TableHead>Title</TableHead>
-                        <TableHead>Screen</TableHead>
-                        <TableHead>Size</TableHead>
-                        <TableHead>Settings</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {selectedChallenge.appConfigs.map((config, index) => (
-                        <TableRow key={index}>
-                          <TableCell>{config.appId}</TableCell>
-                          <TableCell>{config.title}</TableCell>
-                          <TableCell>{config.screen}</TableCell>
-                          <TableCell>{config.width}x{config.height}</TableCell>
-                          <TableCell>
-                            <div className="flex flex-wrap gap-1">
-                              {config.disabled && <Badge variant="outline">Disabled</Badge>}
-                              {config.favourite && <Badge variant="outline">Favorite</Badge>}
-                              {config.desktop_shortcut && <Badge variant="outline">Desktop</Badge>}
-                              {config.launch_on_startup && <Badge variant="outline">Startup</Badge>}
-                            </div>
-                          </TableCell>
+                  {!selectedChallenge.appConfigs || selectedChallenge.appConfigs.length === 0 ? (
+                    <div className="p-4 text-center text-muted-foreground">
+                      No app configurations defined for this challenge
+                    </div>
+                  ) : (
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>App ID</TableHead>
+                          <TableHead>Title</TableHead>
+                          <TableHead>Size</TableHead>
+                          <TableHead>Actions</TableHead>
                         </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
+                      </TableHeader>
+                      <TableBody>
+                        {selectedChallenge.appConfigs?.map((config, index) => (
+                          <TableRow key={index}>
+                            <TableCell>{config.appId}</TableCell>
+                            <TableCell>{config.title}</TableCell>
+                            <TableCell>{config.width}x{config.height}</TableCell>
+                            <TableCell>
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button 
+                                      variant="ghost" 
+                                      size="sm" 
+                                      className="h-8 w-8 p-0"
+                                      disabled
+                                    >
+                                      <Info className="h-4 w-4" />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    View app details
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  )}
                 </AccordionContent>
               </AccordionItem>
               <AccordionItem value="image">

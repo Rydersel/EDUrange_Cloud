@@ -56,8 +56,8 @@ jest.mock('@/lib/prisma', () => ({
     user: {
       findUnique: jest.fn(),
     },
-    challenges: {
-      findMany: jest.fn().mockResolvedValue([]),
+    challenge: {
+      findMany: jest.fn(),
       findUnique: jest.fn(),
       create: jest.fn(),
       update: jest.fn(),
@@ -162,8 +162,8 @@ describe('Challenge API Routes', () => {
         },
       ];
 
-      // Mock prisma.challenges.findMany to return mock challenges
-      (prisma.challenges.findMany as jest.Mock).mockResolvedValue(mockChallenges);
+      // Mock prisma.challenge.findMany to return mock challenges
+      (prisma.challenge.findMany as jest.Mock).mockResolvedValue(mockChallenges);
 
       // Create a mock request
       const req = new NextRequest(new URL('http://localhost:3000/api/challenges'), {
@@ -176,8 +176,8 @@ describe('Challenge API Routes', () => {
       // Verify getServerSession was called
       expect(getServerSession).toHaveBeenCalledWith(authOptions);
 
-      // Verify prisma.challenges.findMany was called
-      expect(prisma.challenges.findMany).toHaveBeenCalled();
+      // Verify prisma.challenge.findMany was called
+      expect(prisma.challenge.findMany).toHaveBeenCalled();
 
       // Verify the response
       expect(response.status).toBe(200);
@@ -315,8 +315,8 @@ describe('Challenge API Routes', () => {
       // Verify the response status (should be 400 Bad Request)
       expect(response.status).toBe(400);
 
-      // Verify prisma.challenges.create was not called
-      expect(prisma.challenges.create).not.toHaveBeenCalled();
+      // Verify prisma.challenge.create was not called
+      expect(prisma.challenge.create).not.toHaveBeenCalled();
     });
   });
 
@@ -382,8 +382,8 @@ describe('Challenge API Routes', () => {
           appConfigs: [],
         };
 
-        // Mock prisma.challenges.findUnique to return the mock challenge
-        (prisma.challenges.findUnique as jest.Mock).mockResolvedValue(mockChallenge);
+        // Mock prisma.challenge.findUnique to return the mock challenge
+        (prisma.challenge.findUnique as jest.Mock).mockResolvedValue(mockChallenge);
 
         // Create a mock request
         const req = new NextRequest(new URL('http://localhost:3000/api/challenges/challenge1'), {
@@ -399,8 +399,8 @@ describe('Challenge API Routes', () => {
         // Verify getServerSession was called
         expect(getServerSession).toHaveBeenCalledWith(authOptions);
 
-        // Verify prisma.challenges.findUnique was called with the correct ID
-        expect(prisma.challenges.findUnique).toHaveBeenCalledWith(expect.objectContaining({
+        // Verify prisma.challenge.findUnique was called with the correct ID
+        expect(prisma.challenge.findUnique).toHaveBeenCalledWith(expect.objectContaining({
           where: { id: 'challenge1' },
         }));
 
@@ -427,8 +427,8 @@ describe('Challenge API Routes', () => {
           user: mockUser,
         });
 
-        // Mock prisma.challenges.findUnique to return null (challenge not found)
-        (prisma.challenges.findUnique as jest.Mock).mockResolvedValue(null);
+        // Mock prisma.challenge.findUnique to return null (challenge not found)
+        (prisma.challenge.findUnique as jest.Mock).mockResolvedValue(null);
 
         // Create a mock request
         const req = new NextRequest(new URL('http://localhost:3000/api/challenges/nonexistent'), {
@@ -444,8 +444,8 @@ describe('Challenge API Routes', () => {
         // Verify getServerSession was called
         expect(getServerSession).toHaveBeenCalledWith(authOptions);
 
-        // Verify prisma.challenges.findUnique was called with the correct ID
-        expect(prisma.challenges.findUnique).toHaveBeenCalledWith(expect.objectContaining({
+        // Verify prisma.challenge.findUnique was called with the correct ID
+        expect(prisma.challenge.findUnique).toHaveBeenCalledWith(expect.objectContaining({
           where: { id: 'nonexistent' },
         }));
 

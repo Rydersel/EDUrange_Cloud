@@ -1,4 +1,4 @@
-import { MainNavigation } from '@/components/MainNavigation'
+import { MainNavigation } from '@/components/navigation/MainNavigation'
 import { getServerSession } from "next-auth/next";
 import authConfig from "@/auth.config";
 import { redirect } from "next/navigation";
@@ -16,17 +16,33 @@ export default async function Profile() {
         redirect('/');
     }
 
-    // Fetch user data
+    // Fetch user data with question completions
     const user = await prisma.user.findUnique({
         where: { email: session.user?.email! },
         include: {
-            challengeCompletions: {
+            questionCompletions: {
                 include: {
+                    question: {
+                        select: {
+                            id: true,
+                            content: true,
+                            points: true,
+                            challengeId: true,
+                            challenge: {
+                                include: {
+                                    challengeType: true
+                                }
+                            }
+                        }
+                    },
                     groupChallenge: {
                         include: {
-                            challenge: true
+                            group: true
                         }
                     }
+                },
+                orderBy: {
+                    completedAt: 'desc'
                 }
             },
             memberOf: true,
@@ -40,17 +56,43 @@ export default async function Profile() {
 
     // Calculate statistics
     const totalPoints = user.groupPoints.reduce((sum, gp) => sum + gp.points, 0);
-    const completedChallenges = user.challengeCompletions.length;
+    
+    // Calculate completed challenges by grouping question completions by challenge
+    const completedChallenges = new Map();
+    user.questionCompletions.forEach(completion => {
+        const challengeId = completion.question.challengeId;
+        if (!completedChallenges.has(challengeId)) {
+            completedChallenges.set(challengeId, {
+                name: completion.question.challenge.name,
+                type: completion.question.challenge.challengeType.name,
+                completedQuestions: new Set(),
+                totalPoints: 0,
+                lastCompletedAt: completion.completedAt
+            });
+        }
+        const challenge = completedChallenges.get(challengeId);
+        challenge.completedQuestions.add(completion.questionId);
+        challenge.totalPoints += completion.question.points;
+    });
+
     const joinedCompetitions = user.memberOf.length;
     const accountAge = Math.floor((new Date().getTime() - user.createdAt.getTime()) / (1000 * 60 * 60 * 24));
 
-    // Get recent activity
-    const recentCompletions = user.challengeCompletions
-        .sort((a, b) => b.completedAt.getTime() - a.completedAt.getTime())
-        .slice(0, 5);
+    // Get recent activity from question completions
+    const recentCompletions = user.questionCompletions
+        .slice(0, 5)
+        .map(completion => ({
+            id: completion.id,
+            challengeName: completion.question.challenge.name,
+            questionName: completion.question.content,
+            points: completion.question.points,
+            completedAt: completion.completedAt,
+            competitionName: completion.groupChallenge.group.name,
+            challengeType: completion.question.challenge.challengeType.name
+        }));
 
     return (
-        <div className="min-h-screen bg-background">
+        <div className="min-h-screen bg-background overflow-y-auto">
             <MainNavigation />
             <div className="container mx-auto p-6 space-y-8 pb-16">
                 {/* Profile Header */}
@@ -83,11 +125,11 @@ export default async function Profile() {
                     </Card>
                     <Card className="bg-black/40 backdrop-blur-sm border-green-900/50">
                         <CardHeader className="flex flex-row items-center justify-between pb-2">
-                            <CardTitle className="text-sm font-medium">Challenges Completed</CardTitle>
+                            <CardTitle className="text-sm font-medium">Challenges Started</CardTitle>
                             <Flag className="h-4 w-4 text-green-400" />
                         </CardHeader>
                         <CardContent>
-                            <div className="text-2xl font-bold text-green-400">{completedChallenges}</div>
+                            <div className="text-2xl font-bold text-green-400">{completedChallenges.size}</div>
                         </CardContent>
                     </Card>
                     <Card className="bg-black/40 backdrop-blur-sm border-green-900/50">
@@ -101,11 +143,11 @@ export default async function Profile() {
                     </Card>
                     <Card className="bg-black/40 backdrop-blur-sm border-green-900/50">
                         <CardHeader className="flex flex-row items-center justify-between pb-2">
-                            <CardTitle className="text-sm font-medium">Current Rank</CardTitle>
-                            <Star className="h-4 w-4 text-green-400" />
+                            <CardTitle className="text-sm font-medium">Questions Completed</CardTitle>
+                            <Target className="h-4 w-4 text-green-400" />
                         </CardHeader>
                         <CardContent>
-                            <div className="text-2xl font-bold text-green-400">#42</div>
+                            <div className="text-2xl font-bold text-green-400">{user.questionCompletions.length}</div>
                         </CardContent>
                     </Card>
                 </div>
@@ -126,8 +168,8 @@ export default async function Profile() {
                         {recentCompletions.length > 0 && (
                             <Card className="bg-black/40 backdrop-blur-sm border-green-900/50">
                                 <CardHeader>
-                                    <CardTitle>Recent Completions</CardTitle>
-                                    <CardDescription>Your latest challenge completions</CardDescription>
+                                    <CardTitle>Recent Activity</CardTitle>
+                                    <CardDescription>Your latest challenge progress</CardDescription>
                                 </CardHeader>
                                 <CardContent className="space-y-4">
                                     {recentCompletions.map((completion) => (
@@ -136,9 +178,17 @@ export default async function Profile() {
                                                 <Target className="h-4 w-4 text-green-400" />
                                             </div>
                                             <div className="flex-1">
-                                                <p className="font-medium">Completed {completion.groupChallenge.challenge.name}</p>
+                                                <p className="font-medium">
+                                                    Completed question in {completion.challengeName}
+                                                    <Badge variant="outline" className="ml-2 text-xs">
+                                                        {completion.challengeType}
+                                                    </Badge>
+                                                </p>
                                                 <p className="text-sm text-muted-foreground">
-                                                    Earned {completion.pointsEarned} points
+                                                    {completion.questionName} (+{completion.points} points)
+                                                </p>
+                                                <p className="text-xs text-muted-foreground">
+                                                    {completion.competitionName}
                                                 </p>
                                             </div>
                                             <time className="text-sm text-muted-foreground">

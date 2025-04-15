@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
   Card,
   CardContent,
@@ -14,7 +14,8 @@ import {
   Server,
   Database,
   Trophy,
-  RefreshCw
+  RefreshCw,
+  LucideIcon
 } from "lucide-react";
 import { SystemHealthCard } from "@/components/dashboard/system-health-card";
 import { ResourceUsageChart } from "@/components/dashboard/resource-usage-chart";
@@ -54,6 +55,21 @@ interface SystemStatus {
       expired: number;
     };
   };
+  monitoring: {
+    status: string;
+    uptime: string;
+    lastRestart: string;
+    version: string;
+    components?: {
+      prometheus: string;
+      nodeExporter: string;
+    };
+    metrics?: {
+      totalSeries: number;
+      scrapeTargets: number;
+      activeTargets: number;
+    };
+  };
   challenges: {
     total: number;
     active: number;
@@ -84,16 +100,51 @@ interface DashboardClientProps {
   systemStatus: SystemStatus;
 }
 
+// Memoize SystemCard component to prevent unnecessary re-renders
+const SystemCard = React.memo(({ 
+  title, 
+  status, 
+  icon, 
+  details, 
+  onClick 
+}: { 
+  title: string;
+  status: HealthStatus;
+  icon: LucideIcon;
+  details: { label: string; value: string }[];
+  onClick: () => void;
+}) => (
+  <div
+    onClick={onClick}
+    className="cursor-pointer transition-transform hover:scale-[1.02]"
+  >
+    <SystemHealthCard
+      title={title}
+      status={status}
+      icon={icon}
+      details={details}
+    />
+  </div>
+));
+
+SystemCard.displayName = 'SystemCard';
+
 export function DashboardClient({ systemStatus: initialSystemStatus }: DashboardClientProps) {
   const router = useRouter();
   const [systemStatus, setSystemStatus] = useState<SystemStatus>(initialSystemStatus);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null);
   const [formattedTime, setFormattedTime] = useState<string>('');
+  
+  // Use a ref for the interval to avoid recreating it on each render
+  const refreshIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  // Use a ref for the API base URL to avoid recalculations
+  const baseUrlRef = useRef<string>('');
 
-  // Initialize lastRefreshed only on client-side to avoid hydration mismatch
+  // Initialize lastRefreshed and baseUrl only on client-side
   useEffect(() => {
     setLastRefreshed(new Date());
+    baseUrlRef.current = process.env.NEXT_PUBLIC_API_URL || window.location.origin;
   }, []);
 
   // Update formatted time whenever lastRefreshed changes
@@ -104,17 +155,18 @@ export function DashboardClient({ systemStatus: initialSystemStatus }: Dashboard
   }, [lastRefreshed]);
 
   // Function to fetch updated system health data
-  const fetchSystemHealth = async () => {
+  const fetchSystemHealth = useCallback(async () => {
+    if (isRefreshing) return; // Prevent multiple simultaneous requests
+    
     try {
       setIsRefreshing(true);
-      const baseUrl = process.env.NEXT_PUBLIC_API_URL || window.location.origin;
-      const response = await fetch(`${baseUrl}/api/system-health`, {
+      const response = await fetch(`${baseUrlRef.current}/api/system-health`, {
         cache: 'no-store',
         credentials: 'include',
       });
 
       if (!response.ok) {
-        throw new Error('Failed to fetch system health data');
+        throw new Error(`Failed to fetch system health data: ${response.status} ${response.statusText}`);
       }
 
       const data = await response.json();
@@ -125,36 +177,69 @@ export function DashboardClient({ systemStatus: initialSystemStatus }: Dashboard
     } finally {
       setIsRefreshing(false);
     }
-  };
+  }, [isRefreshing]);
 
   // Set up automatic refresh every 30 seconds
   useEffect(() => {
-    const refreshInterval = setInterval(() => {
+    // Clear any existing interval
+    if (refreshIntervalRef.current) {
+      clearInterval(refreshIntervalRef.current);
+    }
+    
+    // Create a new interval
+    refreshIntervalRef.current = setInterval(() => {
       fetchSystemHealth();
     }, 30000); // 30 seconds
 
     // Clean up interval on component unmount
-    return () => clearInterval(refreshInterval);
-  }, []);
+    return () => {
+      if (refreshIntervalRef.current) {
+        clearInterval(refreshIntervalRef.current);
+        refreshIntervalRef.current = null;
+      }
+    };
+  }, [fetchSystemHealth]);
 
   // Manual refresh handler
-  const handleManualRefresh = () => {
+  const handleManualRefresh = useCallback(() => {
     fetchSystemHealth();
-  };
+  }, [fetchSystemHealth]);
 
-  // Convert string status to the required HealthStatus type
-  const getHealthStatus = (status: string): HealthStatus => {
+  // Convert string status to the required HealthStatus type - memoize since it's a pure function
+  const getHealthStatus = useCallback((status: string): HealthStatus => {
     if (status === "healthy" || status === "warning" || status === "error") {
       return status as HealthStatus;
     }
     // Default to error if the status is not one of the expected values
     return "error";
-  };
+  }, []);
 
   // Handle click on system health cards
-  const handleCardClick = (component: string) => {
-    router.push(`/dashboard/system/${component}`);
-  };
+  const handleSystemNavigate = useCallback((component: string) => {
+    setIsRefreshing(true);
+    router.push(`/admin/system/${component}`);
+  }, [router]);
+
+  // Memoize card click handlers to prevent recreating on each render
+  const handleInstanceManagerClick = useCallback(() => handleSystemNavigate('instance-manager'), [handleSystemNavigate]);
+  const handleDatabaseClick = useCallback(() => handleSystemNavigate('database'), [handleSystemNavigate]);
+  const handleMonitoringClick = useCallback(() => handleSystemNavigate('monitoring'), [handleSystemNavigate]);
+
+  // Memoize the card details to avoid recalculation on each render
+  const instanceManagerDetails = useMemo(() => [
+    { label: "Uptime", value: systemStatus.ingress.uptime },
+    { label: "Version", value: systemStatus.ingress.version }
+  ], [systemStatus.ingress.uptime, systemStatus.ingress.version]);
+
+  const databaseDetails = useMemo(() => [
+    { label: "Uptime", value: systemStatus.database.uptime },
+    { label: "Connections", value: systemStatus.database.connections?.toString() || "N/A" }
+  ], [systemStatus.database.uptime, systemStatus.database.connections]);
+
+  const monitoringDetails = useMemo(() => [
+    { label: "Uptime", value: systemStatus.monitoring?.uptime || "N/A" },
+    { label: "Metrics", value: systemStatus.monitoring?.metrics?.totalSeries?.toString() || "N/A" }
+  ], [systemStatus.monitoring?.uptime, systemStatus.monitoring?.metrics?.totalSeries]);
 
   return (
     <div className="flex-1 space-y-4 p-4 pt-6 overflow-auto max-h-[calc(100vh-4rem)]">
@@ -185,53 +270,36 @@ export function DashboardClient({ systemStatus: initialSystemStatus }: Dashboard
 
         <TabsContent value="overview" className="space-y-4">
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-            <div
-              onClick={() => handleCardClick('instance-manager')}
-              className="cursor-pointer transition-transform hover:scale-[1.02]"
-            >
-              <SystemHealthCard
-                title="Instance Manager"
-                status={getHealthStatus(systemStatus.ingress.status)}
-                icon={Server}
-                details={[
-                  { label: "Uptime", value: systemStatus.ingress.uptime },
-                  { label: "Version", value: systemStatus.ingress.version }
-                ]}
-              />
-            </div>
+            <SystemCard
+              title="Instance Manager"
+              status={getHealthStatus(systemStatus.ingress.status)}
+              icon={Server}
+              details={instanceManagerDetails}
+              onClick={handleInstanceManagerClick}
+            />
+
+            <SystemCard
+              title="Database"
+              status={getHealthStatus(systemStatus.database.status)}
+              icon={Database}
+              details={databaseDetails}
+              onClick={handleDatabaseClick}
+            />
+
+            <SystemCard
+              title="Monitoring"
+              status={getHealthStatus(systemStatus.monitoring?.status || "error")}
+              icon={Activity}
+              details={monitoringDetails}
+              onClick={handleMonitoringClick}
+            />
 
             <div
-              onClick={() => handleCardClick('database')}
-              className="cursor-pointer transition-transform hover:scale-[1.02]"
-            >
-              <SystemHealthCard
-                title="Database"
-                status={getHealthStatus(systemStatus.database.status)}
-                icon={Database}
-                details={[
-                  { label: "Uptime", value: systemStatus.database.uptime },
-                  { label: "Connections", value: systemStatus.database.connections?.toString() || "N/A" }
-                ]}
-              />
-            </div>
-
-            <div
-              onClick={() => handleCardClick('cert-manager')}
-              className="cursor-pointer transition-transform hover:scale-[1.02]"
-            >
-              <SystemHealthCard
-                title="Cert Manager"
-                status={getHealthStatus(systemStatus.certManager.status)}
-                icon={Activity}
-                details={[
-                  { label: "Uptime", value: systemStatus.certManager.uptime },
-                  { label: "Valid Certs", value: systemStatus.certManager.certificates?.valid.toString() || "N/A" }
-                ]}
-              />
-            </div>
-
-            <div
-              onClick={() => router.push('/dashboard/challenge')}
+              onClick={() => {
+                // Add loading state before navigation for challenge instances
+                setIsRefreshing(true);
+                router.push('/admin/challenge');
+              }}
               className="cursor-pointer transition-transform hover:scale-[1.02]"
             >
               <Card>

@@ -1,0 +1,25 @@
+# Harbor configuration override to enable anonymous access
+# Apply with: kubectl apply -f enable-anonymous-access.yaml -n harbor
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: harbor-core-config-override
+  namespace: harbor
+data:
+  ALLOW_ANONYMOUS_ACCESS: "true"
+  AUTH_MODE: "db_auth"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: harbor-core
+  namespace: harbor
+spec:
+  template:
+    spec:
+      containers:
+      - name: core
+        env:
+        - name: ALLOW_ANONYMOUS_ACCESS
+          value: "true" 

@@ -214,6 +214,474 @@ spec:
 };
 
 /**
+ * Installs PgBouncer in the Kubernetes cluster
+ * @param {Object} params - Parameters
+ * @param {Function} params.addLog - Function to add logs
+ * @param {Function} params.setLogs - Function to set logs
+ * @param {Object} params.database - Database configuration
+ * @returns {Promise<void>}
+ */
+const installPgBouncer = async ({ addLog, setLogs, database }) => {
+  addLog('Installing PgBouncer connection pooler...');
+  setLogs(prev => [...prev, 'Installing PgBouncer connection pooler...']);
+
+  // Clean up any existing PgBouncer resources
+  addLog('Cleaning up existing PgBouncer resources...');
+  try {
+    // Delete PgBouncer deployment and service
+    await window.api.executeCommand('kubectl', ['delete', 'deployment', 'pgbouncer', '--ignore-not-found=true']);
+    await window.api.executeCommand('kubectl', ['delete', 'service', 'pgbouncer', '--ignore-not-found=true']);
+    
+    // Delete PgBouncer ConfigMap and Secret
+    await window.api.executeCommand('kubectl', ['delete', 'configmap', 'pgbouncer-config', '--ignore-not-found=true']);
+    await window.api.executeCommand('kubectl', ['delete', 'secret', 'pgbouncer-admin-credentials', '--ignore-not-found=true']);
+    
+    addLog('Existing PgBouncer resources cleaned up.');
+  } catch (error) {
+    addLog(`Warning: Error during cleanup of existing PgBouncer resources: ${error.message}`);
+    addLog('Continuing with installation...');
+  }
+
+  // Create a ConfigMap with PgBouncer configuration
+  addLog('Creating PgBouncer configuration...');
+  const pgbouncerConfigMapYaml = `
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: pgbouncer-config
+data:
+  pgbouncer.ini: |
+    [databases]
+    * = host=postgres port=5432
+
+    [pgbouncer]
+    listen_addr = 0.0.0.0
+    listen_port = 6432
+    auth_type = trust
+    auth_file = /bitnami/pgbouncer/conf/userlist.txt
+    pool_mode = transaction
+    max_client_conn = 2000
+    default_pool_size = 100
+    min_pool_size = 20
+    reserve_pool_size = 20
+    reserve_pool_timeout = 3
+    max_db_connections = 150
+    max_user_connections = 100
+    server_reset_query = DISCARD ALL
+    ignore_startup_parameters = extra_float_digits
+    admin_users = postgres
+    stats_users = postgres
+    log_connections = 0
+    log_disconnections = 0
+    application_name_add_host = 1
+    tcp_keepalive = 1
+    tcp_keepidle = 60
+    tcp_keepintvl = 30
+    tcp_keepcnt = 9
+
+  userlist.txt: |
+    "postgres" "postgres"
+
+  pgbouncer.pools.ini: |
+    [pools]
+    edurange_dashboard_prod = host=postgres dbname=edurange pool_size=50 min_pool_size=10
+    edurange_webos_prod = host=postgres dbname=edurange pool_size=50 min_pool_size=10
+    edurange_instance_manager_prod = host=postgres dbname=edurange pool_size=50 min_pool_size=10
+    edurange_monitoring_service_prod = host=postgres dbname=edurange pool_size=25 min_pool_size=5
+`;
+
+  // Apply the ConfigMap
+  const configMapResult = await window.api.applyManifestFromString(pgbouncerConfigMapYaml);
+  if (configMapResult.code !== 0) {
+    throw new Error(`Failed to create PgBouncer ConfigMap: ${configMapResult.stderr}`);
+  }
+
+  addLog('PgBouncer configuration ConfigMap created successfully.');
+
+  // Create a Secret with PgBouncer admin credentials for the instance-manager to use
+  addLog('Creating PgBouncer admin credentials secret...');
+  
+  // Initialize default values from database object
+  let username = 'postgres';
+  let password = database.password || 'postgres';
+  
+  // Try to get the actual values from the Kubernetes secret if possible
+  try {
+    // Get the username from database secrets using shell command
+    const secretsCommand = await window.api.executeCommand('sh', [
+      '-c',
+      'kubectl get secret database-secrets -o jsonpath="{.data.postgres-user}" | base64 --decode'
+    ]);
+    
+    if (secretsCommand.code === 0 && secretsCommand.stdout) {
+      username = secretsCommand.stdout.trim() || username;
+      addLog('Retrieved username from database-secrets.');
+    } else {
+      addLog('Could not get username from database-secrets. Using default.');
+    }
+    
+    // Get the password from database secrets using shell command
+    const passwordCommand = await window.api.executeCommand('sh', [
+      '-c',
+      'kubectl get secret database-secrets -o jsonpath="{.data.postgres-password}" | base64 --decode'
+    ]);
+    
+    if (passwordCommand.code === 0 && passwordCommand.stdout) {
+      password = passwordCommand.stdout.trim() || password;
+      addLog('Retrieved password from database-secrets.');
+    } else {
+      addLog('Could not get password from database-secrets. Using provided password.');
+    }
+  } catch (error) {
+    addLog(`Warning: Error getting credentials from Kubernetes secret: ${error.message}`);
+    addLog('Using default or provided credentials instead.');
+    // We'll use the default values set above
+  }
+  
+  // Create base64 encoded values for the secret using imported btoa function
+  const usernameBase64 = btoa(username);
+  const passwordBase64 = btoa(password);
+  
+  const pgbouncerAdminSecretYaml = `
+apiVersion: v1
+kind: Secret
+metadata:
+  name: pgbouncer-admin-credentials
+type: Opaque
+data:
+  username: ${usernameBase64}
+  password: ${passwordBase64}
+`;
+
+  // Apply the Secret
+  const secretResult = await window.api.applyManifestFromString(pgbouncerAdminSecretYaml);
+  if (secretResult.code !== 0) {
+    throw new Error(`Failed to create PgBouncer admin credentials secret: ${secretResult.stderr}`);
+  }
+
+  addLog('PgBouncer admin credentials secret created successfully.');
+
+  // Create PgBouncer Deployment
+  addLog('Creating PgBouncer Deployment...');
+  const pgbouncerDeploymentYaml = `
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pgbouncer
+  labels:
+    app: pgbouncer
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: pgbouncer
+  template:
+    metadata:
+      labels:
+        app: pgbouncer
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "6432"
+    spec:
+      containers:
+      - name: pgbouncer
+        image: bitnami/pgbouncer:latest
+        ports:
+        - containerPort: 6432
+        env:
+        - name: POSTGRESQL_HOST
+          value: postgres
+        - name: POSTGRESQL_PORT
+          value: "5432"
+        - name: POSTGRESQL_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: database-secrets
+              key: postgres-user
+        - name: POSTGRESQL_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: database-secrets
+              key: postgres-password
+        - name: POSTGRESQL_DATABASE
+          valueFrom:
+            secretKeyRef:
+              name: database-secrets
+              key: postgres-name
+        - name: PGBOUNCER_PORT
+          value: "6432"
+        - name: PGBOUNCER_SET_DATABASE_USER
+          value: "yes"
+        volumeMounts:
+        - name: pgbouncer-config
+          mountPath: /bitnami/pgbouncer/conf/pgbouncer.ini
+          subPath: pgbouncer.ini
+        - name: pgbouncer-config
+          mountPath: /bitnami/pgbouncer/conf/userlist.txt
+          subPath: userlist.txt
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "1"
+        # Use a simple TCP check instead of pg_isready
+        readinessProbe:
+          tcpSocket:
+            port: 6432
+          initialDelaySeconds: 15
+          periodSeconds: 10
+        livenessProbe:
+          tcpSocket:
+            port: 6432
+          initialDelaySeconds: 30
+          periodSeconds: 15
+      volumes:
+      - name: pgbouncer-config
+        configMap:
+          name: pgbouncer-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: pgbouncer
+  labels:
+    app: pgbouncer
+spec:
+  selector:
+    app: pgbouncer
+  ports:
+    - protocol: TCP
+      port: 6432
+      targetPort: 6432
+  type: ClusterIP
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: pgbouncer-hpa
+  labels:
+    app: pgbouncer
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: pgbouncer
+  minReplicas: 1
+  maxReplicas: 5
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+    scaleUp:
+      stabilizationWindowSeconds: 60
+`;
+
+  // Apply the Deployment and HPA
+  const deploymentResult = await window.api.applyManifestFromString(pgbouncerDeploymentYaml);
+  if (deploymentResult.code !== 0) {
+    throw new Error(`Failed to create PgBouncer deployment and HPA: ${deploymentResult.stderr}`);
+  }
+
+  addLog('PgBouncer deployment and HPA created successfully.');
+
+  // Wait for the PgBouncer pod to be ready
+  addLog('Waiting for PgBouncer pod to be ready...');
+  let podReady = false;
+  let retryCount = 0;
+  const maxRetries = 10;
+
+  while (!podReady && retryCount < maxRetries) {
+    const podStatusResult = await window.api.executeCommand('kubectl', [
+      'get',
+      'pods',
+      '-l',
+      'app=pgbouncer',
+      '-o',
+      'jsonpath={.items[0].status.phase}'
+    ]);
+
+    if (podStatusResult.code === 0 && podStatusResult.stdout === 'Running') {
+      // Check if the container is ready
+      const containerReadyResult = await window.api.executeCommand('kubectl', [
+        'get',
+        'pods',
+        '-l',
+        'app=pgbouncer',
+        '-o',
+        'jsonpath={.items[0].status.containerStatuses[0].ready}'
+      ]);
+
+      if (containerReadyResult.code === 0 && containerReadyResult.stdout === 'true') {
+        podReady = true;
+        addLog('PgBouncer pod is now ready.');
+      }
+    }
+
+    if (!podReady) {
+      retryCount++;
+      addLog(`Waiting for PgBouncer pod to be ready (attempt ${retryCount}/${maxRetries})...`);
+      await new Promise(resolve => setTimeout(resolve, 5000)); // Wait 5 seconds before checking again
+    }
+  }
+
+  if (!podReady) {
+    addLog('Warning: PgBouncer pod not ready after maximum retries. Check Kubernetes events and logs for issues.');
+  }
+
+  // Update the database-secrets with a new direct connection URL and update the standard URL to use PgBouncer
+  addLog('Updating database connection secrets to use PgBouncer...');
+  
+  // Get current secrets
+  const getCurrentSecretsCmd = await window.api.executeCommand('kubectl', [
+    'get',
+    'secret',
+    'database-secrets',
+    '-o',
+    'json'
+  ]);
+
+  if (getCurrentSecretsCmd.code !== 0) {
+    throw new Error(`Failed to get database secrets: ${getCurrentSecretsCmd.stderr}`);
+  }
+
+  const secrets = JSON.parse(getCurrentSecretsCmd.stdout);
+  
+  // Decode current database URL
+  const encodedDbUrl = secrets.data['database-url'];
+  const dbUrl = atob(encodedDbUrl);
+  
+  // Create a direct connection URL (pointing directly to PostgreSQL) based on the current URL
+  const directDbUrl = dbUrl;
+  
+  // Create a new connection URL that points to PgBouncer
+  // Replace the host (postgres) with pgbouncer and the port (5432) with 6432
+  const pgbouncerDbUrl = dbUrl.replace(/postgresql:\/\/([^:]+):([^@]+)@postgres:5432\/(.+)/, 
+                                      'postgresql://$1:$2@pgbouncer:6432/$3');
+  
+  // Encode the new URLs
+  const encodedDirectDbUrl = btoa(directDbUrl);
+  const encodedPgbouncerDbUrl = btoa(pgbouncerDbUrl);
+  
+  // Update the database-secrets
+  const patchSecretYaml = `{"data":{"database-url":"${encodedPgbouncerDbUrl}","direct-database-url":"${encodedDirectDbUrl}"}}`;
+
+  // Apply the patch
+  const patchResult = await window.api.executeCommand('kubectl', [
+    'patch',
+    'secret',
+    'database-secrets',
+    '-p',
+    `'${patchSecretYaml}'`
+  ]);
+
+  if (patchResult.code !== 0) {
+    throw new Error(`Failed to update database secrets for PgBouncer: ${patchResult.stderr}`);
+  }
+
+  addLog('Database connection secrets updated to use PgBouncer.');
+  
+  // Check if dashboard-secrets exists and update it too
+  const checkDashboardSecretsCmd = await window.api.executeCommand('kubectl', [
+    'get',
+    'secret',
+    'dashboard-secrets',
+    '--ignore-not-found',
+    '-o',
+    'name'
+  ]);
+
+  if (checkDashboardSecretsCmd.code === 0 && checkDashboardSecretsCmd.stdout) {
+    addLog('Updating dashboard secrets to use PgBouncer...');
+    
+    // Get current dashboard secrets
+    const getDashboardSecretsCmd = await window.api.executeCommand('kubectl', [
+      'get',
+      'secret',
+      'dashboard-secrets',
+      '-o',
+      'json'
+    ]);
+
+    if (getDashboardSecretsCmd.code === 0) {
+      const dashboardSecrets = JSON.parse(getDashboardSecretsCmd.stdout);
+      
+      // Check if DATABASE_URL exists in dashboard-secrets
+      if (dashboardSecrets.data['DATABASE_URL']) {
+        // Decode current database URL
+        const encodedDashboardDbUrl = dashboardSecrets.data['DATABASE_URL'];
+        const dashboardDbUrl = atob(encodedDashboardDbUrl);
+        
+        // Create a new connection URL that points to PgBouncer
+        const pgbouncerDashboardDbUrl = dashboardDbUrl.replace(/postgresql:\/\/([^:]+):([^@]+)@postgres:5432\/(.+)/, 
+                                          'postgresql://$1:$2@pgbouncer:6432/$3');
+        
+        // Encode the new URL
+        const encodedPgbouncerDashboardDbUrl = btoa(pgbouncerDashboardDbUrl);
+        
+        // Update the dashboard-secrets
+        const patchDashboardSecretYaml = `{"data":{"DATABASE_URL":"${encodedPgbouncerDashboardDbUrl}"}}`;
+
+        // Apply the patch
+        const patchDashboardResult = await window.api.executeCommand('kubectl', [
+          'patch',
+          'secret',
+          'dashboard-secrets',
+          '-p',
+          `'${patchDashboardSecretYaml}'`
+        ]);
+
+        if (patchDashboardResult.code === 0) {
+          addLog('Dashboard connection secrets updated to use PgBouncer.');
+        } else {
+          addLog(`Warning: Failed to update dashboard secrets for PgBouncer: ${patchDashboardResult.stderr}`);
+        }
+      }
+    }
+  }
+
+  // Verify HPA is working correctly
+  addLog('Verifying PgBouncer HPA configuration...');
+  
+  const hpaStatusCmd = await window.api.executeCommand('kubectl', [
+    'get',
+    'hpa',
+    'pgbouncer-hpa',
+    '-o',
+    'wide'
+  ]);
+  
+  if (hpaStatusCmd.code === 0) {
+    addLog('✅ PgBouncer HPA deployed successfully!');
+    addLog(`HPA Status: ${hpaStatusCmd.stdout}`);
+    addLog('The PgBouncer HPA will automatically scale from 1-5 pods based on:');
+    addLog('- CPU Utilization: Will scale up when average CPU reaches 70%');
+    addLog('- Memory Utilization: Will scale up when average memory reaches 80%');
+    addLog('- Scale Down Delay: 5 minutes (stabilization window)');
+    addLog('- Scale Up Delay: 1 minute (stabilization window)');
+  } else {
+    addLog('⚠️ PgBouncer HPA verification failed. The HPA might not be working correctly.');
+    addLog('You can check the HPA status manually with: kubectl get hpa pgbouncer-hpa');
+  }
+
+  addLog('PgBouncer installation with autoscaling completed successfully.');
+  return true;
+};
+
+/**
  * Installs PostgreSQL in the Kubernetes cluster
  * @param {Object} params - Parameters
  * @param {Function} params.addLog - Function to add logs
@@ -221,7 +689,7 @@ spec:
  * @param {boolean} params.enableStorageCleanup - Whether to enable storage cleanup
  * @returns {Promise<void>}
  */
-const installPostgresInCluster = async ({ addLog, setLogs, enableStorageCleanup }) => {
+const installPostgresInCluster = async ({ addLog, setLogs, enableStorageCleanup, database }) => {
   // Install PostgreSQL in the cluster
   addLog('Installing PostgreSQL in the cluster...');
   setLogs(prev => [...prev, 'Installing PostgreSQL in the cluster...']);
@@ -381,7 +849,7 @@ const installPostgresInCluster = async ({ addLog, setLogs, enableStorageCleanup 
           'pvc',
           'postgres-pvc',
           '-p',
-          '{"metadata":{"finalizers":null}}',
+          `'{"metadata":{"finalizers":null}}'`,
           '--type=merge'
         ]);
 
@@ -436,7 +904,7 @@ const installPostgresInCluster = async ({ addLog, setLogs, enableStorageCleanup 
               'pv',
               pv.metadata.name,
               '-p',
-              '{"metadata":{"finalizers":null}}',
+              `'{"metadata":{"finalizers":null}}'`,
               '--type=merge'
             ]);
 
@@ -525,7 +993,7 @@ spec:
     - ReadWriteOnce
   resources:
     requests:
-      storage: 1Gi
+      storage: 20Gi
   storageClassName: ${storageClassName}
 `;
 
@@ -592,7 +1060,7 @@ metadata:
   name: postgres-pv
 spec:
   capacity:
-    storage: 10Gi
+    storage: 20Gi
   accessModes:
     - ReadWriteOnce
   persistentVolumeReclaimPolicy: Retain
@@ -609,7 +1077,7 @@ spec:
     - ReadWriteOnce
   resources:
     requests:
-      storage: 10Gi
+      storage: 20Gi
   storageClassName: ""
   volumeName: postgres-pv
 `;
@@ -625,7 +1093,7 @@ spec:
     - ReadWriteOnce
   resources:
     requests:
-      storage: 10Gi
+      storage: 20Gi
   storageClassName: ${storageClassName}
 `;
     }
@@ -643,7 +1111,7 @@ metadata:
   name: postgres-pv
 spec:
   capacity:
-    storage: 10Gi
+    storage: 20Gi
   accessModes:
     - ReadWriteOnce
   persistentVolumeReclaimPolicy: Retain
@@ -660,7 +1128,7 @@ spec:
     - ReadWriteOnce
   resources:
     requests:
-      storage: 10Gi
+      storage: 20Gi
   storageClassName: ""
   volumeName: postgres-pv
 `;
@@ -765,8 +1233,11 @@ data:
     host    all             all             all                     trust
   postgresql.conf: |
     listen_addresses = '*'
-    max_connections = 100
-    shared_buffers = 128MB
+    max_connections = 200
+    shared_buffers = 256MB
+    work_mem = 8MB
+    maintenance_work_mem = 64MB
+    effective_cache_size = 768MB
     dynamic_shared_memory_type = posix
     max_wal_size = 1GB
     min_wal_size = 80MB
@@ -887,11 +1358,11 @@ spec:
           value: /var/lib/postgresql/data/pgdata
         resources:
           requests:
-            memory: "256Mi"
-            cpu: "100m"
+            memory: "512Mi"
+            cpu: "250m"
           limits:
             memory: "1Gi"
-            cpu: "500m"
+            cpu: "1"
         volumeMounts:
         - mountPath: /var/lib/postgresql/data
           name: postgres-storage
@@ -1051,6 +1522,15 @@ spec:
 
   addLog('PostgreSQL is now running and ready to accept connections.');
   setLogs(prev => [...prev, 'PostgreSQL is now running and ready to accept connections.']);
+
+  // After PostgreSQL is successfully installed, install PgBouncer
+  addLog('PostgreSQL installation completed. Now setting up connection pooling with PgBouncer...');
+  setLogs(prev => [...prev, 'PostgreSQL installation completed. Now setting up connection pooling with PgBouncer...']);
+  
+  await installPgBouncer({ addLog, setLogs, database });
+  
+  addLog('Database setup with connection pooling completed successfully.');
+  setLogs(prev => [...prev, 'Database setup with connection pooling completed successfully.']);
 };
 
 /**
@@ -1503,7 +1983,7 @@ data:
         'secret',
         'database-secrets',
         '-p',
-        `{"data":{"database-url":"${encodedCorrectedUrl}"}}`
+        `'{"data":{"database-url":"${encodedCorrectedUrl}"}}'`
       ]);
 
       if (updateDbSecretsCmd.code !== 0) {
@@ -1519,7 +1999,7 @@ data:
 
     if (!database.useExistingDatabase) {
       // Install PostgreSQL in the cluster
-      await installPostgresInCluster({ addLog, setLogs, enableStorageCleanup: database.enableStorageCleanup });
+      await installPostgresInCluster({ addLog, setLogs, enableStorageCleanup: database.enableStorageCleanup, database });
 
       // Wait for PostgreSQL pod to be ready
       addLog('Waiting for PostgreSQL pod to be ready...');

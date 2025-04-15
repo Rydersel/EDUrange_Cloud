@@ -1,0 +1,88 @@
+{
+  "$schema": "https://raw.githubusercontent.com/EDURange/schema/main/schemas/cdf.schema.json",
+  "metadata": {
+    "id": "hidden-attributes",
+    "pack_id": "source-code-secrets",
+    "name": "Hidden Attributes",
+    "version": "1.0.0",
+    "description": "Find a hidden flag in HTML element attributes. This challenge teaches you how to inspect HTML elements and their attributes to find information that isn't visible when viewing the page normally.",
+    "challenge_type": "web",
+    "difficulty": "beginner",
+    "author": "EDURange Team"
+  },
+  "components": [
+    {
+      "type": "container",
+      "id": "webserver-2",
+      "config": {
+        "image": "registry.edurange.cloud/challenges/source-code-secrets-2",
+        "ports": [
+          {
+            "containerPort": 80,
+            "protocol": "TCP"
+          }
+        ],
+        "resources": {
+          "cpu_limit": "500m",
+          "mem_limit": "512Mi"
+        }
+      }
+    },
+    {
+      "type": "webosApp",
+      "id": "chrome",
+      "config": {
+        "title": "Browser",
+        "icon": "./icons/browser.svg",
+        "width": 70,
+        "height": 80,
+        "screen": "displayChrome",
+        "disabled": false,
+        "favourite": true,
+        "desktop_shortcut": true,
+        "launch_on_startup": false,
+        "app_type": "browser"
+      }
+    },
+    {
+      "type": "webosApp",
+      "id": "web_chal",
+      "config": {
+        "title": "Web Challenge",
+        "icon": "./icons/browser.svg",
+        "width": 70,
+        "height": 80,
+        "screen": "displayWebChal",
+        "disabled": false,
+        "favourite": true,
+        "desktop_shortcut": true,
+        "launch_on_startup": true,
+        "app_type": "custom"
+      }
+    },
+    {
+      "type": "question",
+      "id": "q1_flag",
+      "config": {
+        "text": "What is the flag hidden in the HTML attribute?",
+        "type": "flag",
+        "points": 15,
+        "order": 0
+      }
+    },
+    {
+      "type": "question",
+      "id": "q2_attribute",
+      "config": {
+        "text": "What HTML attribute contains the hidden flag?",
+        "type": "text",
+        "points": 5,
+        "answer": "data-flag",
+        "order": 1
+      }
+    }
+  ],
+  "typeConfig": {
+    "challengeImage": "registry.edurange.cloud/challenges/source-code-secrets-3"
+  }
+}

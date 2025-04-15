@@ -80,7 +80,7 @@ describe('Competition Management E2E Tests', () => {
         await page.waitForNavigation({ waitUntil: 'networkidle0' });
 
         // Verify we're on the competitions page
-        expect(page.url()).toContain('/dashboard/competitions');
+        expect(page.url()).toContain('/admin/competitions');
       } else {
         // If the link doesn't exist with that test ID, try finding it by text content
         console.log('Competition link with data-testid not found, trying to find by text content');

@@ -1,0 +1,443 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "EDURange Challenge Definition Format (CDF)",
+  "description": "Schema for defining EDURange cybersecurity challenges.",
+  "type": "object",
+  "required": [
+    "metadata",
+    "components"
+  ],
+  "properties": {
+    "metadata": {
+      "$ref": "#/definitions/metadata"
+    },
+    "components": {
+      "type": "array",
+      "description": "Functional parts of the challenge environment.",
+      "items": {
+        "$ref": "#/definitions/component"
+      },
+      "minItems": 1
+    },
+    "typeConfig": {
+      "type": "object",
+      "description": "Configuration specific to this challenge type. Values override defaults in the Challenge Type Definition.",
+      "additionalProperties": true
+    },
+    "variables": {
+      "type": "object",
+      "description": "Key-value pairs for dynamic content substitution.",
+      "additionalProperties": true
+    },
+    "templates": {
+      "type": "array",
+      "description": "Reusable content snippets.",
+      "items": {
+        "$ref": "#/definitions/template"
+      }
+    }
+  },
+  "definitions": {
+    "metadata": {
+      "type": "object",
+      "description": "Essential information about the challenge.",
+      "required": [
+        "name",
+        "version",
+        "challenge_type"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Unique name for the challenge."
+        },
+        "version": {
+          "type": "string",
+          "description": "Version string (e.g., \"1.0.0\"). Semantic versioning recommended."
+        },
+        "description": {
+          "type": "string",
+          "description": "Brief description of the challenge."
+        },
+        "challenge_type": {
+          "type": "string",
+          "description": "Identifier for the challenge type.",
+          "enum": ["fullOS", "web", "container", "metasploit", "sql-injection"]
+        },
+        "difficulty": {
+          "type": "string",
+          "description": "Difficulty level.",
+          "enum": [
+            "beginner",
+            "intermediate",
+            "advanced",
+            "expert"
+          ]
+        },
+        "estimated_time": {
+          "type": "number",
+          "description": "Estimated time to complete in minutes."
+        },
+        "learning_objectives": {
+          "type": "array",
+          "description": "List of learning goals.",
+          "items": {
+            "type": "string"
+          }
+        },
+        "pack_id": {
+          "type": "string",
+          "description": "Identifier of the CDF Pack this challenge belongs to."
+        },
+        "author": {
+          "type": "string",
+          "description": "Author or creator of the challenge."
+        },
+        "license": {
+          "type": "string",
+          "description": "License information (e.g., \"MIT\", \"CC-BY-SA-4.0\")."
+        },
+        "tags": {
+          "type": "array",
+          "description": "List of tags for categorizing challenges.",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "component": {
+      "type": "object",
+      "description": "A functional part of the challenge (e.g., container, app, question).",
+      "required": [
+        "type",
+        "id",
+        "config"
+      ],
+      "properties": {
+        "type": {
+          "type": "string",
+          "description": "Type identifier for the component.",
+          "enum": ["container", "webosApp", "question", "configMap", "secret"]
+        },
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for this component within the challenge."
+        },
+        "config": {
+          "type": "object",
+          "description": "Configuration specific to the component type."
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "type": { "enum": ["container"] }
+            }
+          },
+          "then": {
+            "properties": {
+              "config": { "$ref": "#/definitions/containerConfig" }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": { "enum": ["webosApp"] }
+            }
+          },
+          "then": {
+            "properties": {
+              "config": { "$ref": "#/definitions/webosAppConfig" }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": { "enum": ["question"] }
+            }
+          },
+          "then": {
+            "properties": {
+              "config": { "$ref": "#/definitions/questionConfig" }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": { "enum": ["configMap"] }
+            }
+          },
+          "then": {
+            "properties": {
+              "config": { "$ref": "#/definitions/configMapConfig" }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": { "enum": ["secret"] }
+            }
+          },
+          "then": {
+            "properties": {
+              "config": { "$ref": "#/definitions/secretConfig" }
+            }
+          }
+        }
+      ]
+    },
+    "containerConfig": {
+      "type": "object",
+      "required": ["image"],
+      "properties": {
+        "image": {
+          "type": "string",
+          "description": "Docker image name and tag."
+        },
+        "command": {
+          "type": "array",
+          "description": "Container command to run (overrides default entrypoint).",
+          "items": {
+            "type": "string"
+          }
+        },
+        "args": {
+          "type": "array",
+          "description": "Arguments to the entrypoint.",
+          "items": {
+            "type": "string"
+          }
+        },
+        "env": {
+          "type": "object",
+          "description": "Environment variables to set in the container.",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "ports": {
+          "type": "array",
+          "description": "Network ports to expose from the container.",
+          "items": {
+            "type": "object",
+            "required": ["containerPort"],
+            "properties": {
+              "containerPort": {
+                "type": "number",
+                "description": "Port number to expose from the container."
+              },
+              "hostPort": {
+                "type": "number",
+                "description": "Port number to map to on the host (optional)."
+              },
+              "protocol": {
+                "type": "string",
+                "description": "Protocol for this port mapping (TCP or UDP).",
+                "enum": ["TCP", "UDP"]
+              }
+            }
+          }
+        },
+        "volumes": {
+          "type": "array",
+          "description": "Storage volumes to attach to the container.",
+          "items": {
+            "type": "object",
+            "required": ["name", "mountPath"],
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "Name of the volume."
+              },
+              "mountPath": {
+                "type": "string",
+                "description": "Path to mount the volume inside the container."
+              }
+            }
+          }
+        },
+        "resources": {
+          "type": "object",
+          "description": "Resource requests and limits.",
+          "properties": {
+            "limits": {
+              "type": "object",
+              "description": "Resource limits for the container.",
+              "properties": {
+                "cpu": {
+                  "type": "string",
+                  "description": "CPU limit (e.g., '500m', '1')."
+                },
+                "memory": {
+                  "type": "string",
+                  "description": "Memory limit (e.g., '512Mi', '1Gi')."
+                }
+              }
+            },
+            "requests": {
+              "type": "object",
+              "description": "Resource requests for the container.",
+              "properties": {
+                "cpu": {
+                  "type": "string",
+                  "description": "CPU request (e.g., '250m', '0.5')."
+                },
+                "memory": {
+                  "type": "string",
+                  "description": "Memory request (e.g., '256Mi', '512Mi')."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "webosAppConfig": {
+      "type": "object",
+      "required": ["app_type"],
+      "properties": {
+        "app_type": {
+          "type": "string",
+          "description": "Type of WebOS application.",
+          "enum": ["terminal", "editor", "browser", "custom"]
+        },
+        "target": {
+          "type": "string",
+          "description": "Target container ID for terminal access."
+        },
+        "url": {
+          "type": "string",
+          "description": "URL for browser apps.",
+          "format": "uri"
+        },
+        "icon": {
+          "type": "string",
+          "description": "Icon identifier or path."
+        },
+        "position": {
+          "type": "object",
+          "description": "Window position and size.",
+          "properties": {
+            "x": {
+              "type": "number",
+              "description": "X coordinate."
+            },
+            "y": {
+              "type": "number",
+              "description": "Y coordinate."
+            },
+            "width": {
+              "type": "number",
+              "description": "Window width."
+            },
+            "height": {
+              "type": "number",
+              "description": "Window height."
+            }
+          }
+        }
+      }
+    },
+    "questionConfig": {
+      "type": "object",
+      "required": ["type", "text"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "description": "Type of question.",
+          "enum": ["text", "multiple_choice", "checkboxes", "flag"]
+        },
+        "text": {
+          "type": "string",
+          "description": "The question text."
+        },
+        "points": {
+          "type": "number",
+          "description": "Points awarded for correct answer."
+        },
+        "options": {
+          "type": "array",
+          "description": "Answer options for multiple-choice questions.",
+          "items": {
+            "type": "string"
+          }
+        },
+        "answer": {
+          "description": "The answer for non-flag questions.",
+          "oneOf": [
+            { "type": "string" },
+            { "type": "number" },
+            { 
+              "type": "array",
+              "items": {
+                "oneOf": [
+                  { "type": "string" },
+                  { "type": "number" }
+                ]
+              }
+            }
+          ]
+        },
+        "explanation": {
+          "type": "string",
+          "description": "Explanation of the answer (shown after response)."
+        }
+      }
+    },
+    "configMapConfig": {
+      "type": "object",
+      "required": ["data"],
+      "properties": {
+        "data": {
+          "type": "object",
+          "description": "Key-value pairs of configuration data.",
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "secretConfig": {
+      "type": "object",
+      "required": ["data"],
+      "properties": {
+        "data": {
+          "type": "object",
+          "description": "Key-value pairs of secret data.",
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "template": {
+      "type": "object",
+      "description": "A template for generating files or content.",
+      "required": [
+        "name",
+        "path",
+        "destination"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Unique name for the template."
+        },
+        "path": {
+          "type": "string",
+          "description": "Path to the template file within the pack."
+        },
+        "destination": {
+          "type": "string",
+          "description": "Destination path where the processed template should be placed."
+        }
+      }
+    }
+  }
+} 

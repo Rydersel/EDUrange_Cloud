@@ -1,24 +1,57 @@
-# docker buildx build -f dockerfile.sync --platform linux/amd64 -t registry.rydersel.cloud/database-sync . --push
+# docker buildx build -f dockerfile.sync --platform linux/amd64 -t registry.edurange.cloud/edurange/database-sync . --push
 
-# Use an official Python runtime as a parent image
+# Builder stage
+FROM python:3.10-slim AS builder
+
+# Set environment variables for better Python performance
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+# Set the working directory
+WORKDIR /build
+
+# Copy requirements first for better caching
+COPY requirements.txt .
+COPY schema.prisma .
+
+# Install build dependencies and requirements
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends gcc && \
+    pip install --no-cache-dir -r requirements.txt && \
+    # Generate Python Prisma client
+    prisma generate --generator client_py && \
+    # Ensure generated files are accessible
+    chmod -R a+rX /usr/local/lib/python3.10/site-packages/prisma/ && \
+    # Clean up
+    apt-get purge -y gcc && \
+    apt-get autoremove -y && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+# Final stage
 FROM python:3.10-slim
 
-# Set the working directory in the container
+# Set working directory to /app
 WORKDIR /app
 
-# Copy the sync directory contents into the container at /app
+# Set environment variables
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PYTHONMALLOC=default
+
+# Copy Python modules from builder stage
+COPY --from=builder /usr/local/lib/python3.10/site-packages /usr/local/lib/python3.10/site-packages
+COPY --from=builder /usr/local/bin/prisma /usr/local/bin/prisma
+COPY --from=builder /root/.cache/prisma-python/ /root/.cache/prisma-python/
+COPY --from=builder /build/schema.prisma .
+
+# Copy application code
 COPY sync/ .
 
-# Copy shared files into the container
-COPY .env .env
-COPY schema.prisma schema.prisma
-COPY requirements.txt requirements.txt
+# Copy environment variables
+COPY .env .
 
-# Install any needed packages specified in requirements.txt
-RUN pip install --no-cache-dir -r requirements.txt
-
-# Generate Python Prisma client
-RUN prisma generate --generator client_py
-
-# Run sync.py when the container launches
-CMD ["python", "sync.py"]
+# Run the application
+CMD ["python", "main.py"]

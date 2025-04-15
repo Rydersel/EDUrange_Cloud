@@ -3,6 +3,13 @@ import { getServerSession } from 'next-auth/next';
 import authConfig from '@/auth.config';
 import { prisma } from '@/lib/prisma';
 
+interface DailyChallenge {
+  name: string;
+  competition: string;
+  points: number;
+  type: string;
+}
+
 export async function GET(req: NextRequest) {
   try {
     // Check authentication
@@ -33,8 +40,8 @@ export async function GET(req: NextRequest) {
     const startDate = new Date(year, 0, 1); // January 1st of the requested year
     const endDate = new Date(year, 11, 31, 23, 59, 59, 999); // December 31st of the requested year
 
-    // Fetch challenge completions for the user within the date range
-    const challengeCompletions = await prisma.challengeCompletion.findMany({
+    // Fetch question completions for the user within the date range
+    const questionCompletions = await prisma.questionCompletion.findMany({
       where: {
         userId: userId,
         completedAt: {
@@ -43,9 +50,17 @@ export async function GET(req: NextRequest) {
         }
       },
       include: {
+        question: {
+          include: {
+            challenge: {
+              include: {
+                challengeType: true
+              }
+            }
+          }
+        },
         groupChallenge: {
           include: {
-            challenge: true,
             group: true
           }
         }
@@ -55,12 +70,15 @@ export async function GET(req: NextRequest) {
       }
     });
 
-    // Group completions by date
+    // Group completions by date and challenge
     const completionsByDate = new Map();
+    const challengeCompletions = new Map(); // Track completed challenges
 
-    challengeCompletions.forEach(completion => {
+    questionCompletions.forEach(completion => {
       const dateStr = completion.completedAt.toISOString().split('T')[0]; // YYYY-MM-DD format
+      const challengeId = completion.question.challengeId;
       
+      // Initialize date entry if it doesn't exist
       if (!completionsByDate.has(dateStr)) {
         completionsByDate.set(dateStr, {
           date: dateStr,
@@ -68,14 +86,37 @@ export async function GET(req: NextRequest) {
           challenges: []
         });
       }
-      
+
+      // Track challenge completions
+      if (!challengeCompletions.has(challengeId)) {
+        challengeCompletions.set(challengeId, {
+          totalQuestions: 0,
+          completedQuestions: 0,
+          name: completion.question.challenge.name,
+          competition: completion.groupChallenge.group.name,
+          points: 0,
+          lastCompletedAt: completion.completedAt
+        });
+      }
+
+      const challengeData = challengeCompletions.get(challengeId);
+      challengeData.completedQuestions += 1;
+      challengeData.points += completion.question.points;
+      challengeData.lastCompletedAt = completion.completedAt;
+
+      // If this is a new completion for the day, add it to the day's count
       const dateData = completionsByDate.get(dateStr);
       dateData.count += 1;
-      dateData.challenges.push({
-        name: completion.groupChallenge.challenge.name,
-        competition: completion.groupChallenge.group.name,
-        points: completion.pointsEarned
-      });
+
+      // Add unique challenges to the day's challenges list
+      if (!dateData.challenges.some((c: DailyChallenge) => c.name === completion.question.challenge.name)) {
+        dateData.challenges.push({
+          name: completion.question.challenge.name,
+          competition: completion.groupChallenge.group.name,
+          points: challengeData.points,
+          type: completion.question.challenge.challengeType.name
+        } as DailyChallenge);
+      }
     });
 
     // Convert Map to Array for response
@@ -83,7 +124,8 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({
       completions,
-      totalCompletions: challengeCompletions.length
+      totalCompletions: challengeCompletions.size,
+      totalPoints: Array.from(challengeCompletions.values()).reduce((sum, c) => sum + c.points, 0)
     });
   } catch (error) {
     console.error('Error fetching challenge completions:', error);

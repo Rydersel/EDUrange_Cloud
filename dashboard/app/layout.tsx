@@ -7,7 +7,7 @@ import { Inter } from 'next/font/google';
 import './globals.css';
 import { getServerSession } from 'next-auth/next';
 import authConfig from '@/auth.config';
-import { ThemeProvider } from "@/components/theme-provider"
+import { ThemeProvider } from "@/components/theme/theme-provider"
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -30,7 +30,7 @@ export default async function RootLayout({
         <ThemeProvider
           attribute="class"
           defaultTheme="system"
-          enableSystem
+          enableSystem={true}
           disableTransitionOnChange
         >
           <Providers session={session}>

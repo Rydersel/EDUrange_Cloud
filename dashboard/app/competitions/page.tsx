@@ -1,6 +1,6 @@
 'use client';
 
-import { MainNavigation } from '@/components/MainNavigation';
+import { MainNavigation } from '@/components/navigation/MainNavigation';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -85,16 +85,16 @@ export default function CompetitionsPage() {
   const CompetitionCard = ({competition}: { competition: Competition }) => {
     // Calculate the actual completion percentage based on completed challenges
     const totalChallenges = competition._count.challenges || 0;
-    
+
     // Get user's completed challenges count from the API response
     // We'll use the number of challenges with points > 0 as a proxy for completed challenges
     const completedChallenges = competition.members[0]?.groupPoints.length || 0;
-    
+
     // Calculate percentage based on completed challenges / total challenges
-    const progress = totalChallenges > 0 
+    const progress = totalChallenges > 0
       ? Math.round((completedChallenges / totalChallenges) * 100) / 2
       : 0;
-    
+
     const canViewDetails = competitions.userRole !== 'STUDENT';
 
     return (
@@ -132,7 +132,7 @@ export default function CompetitionsPage() {
                 </Button>
                 {canViewDetails && (
                     <Button className="w-full" variant="outline" asChild>
-                      <Link href={`/dashboard/competitions/${competition.id}`}>
+                      <Link href={`/dashboard/app/admin/competitions/${competition.id}`}>
                         View Details
                       </Link>
                     </Button>

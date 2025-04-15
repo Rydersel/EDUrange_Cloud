@@ -11,8 +11,8 @@ import {
 import { Challenge } from '@/constants/data';
 import { Edit, MoreHorizontal, Trash } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { useState, MouseEvent } from 'react';
-import { getInstanceManagerUrl } from '@/lib/api-config';
+import { useState, MouseEvent, useEffect, useRef } from 'react';
+import { toast } from "@/components/ui/use-toast";
 
 interface CellActionProps {
   data: Challenge;
@@ -23,34 +23,133 @@ export const CellAction: React.FC<CellActionProps> = ({ data, updateChallengeSta
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
   const router = useRouter();
-  const instanceManagerUrl = getInstanceManagerUrl();
+  const statusPollRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Clean up any polling on unmount
+  useEffect(() => {
+    return () => {
+      if (statusPollRef.current) {
+        clearInterval(statusPollRef.current);
+      }
+    };
+  }, []);
 
   const onConfirm = async () => {
     setLoading(true);
-    updateChallengeStatus(data.id, 'Completing');
+    updateChallengeStatus(data.id, 'TERMINATING');
     try {
-      const response = await fetch(`${instanceManagerUrl}/end-challenge`, {
+      const response = await fetch(`/api/challenges/terminate`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ deployment_name: data.id }), // Ensure this matches the expected key
+        body: JSON.stringify({ instanceId: data.id }),
       });
+      
       if (response.ok) {
-        setTimeout(() => {
-          router.refresh(); // Refresh the page or re-fetch the data to update the list
-        }, 20000); // Wait for 20 seconds to simulate deletion delay
+        // Show immediate feedback to user
+        toast({
+          title: "Termination initiated",
+          description: "The challenge is being terminated. This may take a minute.",
+          variant: "default",
+        });
+        
+        // Start polling for status updates instead of arbitrary timeout
+        startStatusPolling(data.id);
       } else {
         const result = await response.json();
-        alert(result.error || 'Failed to delete the challenge');
+        toast({
+          title: "Termination failed",
+          description: result.error || 'Failed to initiate challenge termination',
+          variant: "destructive",
+        });
       }
     } catch (error) {
-      console.error('Error deleting challenge:', error);
-      alert('An error occurred while deleting the challenge');
+      console.error('Error terminating challenge:', error);
+      toast({
+        title: "Error",
+        description: 'An error occurred while terminating the challenge',
+        variant: "destructive",
+      });
     } finally {
       setLoading(false);
       setOpen(false);
     }
+  };
+
+  // Poll for status updates
+  const startStatusPolling = (instanceId: string) => {
+    // Clear any existing polling
+    if (statusPollRef.current) {
+      clearInterval(statusPollRef.current);
+    }
+    
+    // Create counter for attempts
+    let attempts = 0;
+    const maxAttempts = 40; // 2 minutes (3s * 40)
+    
+    statusPollRef.current = setInterval(async () => {
+      try {
+        attempts++;
+        const response = await fetch(`/api/challenges/status?instanceId=${instanceId}`);
+        
+        if (response.ok) {
+          const data = await response.json();
+          updateChallengeStatus(instanceId, data.status);
+          
+          // Stop polling when terminal state is reached
+          if (['TERMINATED', 'ERROR'].includes(data.status)) {
+            if (statusPollRef.current) {
+              clearInterval(statusPollRef.current);
+              statusPollRef.current = null;
+            }
+            
+            // Show appropriate message
+            if (data.status === 'TERMINATED') {
+              toast({
+                title: "Challenge terminated",
+                description: "The challenge has been successfully terminated.",
+                variant: "default",
+              });
+            } else {
+              toast({
+                title: "Termination issue",
+                description: "There was a problem terminating the challenge. It has been marked for manual cleanup.",
+                variant: "destructive",
+              });
+            }
+            
+            router.refresh();
+          }
+        } else {
+          console.error('Status polling failed');
+          // Don't immediately stop on error - might be temporary
+          if (attempts >= 5) { // Stop after 5 consecutive failures
+            if (statusPollRef.current) {
+              clearInterval(statusPollRef.current);
+              statusPollRef.current = null;
+            }
+          }
+        }
+        
+        // Safety measure - stop after max attempts
+        if (attempts >= maxAttempts) {
+          if (statusPollRef.current) {
+            clearInterval(statusPollRef.current);
+            statusPollRef.current = null;
+          }
+          router.refresh();
+        }
+      } catch (error) {
+        console.error('Error polling status:', error);
+        if (attempts >= 5) { // Stop after 5 consecutive failures
+          if (statusPollRef.current) {
+            clearInterval(statusPollRef.current);
+            statusPollRef.current = null;
+          }
+        }
+      }
+    }, 3000); // Poll every 3 seconds
   };
 
   const handleDropdownClick = (e: MouseEvent) => {

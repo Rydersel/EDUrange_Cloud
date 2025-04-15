@@ -1,4 +1,4 @@
-# docker buildx build --platform linux/amd64 -t registry.rydersel.cloud/monitoring-service . --push
+# docker buildx build --platform linux/amd64 -t registry.edurange.cloud/edurange/monitoring-service . --push
 FROM python:3.9-slim
 
 WORKDIR /app

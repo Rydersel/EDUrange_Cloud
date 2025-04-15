@@ -190,7 +190,6 @@ describe('Rate Limit Utility', () => {
     const limiter = rateLimit({
       limit: 2,
       interval: 1000,
-      uniqueTokenPerInterval: 3 // Only store 3 IPs at a time
     });
 
     // Make requests from 3 different IPs

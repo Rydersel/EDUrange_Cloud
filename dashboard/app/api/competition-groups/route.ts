@@ -91,7 +91,7 @@ export async function POST(request: NextRequest) {
       const validatedData = validationResult.data;
 
       // Get all challenges to extract points
-      const challenges = await prisma.challenges.findMany({
+      const challenges = await prisma.challenge.findMany({
         where: {
           id: {
             in: validatedData.challengeIds
@@ -132,7 +132,7 @@ export async function POST(request: NextRequest) {
 
       // Add challenges to the group with points from appConfigs
       await prisma.groupChallenge.createMany({
-        data: challenges.map(challenge => ({
+        data: challenges.map((challenge: any) => ({
           challengeId: challenge.id,
           groupId: group.id,
           points: extractChallengePoints(challenge.appConfigs),

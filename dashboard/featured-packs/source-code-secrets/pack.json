@@ -1,0 +1,15 @@
+{
+  "$schema": "https://raw.githubusercontent.com/EDURange/schema/main/schemas/pack.schema.json",
+  "id": "source-code-secrets",
+  "name": "Source Code Secrets",
+  "version": "1.0.0",
+  "description": "Learn how to find hidden information in web page source code",
+  "author": "EDURange Team",
+  "license": "MIT",
+  "challenges": [
+    "challenges/html-comments.cdf.json",
+    "challenges/hidden-attributes.cdf.json",
+    "challenges/javascript-secrets.cdf.json",
+    "challenges/hackers-login.cdf.json"
+  ]
+} 

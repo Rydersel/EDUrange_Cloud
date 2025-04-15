@@ -48,7 +48,7 @@ export async function POST(request: Request) {
     // Log the challenge creation
     await prisma.activityLog.create({
       data: {
-        eventType: 'CHALLENGE_STARTED',
+        eventType: 'CHALLENGE_INSTANCE_CREATED',
         userId: session.user.id,
         metadata: {
           challengeImage,

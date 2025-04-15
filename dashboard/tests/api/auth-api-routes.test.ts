@@ -119,13 +119,13 @@ describe('Auth API Routes', () => {
         body: JSON.stringify({
           email: 'test@example.com',
           password: 'password123',
-          callbackUrl: '/dashboard',
+          callbackUrl: '/admin',
         }),
       });
 
       // Mock the NextAuth handler response
       const mockResponse = new Response(JSON.stringify({
-        url: '/dashboard',
+        url: '/admin',
       }), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
@@ -140,7 +140,7 @@ describe('Auth API Routes', () => {
       // Verify the response
       expect(response.status).toBe(200);
       const data = await response.json();
-      expect(data).toEqual({ url: '/dashboard' });
+      expect(data).toEqual({ url: '/admin' });
 
       // Verify the handler was called
       expect(authModule.POST).toHaveBeenCalledWith(req);

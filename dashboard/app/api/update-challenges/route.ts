@@ -3,6 +3,22 @@
 import { NextResponse, NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
+// Helper function to map status strings to valid ChallengeStatus enum values
+function mapStatusToEnum(status: string): 'CREATING' | 'ACTIVE' | 'TERMINATING' | 'ERROR' {
+  const statusMap: Record<string, 'CREATING' | 'ACTIVE' | 'TERMINATING' | 'ERROR'> = {
+    'unknown': 'ERROR',
+    'running': 'ACTIVE',
+    'pending': 'CREATING',
+    'creating': 'CREATING',
+    'terminating': 'TERMINATING',
+    'terminated': 'ERROR',
+    'error': 'ERROR',
+    'failed': 'ERROR'
+  };
+  
+  return statusMap[status.toLowerCase()] || 'ERROR';
+}
+
 async function updateChallengeInstances(challengePods: ChallengePod[]) {
   const existingInstanceIds = new Set(
     challengePods.map(pod => pod.pod_name)
@@ -36,6 +52,9 @@ async function updateChallengeInstances(challengePods: ChallengePod[]) {
       flag = '',
     } = pod;
 
+    // Map string status to enum value
+    const statusEnum = mapStatusToEnum(status);
+
     // Find the user's competition group
     const user = await prisma.user.findUnique({
       where: { id: userId },
@@ -62,10 +81,9 @@ async function updateChallengeInstances(challengePods: ChallengePod[]) {
         data: {
           userId,
           challengeId: "temp",
-          challengeImage,
           challengeUrl,
           creationTime: new Date(creationTime),
-          status,
+          status: statusEnum,
           flagSecretName,
           flag,
           competitionId,
@@ -78,10 +96,9 @@ async function updateChallengeInstances(challengePods: ChallengePod[]) {
           id,
           userId,
           challengeId: "temp",
-          challengeImage,
           challengeUrl,
           creationTime: new Date(creationTime),
-          status,
+          status: statusEnum,
           flagSecretName,
           flag,
           competitionId,

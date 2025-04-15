@@ -3,6 +3,9 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { NextRequest, NextResponse } from 'next/server';
 import { redirect } from 'next/navigation';
+import { createErrorResponse } from '@/lib/utils';
+import { User } from '@prisma/client';
+import { Session } from 'next-auth';
 
 /**
  * Checks if the current user is an admin
@@ -58,4 +61,90 @@ export async function requireAdminAccess() {
   }
 
   return user;
+}
+
+/**
+ * Used in API routes to require a valid user session
+ * @returns Object containing session, authorized status, and error response if not authorized
+ */
+export async function requireUser() {
+  const session = await getServerSession(authOptions);
+
+  if (!session?.user) {
+    return {
+      session: null,
+      authorized: false,
+      error: createErrorResponse('Unauthorized', 401)
+    };
+  }
+
+  return {
+    session,
+    authorized: true,
+    error: null
+  };
+}
+
+/**
+ * Checks if a user has authorization to perform actions on a challenge instance
+ * Authorization is granted if:
+ * 1. User owns the instance (own challenges)
+ * 2. User is an instructor for the competition (instructor permission)
+ * 3. User is an admin (global permission)
+ * 
+ * @param instanceId The ID of the challenge instance to check
+ * @param session The user's session from getServerSession
+ * @returns Object containing authorized status and error response if not authorized
+ */
+export async function authorizeProxyAction(
+  instanceId: string,
+  session: Session | null
+): Promise<{ authorized: boolean; error?: NextResponse; instance?: any }> {
+  // Check authentication
+  if (!session?.user) {
+    return { 
+      authorized: false, 
+      error: createErrorResponse('Unauthorized', 401) 
+    };
+  }
+
+  // Get instance details to verify authorization
+  const instance = await prisma.challengeInstance.findFirst({
+    where: { id: instanceId },
+    include: {
+      user: true,
+      competition: {
+        include: {
+          instructors: true
+        }
+      }
+    }
+  });
+
+  if (!instance) {
+    return {
+      authorized: false,
+      error: createErrorResponse('Challenge instance not found', 404)
+    };
+  }
+
+  // Verify user has permission to terminate this instance
+  const authenticatedUserId = session.user.id;
+  const isInstructor = instance.competition?.instructors?.some(
+    (instructor: User) => instructor.id === authenticatedUserId
+  ) || false;
+  const isAdmin = session.user.role === 'ADMIN';
+
+  if (instance.userId !== authenticatedUserId && !isInstructor && !isAdmin) {
+    return {
+      authorized: false,
+      error: createErrorResponse('Not authorized to perform this action on the instance', 403)
+    };
+  }
+
+  // User is authorized
+  return { 
+    authorized: true,
+    instance 
+  };
 }

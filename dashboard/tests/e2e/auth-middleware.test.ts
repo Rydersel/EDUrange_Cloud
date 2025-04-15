@@ -39,7 +39,7 @@ describe('Authentication Middleware Tests', () => {
     });
 
     test('should redirect from admin dashboard to invalid-permission', async () => {
-      await page.goto(`${baseUrl}/dashboard`);
+      await page.goto(`${baseUrl}/admin`);
       // Wait for redirect to complete
       await page.waitForNavigation({ waitUntil: 'networkidle0' });
 
@@ -57,8 +57,8 @@ describe('Authentication Middleware Tests', () => {
       expect(page.url()).toBe(`${baseUrl}/`);
     });
     
-    test('should redirect from dashboard to home page', async () => {
-      await page.goto(`${baseUrl}/dashboard`, { waitUntil: 'networkidle0' });
+    test('should redirect from admin dashboard to home page', async () => {
+      await page.goto(`${baseUrl}/admin`, { waitUntil: 'networkidle0' });
       // Should be redirected to home page
       expect(page.url()).toBe(`${baseUrl}/`);
     });
@@ -80,15 +80,15 @@ describe('Authentication Middleware Tests', () => {
     });
 
     test('should allow access to admin dashboard', async () => {
-      await page.goto(`${baseUrl}/dashboard`, { waitUntil: 'networkidle0' });
+      await page.goto(`${baseUrl}/admin`, { waitUntil: 'networkidle0' });
       // No redirect should happen
-      expect(page.url()).toBe(`${baseUrl}/dashboard`);
+      expect(page.url()).toBe(`${baseUrl}/admin`);
     });
 
     test('should allow access to admin-only pages', async () => {
-      await page.goto(`${baseUrl}/dashboard/users`, { waitUntil: 'networkidle0' });
+      await page.goto(`${baseUrl}/admin/users`, { waitUntil: 'networkidle0' });
       // No redirect should happen
-      expect(page.url()).toBe(`${baseUrl}/dashboard/users`);
+      expect(page.url()).toBe(`${baseUrl}/admin/users`);
     });
   });
 

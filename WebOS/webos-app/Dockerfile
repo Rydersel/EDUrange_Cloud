@@ -1,7 +1,7 @@
-# docker buildx build --platform linux/amd64 -t registry.rydersel.cloud/webos . --push
+# docker buildx build --platform linux/amd64 -t registry.edurange.cloud/edurange/webos . --push
 
 # Build stage
-FROM node:18.18.1-alpine AS builder
+FROM node:20-alpine AS builder
 
 WORKDIR /app
 
@@ -16,7 +16,7 @@ COPY . .
 RUN npm run build
 
 # Production stage
-FROM node:18.18.1-alpine
+FROM node:20-alpine
 
 # Create a non-root user to run the application
 RUN addgroup -g 1001 -S nodejs && \

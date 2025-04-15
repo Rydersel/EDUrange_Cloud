@@ -6,7 +6,7 @@
     "containers": [
       {
         "name": "attack-container",
-        "image": "registry.rydersel.cloud/metasploit-attack-base",
+        "image": "registry.edurange.cloud/challenges/metasploit-attack-base",
         "ports": [
           {
             "containerPort": 22,
@@ -28,7 +28,7 @@
       },
       {
         "name": "defense-container",
-        "image": "registry.rydersel.cloud/metasploit-defense-base",
+        "image": "registry.edurange.cloud/challenges/metasploit-defense-base",
         "ports": [
           {
             "containerPort": 22,
@@ -55,7 +55,7 @@
       },
       {
         "name": "webos",
-        "image": "registry.rydersel.cloud/webos",
+        "image": "registry.edurange.cloud/edurange/webos",
         "ports": [
           {
             "containerPort": 3000,
@@ -80,7 +80,7 @@
       },
       {
         "name": "terminal",
-        "image": "registry.rydersel.cloud/terminal",
+        "image": "registry.edurange.cloud/edurange/terminal",
         "ports": [
           {
             "containerPort": 3001,
@@ -180,16 +180,16 @@
     "attackImage": {
       "container": "attack-container",
       "property": "image",
-      "default": "registry.rydersel.cloud/metasploit-attack-base"
+      "default": "registry.edurange.cloud/challenges/metasploit-attack-base"
     },
     "defenseImage": {
       "container": "defense-container",
       "property": "image",
-      "default": "registry.rydersel.cloud/metasploit-defense-base"
+      "default": "registry.edurange.cloud/challenges/metasploit-defense-base"
     },
     "appsConfig": {
       "container": "webos",
       "property": "env.NEXT_PUBLIC_APPS_CONFIG"
     }
   }
-} 
+}

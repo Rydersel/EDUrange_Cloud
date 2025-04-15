@@ -1806,6 +1806,58 @@ spec:
     }
 
     addComponentLog('Monitoring Service pod is ready.');
+    
+    // Create Horizontal Pod Autoscaler for Monitoring Service
+    addComponentLog('Creating Horizontal Pod Autoscaler for Monitoring Service...');
+    const hpaYaml = `
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: monitoring-service-hpa
+  namespace: default
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: monitoring-service
+  minReplicas: 1
+  maxReplicas: 3
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+      - type: Percent
+        value: 25
+        periodSeconds: 60
+    scaleUp:
+      stabilizationWindowSeconds: 60
+      policies:
+      - type: Percent
+        value: 100
+        periodSeconds: 60
+`;
+
+    try {
+      await window.api.applyManifestFromString(hpaYaml);
+      addComponentLog('Horizontal Pod Autoscaler for Monitoring Service created successfully.');
+    } catch (error) {
+      addComponentLog(`Warning: Failed to create HPA for Monitoring Service: ${error.message}`);
+      addComponentLog('Continuing with installation. You can manually add HPA later.');
+    }
+    
     addComponentLog('Monitoring Service installation completed successfully.');
     
     // Explicitly set the status to 'installed'

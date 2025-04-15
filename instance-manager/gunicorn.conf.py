@@ -7,40 +7,45 @@ logconfig_dict = {
     'version': 1,
     'disable_existing_loggers': False,
     'formatters': {
-        'standard': {
-            'format': '%(asctime)s - [IM] - %(levelname)s - %(message)s'
+        'concise': {
+            'format': '%(asctime)s [%(levelname)s] %(message)s'
         },
     },
     'handlers': {
         'console': {
             'class': 'logging.StreamHandler',
-            'formatter': 'standard',
+            'formatter': 'concise',
             'stream': sys.stdout
         },
     },
     'root': {
         'handlers': ['console'],
-        'level': 'DEBUG',
+        'level': 'INFO',
     },
     'loggers': {
         'gunicorn.error': {
             'handlers': ['console'],
-            'level': 'DEBUG',
+            'level': 'WARNING',
             'propagate': False,
         },
         'gunicorn.access': {
             'handlers': ['console'],
-            'level': 'DEBUG',
+            'level': 'WARNING',
             'propagate': False,
         },
         'kubernetes': {
             'handlers': ['console'],
-            'level': 'WARNING',
+            'level': 'ERROR',
             'propagate': False,
         },
         'kubernetes.client.rest': {
             'handlers': ['console'],
-            'level': 'WARNING',
+            'level': 'ERROR',
+            'propagate': False,
+        },
+        'urllib3': {
+            'handlers': ['console'],
+            'level': 'ERROR',
             'propagate': False,
         }
     }
@@ -54,7 +59,7 @@ timeout = 120
 keepalive = 5
 accesslog = '-'  # Log to stdout
 errorlog = '-'   # Log to stderr
-loglevel = 'debug'
+loglevel = 'info'
 capture_output = True
 enable_stdio_inheritance = True
 
@@ -65,6 +70,6 @@ def post_fork(server, worker):
     # Set up logging after fork
     logging.basicConfig(
         level=logging.INFO,
-        format='%(asctime)s - [IM] - %(levelname)s - %(message)s',
+        format='%(asctime)s [%(levelname)s] %(message)s',
         stream=sys.stdout
     ) 

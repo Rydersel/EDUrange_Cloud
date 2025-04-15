@@ -15,7 +15,7 @@
       "type": "container",
       "id": "webserver-2",
       "config": {
-        "image": "registry.rydersel.cloud/source-code-secrets-2",
+        "image": "registry.edurange.cloud/challenges/source-code-secrets-2",
         "ports": [
           {
             "containerPort": 80,
@@ -83,6 +83,6 @@
     }
   ],
   "typeConfig": {
-    "challengeImage": "registry.rydersel.cloud/source-code-secrets-3"
+    "challengeImage": "registry.edurange.cloud/challenges/source-code-secrets-3"
   }
 }

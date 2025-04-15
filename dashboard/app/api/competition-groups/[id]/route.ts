@@ -16,6 +16,7 @@ type CompetitionWithRelations = CompetitionGroup & {
       challengeType: ChallengeType;
       appConfigs: ChallengeAppConfig[];
       questions: ChallengeQuestion[];
+      difficulty: string | null;
     };
     completions: any[];
     questionCompletions: any[];
@@ -36,7 +37,8 @@ interface FormattedChallenge {
   id: string;
   name: string;
   description: string | null;
-  AppsConfig: ChallengeAppConfig[];
+  difficulty: string;
+  AppsConfig: string;
   points: number;
   completed: boolean;
   challengeType: {
@@ -167,11 +169,15 @@ export async function GET(req: Request, props: { params: Promise<{ id: string }>
       // Check if challenge is completed by checking if all questions are completed
       const isCompleted = completedQuestions === totalQuestions;
       
+      // Convert appConfigs to string for proper description extraction
+      const appConfigsString = JSON.stringify(challenge.challenge.appConfigs);
+      
       return {
         id: challenge.challenge.id,
         name: challenge.challenge.name,
         description: challenge.challenge.description,
-        AppsConfig: challenge.challenge.appConfigs,
+        difficulty: challenge.challenge.difficulty || 'MEDIUM',
+        AppsConfig: appConfigsString,
         points: totalPoints,
         completed: isCompleted,
         challengeType: challenge.challenge.challengeType,

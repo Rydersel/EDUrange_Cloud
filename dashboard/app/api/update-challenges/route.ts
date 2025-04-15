@@ -4,14 +4,14 @@ import { NextResponse, NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
 // Helper function to map status strings to valid ChallengeStatus enum values
-function mapStatusToEnum(status: string): 'CREATING' | 'STARTING' | 'ACTIVE' | 'TERMINATING' | 'TERMINATED' | 'ERROR' {
-  const statusMap: Record<string, 'CREATING' | 'STARTING' | 'ACTIVE' | 'TERMINATING' | 'TERMINATED' | 'ERROR'> = {
+function mapStatusToEnum(status: string): 'CREATING' | 'ACTIVE' | 'TERMINATING' | 'ERROR' {
+  const statusMap: Record<string, 'CREATING' | 'ACTIVE' | 'TERMINATING' | 'ERROR'> = {
     'unknown': 'ERROR',
     'running': 'ACTIVE',
-    'pending': 'STARTING',
+    'pending': 'CREATING',
     'creating': 'CREATING',
     'terminating': 'TERMINATING',
-    'terminated': 'TERMINATED',
+    'terminated': 'ERROR',
     'error': 'ERROR',
     'failed': 'ERROR'
   };

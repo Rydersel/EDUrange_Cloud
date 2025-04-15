@@ -68,6 +68,36 @@ export const getColumns = (
         statusClass = 'text-yellow-600';
       } else if (status === 'active') {
         statusClass = 'text-green-300';
+      } else if (status === 'queued') {
+        statusClass = 'text-blue-500';
+        // If queued, and has metadata with taskId, show the QueuedChallengeStatus component
+        if (row.original.metadata && typeof row.original.metadata === 'object') {
+          const metadata = row.original.metadata;
+          return (
+            <div className="min-w-[200px]">
+              <span className={statusClass}>QUEUED</span>
+              <button
+                onClick={() => {
+                  // Create a modal to show the QueuedChallengeStatus component
+                  // This would be implemented elsewhere
+                  if (typeof window !== 'undefined') {
+                    window.dispatchEvent(new CustomEvent('showQueuedChallengeStatus', {
+                      detail: {
+                        instanceId: row.original.id,
+                        taskId: metadata.taskId,
+                        queuePosition: metadata.queuePosition || 0,
+                        priority: metadata.priority || 2
+                      }
+                    }));
+                  }
+                }}
+                className="ml-2 text-xs text-blue-500 underline"
+              >
+                Details
+              </button>
+            </div>
+          );
+        }
       } else {
         statusClass = 'text-gray-600';
       }

@@ -94,11 +94,29 @@ async def sync_challenges():
                     
                     # Get challenge URL based on type
                     challenge_url = None
-                    if pod.get('urls'):
-                        if pod.get('challenge_type') == 'web':
+                    
+                    # First check for direct webosUrl or webConsoleUrl (new format)
+                    if pod.get('webosUrl'):
+                        challenge_url = pod.get('webosUrl')
+                        logging.info(f"Using webosUrl as challenge URL: {challenge_url}")
+                    elif pod.get('webConsoleUrl'):
+                        challenge_url = pod.get('webConsoleUrl')
+                        logging.info(f"Using webConsoleUrl as challenge URL: {challenge_url}")
+                    # Fall back to the old URL format in the urls dictionary
+                    elif pod.get('urls'):
+                        challenge_type = pod.get('challenge_type')
+                        logging.info(f"Challenge type from pod: {challenge_type}")
+                        
+                        if challenge_type == 'web':
                             challenge_url = pod['urls'].get('challenge')
-                        elif pod.get('challenge_type') == 'fullOS':
+                        # Handle both fullOS and full-os formats
+                        elif challenge_type == 'full-os' or challenge_type == 'fullOS':
                             challenge_url = pod['urls'].get('terminal')
+                    
+                    # If we still don't have a URL, construct a default one
+                    if not challenge_url:
+                        challenge_url = f"https://{pod_id}.edurange.cloud"
+                        logging.info(f"Using fallback URL: {challenge_url}")
                             
                     # Process the pod (add or update)
                     if pod_id not in db_instance_dict:

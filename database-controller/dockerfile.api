@@ -1,4 +1,4 @@
-# docker buildx build -f dockerfile.api --platform linux/amd64 -t registry.rydersel.cloud/database-api . --push
+# docker buildx build -f dockerfile.api --platform linux/amd64 -t registry.edurange.cloud/edurange/database-api . --push
 
 # Stage 1: Builder/Dependencies
 FROM python:3.10-slim AS builder

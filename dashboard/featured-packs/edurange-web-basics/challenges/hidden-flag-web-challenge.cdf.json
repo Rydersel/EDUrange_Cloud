@@ -20,7 +20,7 @@
       "type": "container",
       "id": "webserver",
       "config": {
-        "image": "registry.rydersel.cloud/hidden-flag-challenge",
+        "image": "registry.edurange.cloud/challenges/hidden-flag-challenge",
         "ports": [
           {
             "containerPort": 80,
@@ -99,6 +99,6 @@
     }
   ],
   "typeConfig": {
-    "challengeImage": "registry.rydersel.cloud/hidden-flag-challenge"
+    "challengeImage": "registry.edurange.cloud/challenges/hidden-flag-challenge"
   }
 }

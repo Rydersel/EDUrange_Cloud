@@ -281,6 +281,7 @@ model ChallengeInstance {
   lastStatusChange   DateTime        @default(now()) // Track timing of status changes
   flagSecretName    String?          // Made optional
   flag              String?          // Made optional
+  metadata          Json?            // Added for queue information
   competitionId     String
   k8s_instance_name String?          // Added field
   activityLogs      ActivityLog[]
@@ -361,6 +362,7 @@ enum ActivityEventType {
   USER_UPDATED
   CHALLENGE_INSTANCE_CREATED
   CHALLENGE_INSTANCE_DELETED
+  CHALLENGE_INSTANCE_QUEUED
   CHALLENGE_COMPLETED
   QUESTION_ATTEMPTED
   QUESTION_COMPLETED
@@ -392,7 +394,9 @@ enum LogSeverity {
 enum ChallengeStatus {
   CREATING
   ACTIVE
+  QUEUED
   TERMINATING
+  TERMINATED
   ERROR
 }
 

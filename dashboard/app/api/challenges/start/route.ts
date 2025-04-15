@@ -6,7 +6,7 @@ import { getUserChallengeInstances } from '@/lib/challenges-service';
 import { v4 as uuidv4 } from 'uuid';
 import { ActivityLogger, ActivityEventType } from '@/lib/activity-logger';
 import { getInstanceManagerUrl } from '@/lib/api-config';
-import fetch from 'node-fetch';
+import { updateChallengeInstanceWithMetadata } from '@/lib/prisma-utils';
 
 // Function to generate a random flag for challenges
 const generateFlag = (challengeId: string): string => {
@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
     // Check if user already has too many active instances
     const userInstances = await getUserChallengeInstances(session.user.id);
     const activeInstances = userInstances.filter(
-      (instance: any) => instance.status === "RUNNING" || instance.status === "STARTING"
+      (instance: any) => instance.status === "ACTIVE" || instance.status === "CREATING"
     );
 
     // Limit active instances to 3 per user
@@ -80,13 +80,13 @@ export async function POST(req: NextRequest) {
       
       // Add default typeConfig
       cdfContentObj.typeConfig = {
-        challengeImage: `registry.rydersel.cloud/${challengeId}`
+        challengeImage: `registry.edurange.cloud/challenges/${challengeId}`
       };
       
       // Add type-specific configuration based on challenge type
       if (challengeType === 'metasploit') {
-        cdfContentObj.typeConfig.attackImage = `registry.rydersel.cloud/${challengeId}-attack`;
-        cdfContentObj.typeConfig.defenseImage = `registry.rydersel.cloud/${challengeId}-defense`;
+        cdfContentObj.typeConfig.attackImage = `registry.edurange.cloud/challenges/${challengeId}-attack`;
+        cdfContentObj.typeConfig.defenseImage = `registry.edurange.cloud/challenges/${challengeId}-defense`;
       }
     }
     
@@ -99,7 +99,7 @@ export async function POST(req: NextRequest) {
           userId: session.user.id,
           competitionId: competitionId,
           challengeUrl: 'pending...',
-          status: "STARTING",
+          status: "CREATING",
           flagSecretName: null,
           flag: generateFlag(challengeId),
         },
@@ -107,26 +107,42 @@ export async function POST(req: NextRequest) {
 
       // Call Instance Manager
       const instanceManagerUrl = getInstanceManagerUrl();
-      // Ensure cdf_content is a string as expected by the Instance Manager
-      const cdfContent = typeof cdfContentObj === 'object' 
-        ? JSON.stringify(cdfContentObj) 
-        : challenge.cdf_content;
+      // Log the full URL for debugging
+      console.log(`Using instance manager URL: ${instanceManagerUrl}`);
+      
+      // CDF content can now be passed directly as an object to the Instance Manager
+      const cdfContent = cdfContentObj;
+        
+      // Get user role for priority queue
+      const user = await prisma.user.findUnique({
+        where: { id: session.user.id },
+        select: { role: true }
+      });
+      
+      const userRole = user?.role?.toLowerCase() || 'student';
         
       const imPayload = {
         deployment_name: challengeInstance.id,
         user_id: session.user.id,
         cdf_content: cdfContent,
-        competition_id: competitionId
+        competition_id: competitionId,
+        user_role: userRole // Include user role for priority queue
       };
 
       console.log(`Sending payload to instance manager: ${JSON.stringify({
         deployment_name: challengeInstance.id,
         user_id: session.user.id,
         cdf_content_length: String(cdfContent).length,
-        competition_id: competitionId
+        competition_id: competitionId,
+        user_role: userRole
       })}`);
 
-      const imResponse = await fetch(`${instanceManagerUrl}/start-challenge`, {
+      // Correctly construct the URL for the start-challenge endpoint
+      // instanceManagerUrl already includes /api
+      const startChallengeUrl = `${instanceManagerUrl}/start-challenge`;
+      console.log(`Making request to: ${startChallengeUrl}`);
+      
+      const imResponse = await fetch(startChallengeUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(imPayload),
@@ -145,6 +161,50 @@ export async function POST(req: NextRequest) {
       const imResult = await imResponse.json();
       console.log(`Instance Manager response for ${challengeInstance.id}:`, imResult);
       
+      // Check if the deployment was queued (new priority queue system)
+      if (imResult.queued) {
+        console.log(`Challenge deployment for ${challengeInstance.id} has been queued with task ID: ${imResult.task_id}`);
+        
+        // Update challenge instance to indicate it's queued
+        await updateChallengeInstanceWithMetadata(challengeInstance.id, { 
+          status: "QUEUED",
+          // Store task ID in metadata to be able to check status later
+          metadata: {
+            taskId: imResult.task_id,
+            queuedAt: new Date().toISOString(),
+            queuePosition: imResult.queue_position || 0,
+            priority: imResult.priority || 2
+          }
+        });
+        
+        // Log that the deployment was queued
+        await ActivityLogger.logChallengeEvent(
+          ActivityEventType.CHALLENGE_INSTANCE_QUEUED,
+          session.user.id,
+          challengeId,
+          challengeInstance.id,
+          {
+            taskId: imResult.task_id,
+            queuePosition: imResult.queue_position || 0,
+            priority: imResult.priority || 2,
+            queuedAt: new Date().toISOString()
+          }
+        );
+        
+        // Return the queued instance
+        return NextResponse.json({
+          ...challengeInstance,
+          status: "QUEUED",
+          queueInfo: {
+            taskId: imResult.task_id,
+            queuePosition: imResult.queue_position || 0,
+            priority: imResult.priority || 2,
+            message: imResult.message || "Challenge deployment has been queued"
+          }
+        });
+      }
+      
+      // If not queued, process direct deployment response (legacy flow)
       // Extract flag information from Instance Manager response
       const flagSecretName = imResult.flag_secret_name || null;
       

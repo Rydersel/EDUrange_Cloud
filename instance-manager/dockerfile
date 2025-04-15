@@ -1,4 +1,5 @@
-# docker buildx build --platform linux/amd64 -t registry.rydersel.cloud/instance-manager . --push
+# docker buildx build --platform linux/amd64 -t registry.edurange.cloud/edurange/instance-manager . --push
+
 
 # Build stage
 FROM python:3.10.13-slim AS builder

@@ -20,7 +20,7 @@ function execute_and_exit_on_failure {
 }
 
 # Set environment variables for deployment
-export REGISTRY_URL="registry.rydersel.cloud"
+export REGISTRY_URL="registry.edurange.cloud/edurange"
 export DOMAIN_NAME="rydersel.cloud"
 export INSTANCE_MANAGER_SUBDOMAIN="eductf"
 export DASHBOARD_SUBDOMAIN="dashboard"

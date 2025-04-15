@@ -9,7 +9,7 @@ import { validateAndSanitize, validationSchemas } from '@/lib/validation';
 // Create a rate limiter for competition points operations
 const pointsRateLimiter = rateLimit({
   interval: 60 * 1000, // 1 minute
-  limit: 20, // 20 requests per minute
+  limit: 30, // 30 requests per minute
 });
 
 // Schema for validating points update request

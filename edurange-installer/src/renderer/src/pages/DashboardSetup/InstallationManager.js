@@ -214,6 +214,16 @@ spec:
               name: dashboard-secrets
               key: direct-database-url
               optional: true
+        - name: REDIS_URL
+          valueFrom:
+            secretKeyRef:
+              name: redis-credentials
+              key: redis-url
+        - name: REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: redis-credentials
+              key: redis-password
         - name: AUTH_GITHUB_ID
           valueFrom:
             secretKeyRef:
@@ -337,6 +347,57 @@ spec:
       componentLog('You can check the status again later from the dashboard page.');
     } else {
       componentLog('Dashboard URL is accessible and ready to use.');
+    }
+
+    // Create Horizontal Pod Autoscaler for Dashboard
+    componentLog('Creating Horizontal Pod Autoscaler for Dashboard...');
+    const hpaYaml = `
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: dashboard-hpa
+  namespace: default
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: dashboard
+  minReplicas: 1
+  maxReplicas: 5
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+      - type: Percent
+        value: 25
+        periodSeconds: 60
+    scaleUp:
+      stabilizationWindowSeconds: 60
+      policies:
+      - type: Percent
+        value: 100
+        periodSeconds: 60
+`;
+
+    const hpaResult = await window.api.applyManifestFromString(hpaYaml);
+    if (hpaResult.code !== 0) {
+      componentLog(`Warning: Failed to create HPA for Dashboard: ${hpaResult.stderr}`);
+      componentLog('Continuing with installation. You can manually add HPA later.');
+    } else {
+      componentLog('Horizontal Pod Autoscaler for Dashboard created successfully.');
     }
 
     componentLog('Dashboard installation completed successfully.');

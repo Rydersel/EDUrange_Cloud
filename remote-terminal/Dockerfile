@@ -1,4 +1,4 @@
-# docker buildx build --platform linux/amd64 -t registry.rydersel.cloud/terminal . --push
+# docker buildx build --platform linux/amd64 -t registry.edurange.cloud/edurange/terminal . --push
 
 # Build stage
 FROM node:20-alpine AS builder

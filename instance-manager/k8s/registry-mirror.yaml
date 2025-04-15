@@ -1,0 +1,122 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: registry-mirror-config
+  namespace: default
+data:
+  config.yml: |
+    version: 0.1
+    log:
+      level: info
+      formatter: json
+      fields:
+        service: registry
+    storage:
+      filesystem:
+        rootdirectory: /var/lib/registry
+      cache:
+        blobdescriptor: inmemory
+      maintenance:
+        uploadpurging:
+          enabled: true
+          age: 168h
+          interval: 24h
+          dryrun: false
+        readonly:
+          enabled: false
+      delete:
+        enabled: true
+    http:
+      addr: :5000
+      headers:
+        X-Content-Type-Options: [nosniff]
+    proxy:
+      remoteurl: https://registry-1.docker.io
+      ttl: 24h
+    health:
+      storagedriver:
+        enabled: true
+        interval: 10s
+        threshold: 3
+      http:
+        headers:
+          Cache-Control: [no-cache]
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: registry-mirror-pvc
+  namespace: default
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 20Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: registry-mirror
+  namespace: default
+  labels:
+    app: registry-mirror
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: registry-mirror
+  template:
+    metadata:
+      labels:
+        app: registry-mirror
+    spec:
+      containers:
+      - name: registry
+        image: registry:2
+        ports:
+        - containerPort: 5000
+        volumeMounts:
+        - name: registry-storage
+          mountPath: /var/lib/registry
+        - name: registry-config
+          mountPath: /etc/docker/registry/config.yml
+          subPath: config.yml
+        resources:
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 5000
+          initialDelaySeconds: 30
+          periodSeconds: 60
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 5000
+          initialDelaySeconds: 10
+          periodSeconds: 30
+      volumes:
+      - name: registry-storage
+        persistentVolumeClaim:
+          claimName: registry-mirror-pvc
+      - name: registry-config
+        configMap:
+          name: registry-mirror-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: registry-mirror
+  namespace: default
+  labels:
+    app: registry-mirror
+spec:
+  selector:
+    app: registry-mirror
+  ports:
+  - port: 5000
+    targetPort: 5000
+  type: ClusterIP 

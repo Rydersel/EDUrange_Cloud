@@ -3,6 +3,13 @@ import { getDatabaseApiUrl } from '@/lib/api-config';
 import { prisma } from '@/lib/prisma';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
+import rateLimit from '@/lib/rate-limit';
+
+// Create a rate limiter for activity logging operations
+const activityLogRateLimiter = rateLimit({
+  interval: 60 * 1000, // 1 minute
+  limit: 100, // 100 requests per minute - higher limit since this is used throughout the app
+});
 
 /**
  * Direct route for activity logging with fallback to local database
@@ -10,6 +17,10 @@ import { authOptions } from '@/lib/auth';
  */
 export async function POST(req: NextRequest) {
   try {
+    // Apply rate limiting
+    const rateLimitResult = await activityLogRateLimiter.check(req);
+    if (rateLimitResult) return rateLimitResult;
+    
     // Validate authentication
     const session = await getServerSession(authOptions);
     if (!session?.user) {

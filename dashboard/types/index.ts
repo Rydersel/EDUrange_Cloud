@@ -1,4 +1,6 @@
 import { Icons } from '@/components/icons';
+// Export environment variable typing
+export { env } from './env';
 
 export interface NavItem {
   title: string;

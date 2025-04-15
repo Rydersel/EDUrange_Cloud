@@ -3,6 +3,13 @@ import { getDatabaseApiUrl } from '@/lib/api-config';
 import { prisma } from '@/lib/prisma';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
+import rateLimit from '@/lib/rate-limit';
+
+// Create a rate limiter for database proxy operations
+const databaseProxyRateLimiter = rateLimit({
+  interval: 60 * 1000, // 1 minute
+  limit: 60, // 60 requests per minute
+});
 
 /**
  * Proxy API endpoint for database API requests with fallback to local database
@@ -10,6 +17,10 @@ import { authOptions } from '@/lib/auth';
  */
 export async function GET(req: NextRequest) {
   try {
+    // Apply rate limiting
+    const rateLimitResult = await databaseProxyRateLimiter.check(req);
+    if (rateLimitResult) return rateLimitResult;
+    
     // Get path and query parameters
     const url = new URL(req.url);
     
@@ -229,6 +240,10 @@ async function handleActivityLog(req: NextRequest) {
  */
 export async function POST(req: NextRequest) {
   try {
+    // Apply rate limiting
+    const rateLimitResult = await databaseProxyRateLimiter.check(req);
+    if (rateLimitResult) return rateLimitResult;
+    
     // Get path from either query parameter or URL path
     const url = new URL(req.url);
     

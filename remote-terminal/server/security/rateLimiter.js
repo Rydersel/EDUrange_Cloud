@@ -12,9 +12,9 @@ const { RateLimiterMemory } = require("rate-limiter-flexible");
  * Limits overall API usage per client
  */
 const generalLimiter = new RateLimiterMemory({
-  points: 100,              // Number of points
+  points: 250,             
   duration: 60,             // Per 60 seconds
-  blockDuration: 60 * 2     // Block for 2 minutes if exceeded
+  blockDuration: 60         // 1 minute
 });
 
 /**
@@ -22,9 +22,9 @@ const generalLimiter = new RateLimiterMemory({
  * More strict to prevent terminal spamming
  */
 const terminalCreateLimiter = new RateLimiterMemory({
-  points: 5,                // Limit terminal creation
+  points: 15,               
   duration: 60,             // Per 60 seconds
-  blockDuration: 60 * 5     // Block for 5 minutes if exceeded
+  blockDuration: 60 * 2     // 2 minutes
 });
 
 /**
@@ -32,9 +32,9 @@ const terminalCreateLimiter = new RateLimiterMemory({
  * More generous to allow normal terminal usage
  */
 const inputLimiter = new RateLimiterMemory({
-  points: 120,              // Allow more points for terminal input
+  points: 300,             
   duration: 60,             // Per 60 seconds
-  blockDuration: 60         // Block for 1 minute if exceeded
+  blockDuration: 30         // 30 seconds
 });
 
 /**

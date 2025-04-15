@@ -260,13 +260,13 @@ data:
     auth_type = trust
     auth_file = /bitnami/pgbouncer/conf/userlist.txt
     pool_mode = transaction
-    max_client_conn = 1000
-    default_pool_size = 20
-    min_pool_size = 5
-    reserve_pool_size = 5
+    max_client_conn = 2000
+    default_pool_size = 100
+    min_pool_size = 20
+    reserve_pool_size = 20
     reserve_pool_timeout = 3
-    max_db_connections = 50
-    max_user_connections = 50
+    max_db_connections = 150
+    max_user_connections = 100
     server_reset_query = DISCARD ALL
     ignore_startup_parameters = extra_float_digits
     admin_users = postgres
@@ -281,6 +281,13 @@ data:
 
   userlist.txt: |
     "postgres" "postgres"
+
+  pgbouncer.pools.ini: |
+    [pools]
+    edurange_dashboard_prod = host=postgres dbname=edurange pool_size=50 min_pool_size=10
+    edurange_webos_prod = host=postgres dbname=edurange pool_size=50 min_pool_size=10
+    edurange_instance_manager_prod = host=postgres dbname=edurange pool_size=50 min_pool_size=10
+    edurange_monitoring_service_prod = host=postgres dbname=edurange pool_size=25 min_pool_size=5
 `;
 
   // Apply the ConfigMap
@@ -372,6 +379,9 @@ spec:
     metadata:
       labels:
         app: pgbouncer
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "6432"
     spec:
       containers:
       - name: pgbouncer
@@ -411,11 +421,11 @@ spec:
           subPath: userlist.txt
         resources:
           requests:
-            memory: "64Mi"
-            cpu: "50m"
+            memory: "512Mi"
+            cpu: "250m"
           limits:
-            memory: "128Mi"
-            cpu: "100m"
+            memory: "1Gi"
+            cpu: "1"
         # Use a simple TCP check instead of pg_isready
         readinessProbe:
           tcpSocket:
@@ -446,15 +456,47 @@ spec:
       port: 6432
       targetPort: 6432
   type: ClusterIP
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: pgbouncer-hpa
+  labels:
+    app: pgbouncer
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: pgbouncer
+  minReplicas: 1
+  maxReplicas: 5
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+    scaleUp:
+      stabilizationWindowSeconds: 60
 `;
 
-  // Apply the Deployment
+  // Apply the Deployment and HPA
   const deploymentResult = await window.api.applyManifestFromString(pgbouncerDeploymentYaml);
   if (deploymentResult.code !== 0) {
-    throw new Error(`Failed to create PgBouncer deployment: ${deploymentResult.stderr}`);
+    throw new Error(`Failed to create PgBouncer deployment and HPA: ${deploymentResult.stderr}`);
   }
 
-  addLog('PgBouncer deployment created successfully.');
+  addLog('PgBouncer deployment and HPA created successfully.');
 
   // Wait for the PgBouncer pod to be ready
   addLog('Waiting for PgBouncer pod to be ready...');
@@ -557,11 +599,13 @@ spec:
     'get',
     'secret',
     'dashboard-secrets',
-    '--ignore-not-found'
+    '--ignore-not-found',
+    '-o',
+    'name'
   ]);
-  
-  if (checkDashboardSecretsCmd.code === 0 && checkDashboardSecretsCmd.stdout.includes('dashboard-secrets')) {
-    addLog('Found dashboard-secrets. Updating with direct database URL...');
+
+  if (checkDashboardSecretsCmd.code === 0 && checkDashboardSecretsCmd.stdout) {
+    addLog('Updating dashboard secrets to use PgBouncer...');
     
     // Get current dashboard secrets
     const getDashboardSecretsCmd = await window.api.executeCommand('kubectl', [
@@ -571,33 +615,27 @@ spec:
       '-o',
       'json'
     ]);
-    
+
     if (getDashboardSecretsCmd.code === 0) {
       const dashboardSecrets = JSON.parse(getDashboardSecretsCmd.stdout);
       
-      // Check if database-url exists in dashboard-secrets
-      if (dashboardSecrets.data && dashboardSecrets.data['database-url']) {
-        // Decode the dashboard database URL
-        const dashboardDbUrl = atob(dashboardSecrets.data['database-url']);
+      // Check if DATABASE_URL exists in dashboard-secrets
+      if (dashboardSecrets.data['DATABASE_URL']) {
+        // Decode current database URL
+        const encodedDashboardDbUrl = dashboardSecrets.data['DATABASE_URL'];
+        const dashboardDbUrl = atob(encodedDashboardDbUrl);
         
-        // If the dashboard URL contains 'postgres:5432', update it to use pgbouncer
-        let updatedDashboardDbUrl = dashboardDbUrl;
-        if (dashboardDbUrl.includes('postgres:5432')) {
-          updatedDashboardDbUrl = dashboardDbUrl.replace(/postgresql:\/\/([^:]+):([^@]+)@postgres:5432\/(.+)/, 
-                                                       'postgresql://$1:$2@pgbouncer:6432/$3');
-        }
+        // Create a new connection URL that points to PgBouncer
+        const pgbouncerDashboardDbUrl = dashboardDbUrl.replace(/postgresql:\/\/([^:]+):([^@]+)@postgres:5432\/(.+)/, 
+                                          'postgresql://$1:$2@pgbouncer:6432/$3');
         
-        // Create a direct connection URL for dashboard
-        const directDashboardDbUrl = dashboardDbUrl.replace(/postgresql:\/\/([^:]+):([^@]+)@pgbouncer:6432\/(.+)/, 
-                                                          'postgresql://$1:$2@postgres:5432/$3');
-        
-        // Encode the updated URLs
-        const encodedUpdatedDashboardDbUrl = btoa(updatedDashboardDbUrl);
-        const encodedDirectDashboardDbUrl = btoa(directDashboardDbUrl);
+        // Encode the new URL
+        const encodedPgbouncerDashboardDbUrl = btoa(pgbouncerDashboardDbUrl);
         
         // Update the dashboard-secrets
-        const patchDashboardSecretYaml = `{"data":{"database-url":"${encodedUpdatedDashboardDbUrl}","direct-database-url":"${encodedDirectDashboardDbUrl}"}}`;
-        
+        const patchDashboardSecretYaml = `{"data":{"DATABASE_URL":"${encodedPgbouncerDashboardDbUrl}"}}`;
+
+        // Apply the patch
         const patchDashboardResult = await window.api.executeCommand('kubectl', [
           'patch',
           'secret',
@@ -605,23 +643,42 @@ spec:
           '-p',
           `'${patchDashboardSecretYaml}'`
         ]);
-        
+
         if (patchDashboardResult.code === 0) {
-          addLog('Successfully updated dashboard-secrets to use PgBouncer.');
+          addLog('Dashboard connection secrets updated to use PgBouncer.');
         } else {
-          addLog(`Warning: Failed to update dashboard-secrets: ${patchDashboardResult.stderr}`);
+          addLog(`Warning: Failed to update dashboard secrets for PgBouncer: ${patchDashboardResult.stderr}`);
         }
-      } else {
-        addLog('Warning: database-url not found in dashboard-secrets. Skipping update.');
       }
-    } else {
-      addLog(`Warning: Failed to get dashboard-secrets: ${getDashboardSecretsCmd.stderr}`);
     }
-  } else {
-    addLog('Dashboard-secrets not found. This is normal if dashboard is not yet deployed.');
   }
+
+  // Verify HPA is working correctly
+  addLog('Verifying PgBouncer HPA configuration...');
   
-  addLog('PgBouncer installation completed successfully.');
+  const hpaStatusCmd = await window.api.executeCommand('kubectl', [
+    'get',
+    'hpa',
+    'pgbouncer-hpa',
+    '-o',
+    'wide'
+  ]);
+  
+  if (hpaStatusCmd.code === 0) {
+    addLog('✅ PgBouncer HPA deployed successfully!');
+    addLog(`HPA Status: ${hpaStatusCmd.stdout}`);
+    addLog('The PgBouncer HPA will automatically scale from 1-5 pods based on:');
+    addLog('- CPU Utilization: Will scale up when average CPU reaches 70%');
+    addLog('- Memory Utilization: Will scale up when average memory reaches 80%');
+    addLog('- Scale Down Delay: 5 minutes (stabilization window)');
+    addLog('- Scale Up Delay: 1 minute (stabilization window)');
+  } else {
+    addLog('⚠️ PgBouncer HPA verification failed. The HPA might not be working correctly.');
+    addLog('You can check the HPA status manually with: kubectl get hpa pgbouncer-hpa');
+  }
+
+  addLog('PgBouncer installation with autoscaling completed successfully.');
+  return true;
 };
 
 /**
@@ -936,7 +993,7 @@ spec:
     - ReadWriteOnce
   resources:
     requests:
-      storage: 1Gi
+      storage: 20Gi
   storageClassName: ${storageClassName}
 `;
 
@@ -1003,7 +1060,7 @@ metadata:
   name: postgres-pv
 spec:
   capacity:
-    storage: 10Gi
+    storage: 20Gi
   accessModes:
     - ReadWriteOnce
   persistentVolumeReclaimPolicy: Retain
@@ -1020,7 +1077,7 @@ spec:
     - ReadWriteOnce
   resources:
     requests:
-      storage: 10Gi
+      storage: 20Gi
   storageClassName: ""
   volumeName: postgres-pv
 `;
@@ -1036,7 +1093,7 @@ spec:
     - ReadWriteOnce
   resources:
     requests:
-      storage: 10Gi
+      storage: 20Gi
   storageClassName: ${storageClassName}
 `;
     }
@@ -1054,7 +1111,7 @@ metadata:
   name: postgres-pv
 spec:
   capacity:
-    storage: 10Gi
+    storage: 20Gi
   accessModes:
     - ReadWriteOnce
   persistentVolumeReclaimPolicy: Retain
@@ -1071,7 +1128,7 @@ spec:
     - ReadWriteOnce
   resources:
     requests:
-      storage: 10Gi
+      storage: 20Gi
   storageClassName: ""
   volumeName: postgres-pv
 `;
@@ -1176,8 +1233,11 @@ data:
     host    all             all             all                     trust
   postgresql.conf: |
     listen_addresses = '*'
-    max_connections = 100
-    shared_buffers = 128MB
+    max_connections = 200
+    shared_buffers = 256MB
+    work_mem = 8MB
+    maintenance_work_mem = 64MB
+    effective_cache_size = 768MB
     dynamic_shared_memory_type = posix
     max_wal_size = 1GB
     min_wal_size = 80MB
@@ -1298,11 +1358,11 @@ spec:
           value: /var/lib/postgresql/data/pgdata
         resources:
           requests:
-            memory: "256Mi"
-            cpu: "100m"
+            memory: "512Mi"
+            cpu: "250m"
           limits:
             memory: "1Gi"
-            cpu: "500m"
+            cpu: "1"
         volumeMounts:
         - mountPath: /var/lib/postgresql/data
           name: postgres-storage

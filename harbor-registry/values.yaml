@@ -1,0 +1,152 @@
+## Global configurations
+global:
+  # Defaults to Helm chart / appVersion
+  # version: v2.8.0
+
+## Expose configurations
+expose:
+  # Type of service
+  type: ingress
+  tls:
+    enabled: true
+    certSource: secret
+    secret:
+      secretName: "wildcard-domain-certificate-prod"
+      notarySecretName: "wildcard-domain-certificate-prod"
+  ingress:
+    hosts:
+      core: registry.edurange.cloud
+    # Use ingressClassName instead of deprecated annotation
+    # ingressClassName: nginx
+    annotations:
+      kubernetes.io/ingress.class: "nginx"
+      nginx.ingress.kubernetes.io/ssl-redirect: "true"
+      # Fix routing issues by ensuring consistent settings
+      nginx.ingress.kubernetes.io/proxy-body-size: "0"
+      # Disable buffering for core API
+      nginx.ingress.kubernetes.io/proxy-buffering: "off"
+
+# Core settings to fix authentication issues
+core:
+  replicas: 1  # Reduce to 1 replica for testing
+  # Maximum number of concurrent users
+  maxConcurrency: 100
+  # Allow anonymous read-only access
+  anonymousAccessForRead: true
+
+# Change service configuration to ensure proper routing
+portal:
+  serviceType: "ClusterIP"  # Ensure portal is ClusterIP, not LoadBalancer
+  # Ensure portal is using port 80
+  port: 80
+
+# Database settings with clear password
+database:
+  type: internal
+  internal:
+    password: "Harbor@db123"
+    # Size for database PVC
+    size: 10Gi
+
+# Persistence settings
+persistence:
+  enabled: true
+  # Use persistentVolumeClaim for registry data
+  persistentVolumeClaim:
+    registry:
+      # Use existing PVC or create a new one
+      existingClaim: ""
+      # When no existing claim is provided, this size will be used
+      size: 50Gi
+      # StorageClass to use, leave empty to use default
+      storageClass: ""
+  imageChartStorage:
+    # Storage backend for storing images and charts metadata
+    # Options: filesystem, azure, gcs, s3, swift, oss
+    type: filesystem
+    filesystem:
+      rootdirectory: /storage
+
+# Registry component settings
+registry:
+  replicas: 1
+  # Registry storage driver
+  storageProviders:
+    filesystem:
+      rootdirectory: /storage
+
+# ChartMuseum for Helm charts
+chartmuseum:
+  enabled: true
+  replicas: 1
+
+# Trivy for container vulnerability scanning
+trivy:
+  enabled: true
+  replicas: 1
+  # Skip vulnerability scanning for challenge images
+  # This is a custom configuration through security policy
+  ignoreNamespaces:
+    - challenges
+  # Update vulnerability database
+  updateInterval: "24h"
+
+# Notary for content trust
+notary:
+  enabled: false
+
+# Redis for caching
+redis:
+  type: internal
+  internal:
+    # Size for Redis PVC
+    size: 5Gi
+
+# Job service settings
+jobservice:
+  replicas: 1
+  # Maximum job workers
+  maxJobWorkers: 10
+
+# Log settings
+log:
+  level: debug  # Set to debug for troubleshooting
+  # Rotating files for logs
+  rotate_count: 50
+  # Size of a single log file
+  rotate_size: 200M
+
+# Proxy cache
+proxy:
+  enabled: true
+  httpProxy: ""
+  httpsProxy: ""
+  noProxy: "127.0.0.1,localhost,.local,.internal"
+
+# Authentication
+externalURL: https://registry.edurange.cloud
+
+# Resources for each component
+# Adjust based on your cluster capacity
+resources:
+  small:
+    requests:
+      memory: 256Mi
+      cpu: 250m
+    limits:
+      memory: 512Mi
+      cpu: 500m
+  medium:
+    requests:
+      memory: 512Mi
+      cpu: 500m
+    limits:
+      memory: 1Gi
+      cpu: 1
+  large:
+    requests:
+      memory: 1Gi
+      cpu: 1
+    limits:
+      memory: 2Gi
+      cpu: 2

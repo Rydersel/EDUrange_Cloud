@@ -47,11 +47,22 @@ export const getDatabaseSubdomain = (): string => {
 export const getInstanceManagerUrl = (): string => {
   // First check if we have a direct URL configured
   if (process.env.INSTANCE_MANAGER_URL) {
-    return process.env.INSTANCE_MANAGER_URL;
+    const url = process.env.INSTANCE_MANAGER_URL;
+    
+    // Safety check - never use localhost URLs in production
+    if (process.env.NODE_ENV === 'production' && url.includes('localhost')) {
+      console.error(`[ERROR] Ignoring localhost URL in production: ${url}`);
+      // Force fallback to Kubernetes service URL
+      return 'http://instance-manager.default.svc.cluster.local/api';
+    }
+    
+    console.log(`[DEBUG] Using INSTANCE_MANAGER_URL from env: ${url}`);
+    return url;
   }
 
   // Check for health check specific URL
   if (process.env.HEALTH_CHECK_INSTANCE_MANAGER_URL) {
+    console.log(`[DEBUG] Using HEALTH_CHECK_INSTANCE_MANAGER_URL: ${process.env.HEALTH_CHECK_INSTANCE_MANAGER_URL}`);
     return process.env.HEALTH_CHECK_INSTANCE_MANAGER_URL;
   }
 
@@ -59,10 +70,17 @@ export const getInstanceManagerUrl = (): string => {
   const baseDomain = getBaseDomain();
   const subdomain = getInstanceManagerSubdomain();
 
+  console.log(`[DEBUG] Constructing URL from parts: subdomain=${subdomain}, baseDomain=${baseDomain}`);
+
   if (!baseDomain) {
     console.error("Cannot construct instance manager URL: missing base domain");
     console.error("BASE_DOMAIN:", process.env.BASE_DOMAIN);
     console.error("CONNECT_SRC_DOMAIN:", process.env.CONNECT_SRC_DOMAIN);
+    console.log("[DEBUG] Falling back to direct Kubernetes service URL");
+    // Use Kubernetes service DNS name when running inside the cluster
+    if (typeof window === 'undefined') {
+      return 'http://instance-manager.default.svc.cluster.local/api';
+    }
     // Never fall back to localhost in production
     return '';
   }
@@ -70,11 +88,18 @@ export const getInstanceManagerUrl = (): string => {
   if (!subdomain) {
     console.error("Cannot construct instance manager URL: missing subdomain");
     console.error("INSTANCE_MANAGER_SUBDOMAIN:", process.env.INSTANCE_MANAGER_SUBDOMAIN);
+    console.log("[DEBUG] Falling back to direct Kubernetes service URL");
+    // Use Kubernetes service DNS name when running inside the cluster
+    if (typeof window === 'undefined') {
+      return 'http://instance-manager.default.svc.cluster.local/api';
+    }
     // Never fall back to localhost in production
     return '';
   }
 
-  return `https://${subdomain}.${baseDomain}/instance-manager/api`;
+  const constructedUrl = `https://${subdomain}.${baseDomain}/instance-manager/api`;
+  console.log(`[DEBUG] Constructed URL: ${constructedUrl}`);
+  return constructedUrl;
 };
 
 /**

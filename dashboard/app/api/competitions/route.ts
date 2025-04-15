@@ -11,7 +11,7 @@ import { NextRequest } from 'next/server';
 // Create a rate limiter for competition operations
 const competitionRateLimiter = rateLimit({
   interval: 60 * 1000, // 1 minute
-  limit: 20, // 20 requests per minute
+  limit: 40, // 40 requests per minute
 });
 
 const competitionSchema = z.object({

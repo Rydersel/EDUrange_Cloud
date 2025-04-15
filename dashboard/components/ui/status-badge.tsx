@@ -9,12 +9,14 @@ export type StatusType =
   | 'error'
   | 'warning' 
   | 'info'
+  | 'completed'
   | 'unknown';
 
 interface StatusBadgeProps extends React.HTMLAttributes<HTMLDivElement> {
   status: string;
   showText?: boolean;
   customText?: string;
+  children?: React.ReactNode;
 }
 
 // Map different status values to standardized status types
@@ -38,6 +40,9 @@ const normalizeStatus = (status: string): StatusType => {
   } 
   else if (['info'].includes(lowerStatus)) {
     return 'info';
+  }
+  else if (['completed', 'complete', 'success', 'done', 'finished'].includes(lowerStatus)) {
+    return 'completed';
   }
   
   return 'unknown';
@@ -69,20 +74,22 @@ const getStatusDisplayText = (status: string): string => {
 const getStatusClassNames = (statusType: StatusType): string => {
   switch (statusType) {
     case 'active':
-      return 'bg-green-500/10 text-green-500 hover:bg-green-500/20 border-green-500/10';
+      return 'bg-green-500/20 text-green-500 hover:bg-green-500/30 border border-green-500/30';
     case 'creating':
-      return 'bg-yellow-500/10 text-yellow-500 hover:bg-yellow-500/20 border-yellow-500/10';
+      return 'bg-yellow-500/20 text-yellow-500 hover:bg-yellow-500/30 border border-yellow-500/30';
     case 'error':
-      return 'bg-red-500/10 text-red-500 hover:bg-red-500/20 border-red-500/10';
+      return 'bg-red-500/20 text-red-500 hover:bg-red-500/30 border border-red-500/30';
     case 'warning':
-      return 'bg-orange-500/10 text-orange-500 hover:bg-orange-500/20 border-orange-500/10';
+      return 'bg-orange-500/20 text-orange-500 hover:bg-orange-500/30 border border-orange-500/30';
     case 'terminating':
-      return 'bg-orange-500/10 text-orange-500 hover:bg-orange-500/20 border-orange-500/10';
+      return 'bg-orange-500/20 text-orange-500 hover:bg-orange-500/30 border border-orange-500/30';
     case 'info':
-      return 'bg-blue-500/10 text-blue-500 hover:bg-blue-500/20 border-blue-500/10';
+      return 'bg-blue-500/20 text-blue-500 hover:bg-blue-500/30 border border-blue-500/30';
+    case 'completed':
+      return 'bg-emerald-500/20 text-emerald-500 hover:bg-emerald-500/30 border border-emerald-500/30';
     case 'unknown':
     default:
-      return 'bg-gray-500/10 text-gray-500 hover:bg-gray-500/20 border-gray-500/10';
+      return 'bg-gray-500/20 text-gray-500 hover:bg-gray-500/30 border border-gray-500/30';
   }
 };
 
@@ -91,6 +98,7 @@ export function StatusBadge({
   showText = true, 
   customText, 
   className,
+  children,
   ...props 
 }: StatusBadgeProps) {
   const statusType = normalizeStatus(status);
@@ -99,9 +107,10 @@ export function StatusBadge({
   return (
     <Badge
       variant="secondary"
-      className={cn(getStatusClassNames(statusType), className)}
+      className={cn(getStatusClassNames(statusType), "font-medium", className)}
       {...props}
     >
+      {children}
       {displayText}
     </Badge>
   );

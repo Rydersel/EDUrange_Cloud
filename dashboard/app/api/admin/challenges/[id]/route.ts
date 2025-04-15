@@ -3,10 +3,22 @@ import { getServerSession } from 'next-auth/next';
 import authConfig from '@/auth.config';
 import { prisma } from '@/lib/prisma';
 import { requireAdmin } from '@/lib/auth-utils';
+import rateLimit from '@/lib/rate-limit';
+
+// Create a rate limiter for admin operations
+const adminOperationsRateLimiter = rateLimit({
+  interval: 60 * 1000, // 1 minute
+  limit: 15, // 15 requests per minute - strict limit for admin operations
+});
 
 export async function DELETE(req: NextRequest, props: { params: Promise<{ id: string }> }) {
-  const params = await props.params;
   try {
+    // Apply rate limiting
+    const rateLimitResult = await adminOperationsRateLimiter.check(req);
+    if (rateLimitResult) return rateLimitResult;
+    
+    const params = await props.params;
+    
     // Check if user is admin using the utility function
     const adminCheckResult = await requireAdmin(req);
     if (adminCheckResult) return adminCheckResult;

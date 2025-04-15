@@ -6,7 +6,7 @@
     "containers": [
       {
         "name": "challenge-container",
-        "image": "registry.rydersel.cloud/challenge-base",
+        "image": "registry.edurange.cloud/challenges/challenge-base",
         "ports": [
           {
             "containerPort": 22,
@@ -28,7 +28,7 @@
       },
       {
         "name": "webos",
-        "image": "registry.rydersel.cloud/webos",
+        "image": "registry.edurange.cloud/edurange/webos",
         "ports": [
           {
             "containerPort": 3000,
@@ -53,7 +53,7 @@
       },
       {
         "name": "terminal",
-        "image": "registry.rydersel.cloud/terminal",
+        "image": "registry.edurange.cloud/edurange/terminal",
         "ports": [
           {
             "containerPort": 3001,
@@ -153,11 +153,11 @@
     "challengeImage": {
       "container": "challenge-container",
       "property": "image",
-      "default": "registry.rydersel.cloud/challenge-base"
+      "default": "registry.edurange.cloud/challenges/challenge-base"
     },
     "appsConfig": {
       "container": "webos",
       "property": "env.NEXT_PUBLIC_APPS_CONFIG"
     }
   }
-} 
+}

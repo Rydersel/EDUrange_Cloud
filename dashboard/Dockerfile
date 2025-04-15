@@ -1,4 +1,4 @@
-# docker buildx build --platform linux/amd64 -t registry.rydersel.cloud/dashboard . --push
+# docker buildx build --platform linux/amd64 -t registry.edurange.cloud/edurange/dashboard . --push
 
 FROM node:20-alpine AS base
 
@@ -28,13 +28,18 @@ RUN npx prisma generate
 
 # Use build arguments for build-time configuration (not sensitive values)
 ARG BUILD_DATABASE_URL=postgresql://postgres:postgres@localhost:5432/postgres
+# Add build arguments for required environment variables
+ARG GITHUB_CLIENT_ID=build-placeholder
+ARG GITHUB_CLIENT_SECRET=build-placeholder
+ARG NEXT_PUBLIC_APP_URL=http://localhost:3000
 
-# Build the application - using environment variables only during build time
-# These are not saved in the final image layers
+# Build the application - using only essential build-time variables
 RUN NEXT_TELEMETRY_DISABLED=1 \
     PRISMA_ENGINES_CHECKSUM_IGNORE_MISSING=1 \
     DATABASE_URL=${BUILD_DATABASE_URL} \
     NEXTAUTH_SECRET=build-time-only-not-saved-in-image \
+    NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL} \
+    SKIP_ENV_VALIDATION=1 \
     npm run build
 
 # Production image, copy all the files and run next

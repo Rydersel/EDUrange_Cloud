@@ -84,6 +84,13 @@ class CTDBasedHandler(BaseChallengeHandler):
                 logging.info(f"Using INGRESS_URL as domain: {self.domain}")
         else:
             logging.info(f"Using DOMAIN environment variable: {self.domain}")
+            
+        # Debug: Log registry URL from environment
+        self.registry_url = os.getenv("REGISTRY_URL")
+        if self.registry_url:
+            logging.info(f"[REGISTRY DEBUG] Using REGISTRY_URL: {self.registry_url}")
+        else:
+            logging.warning("[REGISTRY DEBUG] REGISTRY_URL environment variable is not set")
 
         # Load the CTD for this challenge type
         self._load_ctd()
@@ -722,84 +729,70 @@ class CTDBasedHandler(BaseChallengeHandler):
         return ingress
 
     def deploy(self):
-        """Deploy the challenge based on the Challenge Type Definition."""
+        """Deploy the challenge using the CTD template."""
         try:
-            # Step 1: Prepare variables for template substitution
-            variables = self._prepare_template_variables()
+            instance_name = self.instance_name
+            logging.info(f"Deploying challenge for instance: {instance_name}")
+            
+            # Debug: Check registry values in environment at deployment time
+            self._debug_registry_config()
+            
+            # Prepare variables for template substitution
+            template_vars = self._prepare_template_variables()
+            
+            # Debug: Log template variables
+            logging.info(f"[REGISTRY DEBUG] Template variables: {template_vars}")
 
-            # Verify that resolved_variables is set and contains necessary values
-            if not hasattr(self, 'resolved_variables') or not self.resolved_variables:
-                logging.error("resolved_variables not set after calling _prepare_template_variables")
-                self.resolved_variables = variables  # Set it directly as a fallback
-
-            # Log the flag secret name for debugging
-            flag_secret_name = self.resolved_variables.get('FLAG_SECRET_NAME', 'not-set')
-            logging.info(f"Using flag secret name: {flag_secret_name} for instance {self.instance_name}")
-
-            # Step 2: Resolve the CTD template with variables
+            # Get Challenge Type Definition and resolve templates
             from challenge_utils.ctd_loader import resolve_ctd_template
-            resolved_ctd = resolve_ctd_template(self.ctd_data, variables)
+            resolved_ctd = resolve_ctd_template(self.ctd_data, template_vars)
+            
+            # Debug: Log resolved CTD registry references
+            self._debug_registry_references(resolved_ctd)
 
-            # Log service and ingress names from CTD for debugging
-            for service_def in resolved_ctd.get('services', []):
-                logging.info(f"Service name in resolved CTD: {service_def.get('name')}")
-
-            for ingress_def in resolved_ctd.get('ingress', []):
-                logging.info(f"Ingress name in resolved CTD: {ingress_def.get('name')}")
-                for rule in ingress_def.get('rules', []):
-                    logging.info(f"Ingress host in resolved CTD: {rule.get('host')}")
-                    for path in rule.get('http', {}).get('paths', []):
-                        service_name = path.get('backend', {}).get('service', {}).get('name')
-                        logging.info(f"  Backend service name in resolved CTD: {service_name}")
-
-            # Step 3: Convert CTD to Kubernetes resources
+            # Create Kubernetes resources from the resolved CTD
             resources = self._convert_ctd_to_k8s_resources(resolved_ctd)
+            logging.info(f"Created {len(resources)} resource definitions")
 
-            # Log resource names for debugging
-            for resource in resources:
-                if resource.kind == "Service":
-                    logging.info(f"Service resource name: {resource.metadata.name}")
-                elif resource.kind == "Ingress":
-                    logging.info(f"Ingress resource name: {resource.metadata.name}")
-                    for rule in resource.spec.rules:
-                        logging.info(f"Ingress rule host: {rule.host}")
-                        for path in rule.http.paths:
-                            logging.info(f"  Backend service name: {path.backend.service.name}")
-
-            # Step 4: Apply type-specific configurations
+            # Apply type-specific configuration to resources
             resources = self._apply_type_config(resources)
+            
+            # Debug: Check final resource image references 
+            self._debug_resource_images(resources)
 
-            # Step 5: Create resources in Kubernetes
+            # Create Kubernetes resources
             created_resources = []
             for resource in resources:
+                kind = resource.kind
+                logging.info(f"Creating {kind} for instance {instance_name}")
+                
                 try:
-                    if resource.kind == "Pod":
-                        # Log environment variables in challenge container for debugging
-                        for container in resource.spec.containers:
-                            if container.name == 'challenge-container':
-                                logging.info(f"Container: {container.name} environment variables:")
-                                for env in container.env:
-                                    if env.value_from and env.value_from.secret_key_ref:
-                                        logging.info(
-                                            f"  {env.name}: secretKeyRef.name={env.value_from.secret_key_ref.name}, key={env.value_from.secret_key_ref.key}")
-                                    else:
-                                        logging.info(f"  {env.name}: {env.value}")
-
-                        created = self.api_core_v1.create_namespaced_pod(namespace="default", body=resource)
-                    elif resource.kind == "Service":
+                    # Logic to create different types of resources
+                    if kind == "Pod":
+                        # Debug: Check Pod container images before creation
+                        for i, container in enumerate(resource.spec.containers):
+                            logging.info(f"[REGISTRY DEBUG] Final Pod container {i} ({container.name}): image = {container.image}")
+                        
+                        # Create Pod
+                        self.api_core_v1.create_namespaced_pod(
+                            namespace="default",
+                            body=resource
+                        )
+                        created_resources.append({"kind": "Pod", "name": resource.metadata.name})
+                    elif kind == "Service":
                         logging.info(f"Creating Service '{resource.metadata.name}'")
-                        created = self.api_core_v1.create_namespaced_service(namespace="default", body=resource)
-                    elif resource.kind == "Ingress":
+                        self.api_core_v1.create_namespaced_service(namespace="default", body=resource)
+                    elif kind == "Ingress":
                         logging.info(f"Creating Ingress '{resource.metadata.name}'")
-                        created = self.api_networking_v1.create_namespaced_ingress(namespace="default", body=resource)
+                        self.api_networking_v1.create_namespaced_ingress(namespace="default", body=resource)
                     else:
-                        logging.warning(f"Unknown resource kind: {resource.kind}")
+                        logging.warning(f"Unknown resource kind: {kind}")
                         continue
 
-                    created_resources.append(created)
-                    logging.info(f"Created {resource.kind} '{resource.metadata.name}'")
+                    created_resources.append({"kind": kind, "name": resource.metadata.name})
+                    logging.info(f"Created {kind} '{resource.metadata.name}'")
                 except Exception as e:
-                    logging.error(f"Error creating {resource.kind}: {e}")
+                    logging.error(f"Error creating {kind}: {e}")
                     # Attempt cleanup and raise exception
                     self.cleanup()
                     raise
@@ -873,6 +866,63 @@ class CTDBasedHandler(BaseChallengeHandler):
             result['success'] = False
 
         return result['success']
+
+    def _debug_registry_config(self):
+        """Debug helper to check registry configuration"""
+        logging.info("[REGISTRY DEBUG] ============ Registry Configuration Debug ============")
+        
+        # Check environment variables
+        registry_url = os.getenv("REGISTRY_URL")
+        logging.info(f"[REGISTRY DEBUG] REGISTRY_URL env: {registry_url}")
+        
+        # Check webos-environment ConfigMap
+        try:
+            configmap = self.api_core_v1.read_namespaced_config_map(
+                name="webos-environment",
+                namespace="default"
+            )
+            if configmap and configmap.data:
+                if "REGISTRY_URL" in configmap.data:
+                    logging.info(f"[REGISTRY DEBUG] webos-environment ConfigMap REGISTRY_URL: {configmap.data['REGISTRY_URL']}")
+                else:
+                    logging.info("[REGISTRY DEBUG] webos-environment ConfigMap exists but doesn't contain REGISTRY_URL")
+        except Exception as e:
+            logging.info(f"[REGISTRY DEBUG] Error getting webos-environment ConfigMap: {e}")
+        
+        # Check which registry values will be respected
+        registry_to_use = registry_url or "registry.edurange.cloud/edurange"
+        logging.info(f"[REGISTRY DEBUG] Registry URL that will be used: {registry_to_use}")
+        logging.info("[REGISTRY DEBUG] =====================================================")
+    
+    def _debug_registry_references(self, ctd_data):
+        """Debug helper to check registry URLs in CTD data"""
+        logging.info("[REGISTRY DEBUG] ============ CTD Registry References ============")
+        
+        # Check pods
+        if 'podTemplate' in ctd_data and 'containers' in ctd_data['podTemplate']:
+            for i, container in enumerate(ctd_data['podTemplate']['containers']):
+                if 'image' in container:
+                    logging.info(f"[REGISTRY DEBUG] Container {i} ({container.get('name', 'unnamed')}): image = {container['image']}")
+        
+        # Check extension points
+        if 'extensionPoints' in ctd_data:
+            for ext_name, ext_config in ctd_data['extensionPoints'].items():
+                logging.info(f"[REGISTRY DEBUG] Extension point: {ext_name}, config: {ext_config}")
+        
+        logging.info("[REGISTRY DEBUG] ================================================")
+    
+    def _debug_resource_images(self, resources):
+        """Debug helper to check images in k8s resources"""
+        logging.info("[REGISTRY DEBUG] ============ K8S Resource Images ============")
+        
+        for resource in resources:
+            if hasattr(resource, 'kind') and resource.kind == 'Pod':
+                if hasattr(resource.spec, 'containers'):
+                    for i, container in enumerate(resource.spec.containers):
+                        if hasattr(container, 'image'):
+                            logging.info(f"[REGISTRY DEBUG] Pod {resource.metadata.name} container {i} ({container.name}): image = {container.image}")
+        
+        logging.info("[REGISTRY DEBUG] =============================================")
 
 
 # Registry mapping challenge_type strings to Handler classes

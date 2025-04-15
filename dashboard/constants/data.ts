@@ -14,6 +14,13 @@ export type Challenge = {
   time_alive: string;
   challengeType?: string;
   groupId?: string | null;
+  metadata?: {
+    taskId?: string;
+    queuePosition?: number;
+    priority?: number;
+    queuedAt?: string;
+    error?: string;
+  };
 };
 
 

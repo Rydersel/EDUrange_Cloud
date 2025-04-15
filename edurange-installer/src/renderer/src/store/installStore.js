@@ -91,7 +91,7 @@ const useInstallStore = create(
       
       // Registry configuration
       registry: {
-        url: 'registry.rydersel.cloud',
+        url: 'registry.edurange.cloud/edurange',
       },
       setRegistry: (key, value) => set((state) => ({
         registry: {
@@ -108,6 +108,7 @@ const useInstallStore = create(
         databaseController: 'pending',
         instanceManager: 'pending',
         monitoringService: 'pending',
+        redisService: 'pending',
         dashboard: 'pending',
         userManagement: 'pending',
       },
@@ -153,7 +154,7 @@ const useInstallStore = create(
           enableDebugSidecar: false,
         },
         registry: {
-          url: 'registry.rydersel.cloud',
+          url: 'registry.edurange.cloud/edurange',
         },
         installationStatus: {
           ingressController: 'pending',
@@ -162,11 +163,24 @@ const useInstallStore = create(
           databaseController: 'pending',
           instanceManager: 'pending',
           monitoringService: 'pending',
+          redisService: 'pending',
           dashboard: 'pending',
           userManagement: 'pending',
         },
         logs: [],
       }),
+      
+      // Instance Manager configuration
+      instanceManager: {
+        enableImageCaching: false,
+      },
+      setInstanceManagerOption: (option, value) => 
+        set((state) => ({
+          instanceManager: {
+            ...state.instanceManager,
+            [option]: value
+          }
+        })),
     }),
     {
       name: 'edurange-installer-storage',

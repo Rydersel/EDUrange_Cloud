@@ -15,7 +15,7 @@
       "type": "container",
       "id": "bandit-4-os",
       "config": {
-        "image": "registry.rydersel.cloud/bandit4",
+        "image": "registry.edurange.cloud/challenges/bandit4",
         "resources": {
           "cpu_limit": "500m",
           "mem_limit": "512Mi"
@@ -145,6 +145,6 @@
     }
   ],
   "typeConfig": {
-    "challengeImage": "registry.rydersel.cloud/bandit4"
+    "challengeImage": "registry.edurange.cloud/challenges/bandit4"
   }
 }

@@ -11,7 +11,7 @@ import { NextRequest } from 'next/server';
 // Create a rate limiter for join operations
 const joinRateLimiter = rateLimit({
   interval: 60 * 1000, // 1 minute
-  limit: 10, // 10 requests per minute
+  limit: 15, 
 });
 
 // Define validation schema for join request

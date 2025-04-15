@@ -1,7 +1,7 @@
 "use client"
 
 import React from 'react'
-import { ChevronDown, ChevronUp, Trophy } from 'lucide-react'
+import { ChevronDown, ChevronUp, Trophy, Loader2 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { StatusBadge } from '@/components/ui/status-badge'
 import {
@@ -12,7 +12,6 @@ import {
 } from "@/components/ui/accordion"
 import { Button } from "@/components/ui/button"
 import { motion, AnimatePresence } from "framer-motion"
-import { extractChallengeDescription } from "@/lib/utils"
 import { useToast } from "@/components/ui/use-toast"
 import { useRouter } from "next/navigation"
 import { devLog } from '@/lib/logger'
@@ -46,6 +45,16 @@ interface ChallengeItemProps {
   onDifficultyClick: (difficulty: string) => void;
   sortByDifficulty: "asc" | "desc" | null;
   onComplete: (challengeName: string) => void;
+  activeInstance?: {
+    id: string;
+    challengeUrl: string;
+    status: string;
+    creationTime: string;
+    challengeId?: string;
+    competitionId?: string;
+  };
+  onTerminateInstance: (instanceId: string) => Promise<void>;
+  hasReachedMaxInstances: boolean;
 }
 
 const checkUrlAvailability = async (url: string, maxAttempts = 30): Promise<boolean> => {
@@ -75,13 +84,48 @@ export function ChallengeItem({
   difficultyColors,
   onDifficultyClick,
   sortByDifficulty,
-  onComplete
+  onComplete,
+  activeInstance,
+  onTerminateInstance,
+  hasReachedMaxInstances
 }: ChallengeItemProps) {
   const [showCompletionAnimation, setShowCompletionAnimation] = React.useState(false);
   const [isStarting, setIsStarting] = React.useState(false);
-  const description = challenge.description || extractChallengeDescription(challenge.AppsConfig);
+  const [isTerminating, setIsTerminating] = React.useState(false);
   const { toast } = useToast();
   const router = useRouter();
+
+  // Use the challenge description directly, without fallback to AppConfig
+  const description = challenge.description || 'No description available';
+  
+  // Check for an active instance of this challenge
+  const isActive = !!activeInstance;
+  
+  // Debug logs to help troubleshoot status issues
+  console.log(`Challenge ${challenge.name} (ID: ${challenge.id}):`);
+  console.log(`  Has active instance: ${isActive}`);
+  if (isActive) {
+    console.log(`  Instance ID: ${activeInstance.id}`);
+    console.log(`  Instance status: ${activeInstance.status}`);
+  }
+  
+  // Helper flags for different instance statuses
+  const isCreating = isActive && activeInstance.status?.toLowerCase().includes('creating');
+  const isQueued = isActive && activeInstance.status?.toLowerCase().includes('queued');
+  const isTerminatingStatus = isActive && activeInstance.status?.toLowerCase().includes('terminating');
+  const isPending = isCreating || isQueued;
+  
+  // This will ensure instance is correctly matched with the challenge and status is shown
+  console.log(`  Is Creating: ${isCreating}, Is Queued: ${isQueued}, Is Terminating: ${isTerminatingStatus}`);
+
+  // Debug logging - log once on initial render
+  React.useEffect(() => {
+    console.log(`ChallengeItem ${challenge.id} (${challenge.name}):`, {
+      activeInstance,
+      hasInstance: !!activeInstance,
+      challengeId: challenge.id
+    });
+  }, [challenge.id, challenge.name, activeInstance]);
 
   const handleStartChallenge = async () => {
     try {
@@ -120,13 +164,11 @@ export function ChallengeItem({
       // Show success toast
       toast({
         title: "Challenge Created",
-        description: "Your challenge instance has been created. Refreshing page to show the new instance...",
+        description: "Your challenge is being prepared. Redirecting to challenge view...",
       });
 
-      // Do a full page reload to ensure instances list is updated
-      setTimeout(() => {
-        window.location.reload();
-      }, 1000);
+      // Navigate to the embedded challenge view
+      router.push(`/competitions/${competitionId}/challenges/${challenge.id}`);
 
     } catch (error) {
       console.error("Error starting challenge:", error);
@@ -140,7 +182,48 @@ export function ChallengeItem({
     }
   };
 
+  const handleTerminateChallenge = async () => {
+    if (!activeInstance) return;
+    
+    // Prevent double-clicks
+    if (isTerminating) return;
+    
+    try {
+      setIsTerminating(true);
+      toast({
+        title: "Terminating Challenge",
+        description: "Please wait while your challenge instance is being terminated...",
+      });
 
+      await onTerminateInstance(activeInstance.id);
+      
+      toast({
+        title: "Challenge Terminated",
+        description: "Your challenge has been successfully terminated.",
+      });
+      
+      // Remove from started challenges map
+      setStartedChallenges(prev => {
+        const newMap = new Map(prev);
+        const competitionChallenges = newMap.get(competitionId) || new Set();
+        competitionChallenges.delete(challenge.name);
+        newMap.set(competitionId, competitionChallenges);
+        return newMap;
+      });
+      
+    } catch (error) {
+      console.error("Error terminating challenge:", error);
+      toast({
+        title: "Error",
+        description: "Failed to terminate challenge. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsTerminating(false);
+    }
+  };
+
+  // When rendering the challenge status, check for active instances
   return (
     <Accordion
       type="single"
@@ -191,7 +274,43 @@ export function ChallengeItem({
               {(challenge.completed || completedChallenges.get(competitionId)?.has(challenge.name)) && (
                 <StatusBadge status="completed" />
               )}
-              {startedChallenges.get(competitionId)?.has(challenge.name) && !challenge.completed && (
+              {isActive && (
+                <div className="flex items-center gap-2">
+                  <StatusBadge 
+                    status={
+                      isCreating ? "pending" : 
+                      isQueued ? "info" : 
+                      isTerminatingStatus ? "warning" : 
+                      "success"
+                    } 
+                    customText={
+                      isCreating ? "Creating" : 
+                      isQueued ? "Queued" : 
+                      isTerminatingStatus ? "Terminating" : 
+                      "Active"
+                    } 
+                  />
+                  {!isTerminatingStatus && (
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleTerminateChallenge();
+                      }}
+                      disabled={isTerminating}
+                      className="h-6 px-2 py-0 text-xs"
+                    >
+                      {isTerminating ? (
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                      ) : (
+                        'Terminate'
+                      )}
+                    </Button>
+                  )}
+                </div>
+              )}
+              {!isActive && startedChallenges.get(competitionId)?.has(challenge.name) && !challenge.completed && (
                 <StatusBadge status="pending" customText="In Progress" />
               )}
             </div>
@@ -202,9 +321,7 @@ export function ChallengeItem({
             <div className="rounded-lg bg-[#0A120A] p-4 space-y-4">
               <div className="flex justify-between items-start">
                 <p className="text-gray-200">
-                  {description && description !== 'No description available'
-                    ? description
-                    : 'This challenge does not have a description.'}
+                  {description}
                 </p>
                 <div className="flex items-center gap-2 ml-4">
                   <span className="text-sm text-gray-400">Questions completed:</span>
@@ -215,25 +332,73 @@ export function ChallengeItem({
                 </div>
               </div>
 
-              <Button
-                className="w-full mt-4"
-                onClick={() => {
-                  if (challenge.completed || completedChallenges.get(competitionId)?.has(challenge.name)) {
-                    // Do nothing if already completed
-
-                  } else {
-                    handleStartChallenge();
-                  }
-                }}
-                disabled={challenge.completed || completedChallenges.get(competitionId)?.has(challenge.name) || isStarting}
-              >
-                {isStarting ? 'Starting Challenge...' :
-                  challenge.completed || completedChallenges.get(competitionId)?.has(challenge.name)
-                    ? 'Challenge Completed'
-                    : startedChallenges.get(competitionId)?.has(challenge.name)
-                      ? 'Complete Challenge'
-                      : 'Start Challenge'}
-              </Button>
+              <div className="flex gap-2 mt-4">
+                {isActive ? (
+                  <>
+                    <Button
+                      className="flex-1"
+                      onClick={() => router.push(`/competitions/${competitionId}/challenges/${challenge.id}`)}
+                      disabled={isPending || isTerminatingStatus}
+                    >
+                      {isPending ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Preparing Challenge...
+                        </>
+                      ) : (
+                        'Continue Challenge'
+                      )}
+                    </Button>
+                    <Button
+                      className="w-auto"
+                      variant="destructive"
+                      onClick={handleTerminateChallenge}
+                      disabled={isTerminating || isTerminatingStatus}
+                    >
+                      {isTerminating || isTerminatingStatus ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Terminating...
+                        </>
+                      ) : (
+                        'Terminate'
+                      )}
+                    </Button>
+                  </>
+                ) : (
+                  <Button
+                    className="w-full"
+                    onClick={() => {
+                      if (challenge.completed || completedChallenges.get(competitionId)?.has(challenge.name)) {
+                        // Do nothing if already completed
+                      } else {
+                        handleStartChallenge();
+                      }
+                    }}
+                    disabled={
+                      challenge.completed || 
+                      completedChallenges.get(competitionId)?.has(challenge.name) || 
+                      isStarting || 
+                      hasReachedMaxInstances
+                    }
+                  >
+                    {isStarting ? 'Starting Challenge...' :
+                      challenge.completed || completedChallenges.get(competitionId)?.has(challenge.name)
+                        ? 'Challenge Completed'
+                        : hasReachedMaxInstances
+                          ? 'Maximum Active Challenges Reached'
+                          : startedChallenges.get(competitionId)?.has(challenge.name)
+                            ? 'Complete Challenge'
+                            : 'Start Challenge'}
+                  </Button>
+                )}
+              </div>
+              
+              {hasReachedMaxInstances && !isActive && (
+                <p className="text-sm text-amber-500 mt-2">
+                  You have reached the maximum of 3 active challenges. Terminate an existing challenge to start a new one.
+                </p>
+              )}
             </div>
           </div>
         </AccordionContent>

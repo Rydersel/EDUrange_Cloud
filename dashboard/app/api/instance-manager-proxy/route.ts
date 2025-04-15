@@ -161,19 +161,52 @@ export async function GET(req: NextRequest) {
         // Only include instances that belong to the current user
         const transformedInstances = data.challenge_pods
           .filter((pod: any) => !currentUserId || pod.user_id === currentUserId) // Include all if no user ID (for admin views) or only matching user ID
-          .map((pod: any) => ({
-            id: pod.name,
-          userId: pod.user_id,
-          userEmail: pod.user_email || 'Loading...',
-          userName: pod.user_name || 'Loading...',
-            challengeId: pod.challenge_id || pod.challenge_name,
-            challengeUrl: pod.challengeUrl || pod.webosUrl || `https://${pod.name}.edurange.cloud`,
-            creationTime: pod.creation_time || new Date().toISOString(),
-          status: pod.status,
-          flagSecretName: pod.flag_secret_name,
-          groupId: pod.competition_id,
-          groupName: pod.competition_id === 'standalone' ? 'Standalone' : pod.competition_id
-        }));
+          .map((pod: any) => {
+            // Attempt to extract the challengeId using multiple strategies
+            let challengeId = pod.challenge_id || pod.challenge_name;
+            
+            // Try to extract from labels if available
+            if (!challengeId && pod.metadata?.labels?.challenge) {
+              challengeId = pod.metadata.labels.challenge;
+            }
+            
+            // Try to extract from metadata
+            if (!challengeId && pod.metadata?.annotations?.challengeId) {
+              challengeId = pod.metadata.annotations.challengeId;
+            }
+            
+            // Try to extract from deploymentLabels
+            if (!challengeId && pod.deploymentLabels?.challenge) {
+              challengeId = pod.deploymentLabels.challenge;
+            }
+            
+            // Try to extract from name format (often contains challenge ID)
+            if (!challengeId && pod.name) {
+              // Common pattern: challengeId-randomString
+              const nameParts = pod.name.split('-');
+              if (nameParts.length > 1) {
+                // Grab the first part as a potential challengeId
+                challengeId = nameParts[0];
+              }
+            }
+            
+            // Log for debugging
+            console.log(`Extracted challengeId ${challengeId} for pod ${pod.name}`);
+            
+            return {
+              id: pod.name,
+              userId: pod.user_id,
+              userEmail: pod.user_email || 'Loading...',
+              userName: pod.user_name || 'Loading...',
+              challengeId: challengeId,
+              challengeUrl: pod.challengeUrl || pod.webosUrl || `https://${pod.name}.edurange.cloud`,
+              creationTime: pod.creation_time || new Date().toISOString(),
+              status: pod.status,
+              flagSecretName: pod.flag_secret_name,
+              groupId: pod.competition_id,
+              groupName: pod.competition_id === 'standalone' ? 'Standalone' : pod.competition_id
+            };
+          });
 
         return NextResponse.json({ instances: transformedInstances });
       }

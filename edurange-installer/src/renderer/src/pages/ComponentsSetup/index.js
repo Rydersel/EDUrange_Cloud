@@ -8,6 +8,8 @@ import { installDatabaseController } from './DatabaseController';
 import { installInstanceManager } from './InstanceManager';
 import { setupDatabaseController } from './DatabaseController';
 import { setupInstanceManager } from './InstanceManager';
+import { Checkbox } from '../../components/Checkbox';
+import { useNavigate } from 'react-router-dom';
 
 // Constants
 const WILDCARD_CERT_NAME = 'wildcard-certificate-prod';
@@ -27,6 +29,7 @@ const LogDisplay = ({ logs, maxHeight }) => {
 };
 
 const ComponentsSetup = () => {
+  const navigate = useNavigate();
   const {
     setInstallationStatus,
     installationStatus,
@@ -34,13 +37,16 @@ const ComponentsSetup = () => {
     registry,
     addLog,
     markStepCompleted,
-    removeStepCompleted
+    removeStepCompleted,
+    instanceManager,
+    setInstanceManagerOption
   } = useInstallStore();
 
   const [logs, setLogs] = useState({
     databaseController: [],
     instanceManager: [],
-    monitoringService: []
+    monitoringService: [],
+    redisService: []
   });
 
   const [activeComponent, setActiveComponent] = useState(null);
@@ -78,6 +84,15 @@ const ComponentsSetup = () => {
         ]);
         const monitoringServiceInstalled = monitoringServiceResult.code === 0 && monitoringServiceResult.stdout.includes('monitoring-service');
 
+        // Check Redis Service
+        const redisServiceResult = await window.api.executeCommand('kubectl', [
+          'get',
+          'deployment',
+          'redis',
+          '--ignore-not-found'
+        ]);
+        const redisServiceInstalled = redisServiceResult.code === 0 && redisServiceResult.stdout.includes('redis');
+
         // Update installation status for each component
         if (dbControllerInstalled) {
           setInstallationStatus('databaseController', 'installed');
@@ -97,8 +112,14 @@ const ComponentsSetup = () => {
           setInstallationStatus('monitoringService', 'not-started');
         }
 
+        if (redisServiceInstalled) {
+          setInstallationStatus('redisService', 'installed');
+        } else {
+          setInstallationStatus('redisService', 'not-started');
+        }
+
         // If all components are installed, mark the step as completed
-        if (dbControllerInstalled && instanceManagerInstalled && monitoringServiceInstalled) {
+        if (dbControllerInstalled && instanceManagerInstalled && monitoringServiceInstalled && redisServiceInstalled) {
           markStepCompleted('components-setup');
         } else {
           // If not all components are installed, make sure it's not marked as completed
@@ -550,6 +571,36 @@ spec:
         '--ignore-not-found'
       ]);
 
+      // Clean up image caching resources
+      addLog('Cleaning up any image caching resources...');
+      try {
+        // Delete the image puller DaemonSet and CronJob
+        await window.api.executeCommand('kubectl', [
+          'delete', 'daemonset', 'image-puller', '--ignore-not-found=true'
+        ]);
+        await window.api.executeCommand('kubectl', [
+          'delete', 'cronjob', 'refresh-image-cache', '--ignore-not-found=true'
+        ]);
+        
+        // Delete the registry mirror deployment, service, pvc, and configmap
+        await window.api.executeCommand('kubectl', [
+          'delete', 'deployment', 'registry-mirror', '--ignore-not-found=true'
+        ]);
+        await window.api.executeCommand('kubectl', [
+          'delete', 'service', 'registry-mirror', '--ignore-not-found=true'
+        ]);
+        await window.api.executeCommand('kubectl', [
+          'delete', 'pvc', 'registry-mirror-pvc', '--ignore-not-found=true'
+        ]);
+        await window.api.executeCommand('kubectl', [
+          'delete', 'configmap', 'registry-mirror-config', '--ignore-not-found=true'
+        ]);
+        
+        addLog('Image caching resources cleaned up.');
+      } catch (error) {
+        addLog(`Warning: Error during cleanup of image caching resources: ${error.message}`);
+      }
+
       addLog('Instance Manager and terminal RBAC resources uninstalled successfully.');
       setInstallationStatus('instanceManager', 'not-started');
 
@@ -659,7 +710,8 @@ spec:
     const allComponentsUninstalled =
       installationStatus.databaseController !== 'installed' &&
       installationStatus.instanceManager !== 'installed' &&
-      installationStatus.monitoringService !== 'installed';
+      installationStatus.monitoringService !== 'installed' &&
+      installationStatus.redisService !== 'installed';
 
     if (allComponentsUninstalled) {
       removeStepCompleted('components-setup');
@@ -833,11 +885,17 @@ data:
     }
   };
 
+  // Add a function to navigate to the Redis service page
+  const handleRedisServiceNavigation = () => {
+    navigate('/redis-service');
+  };
+
   // Add a function to forcefully cancel installation
   const handleForceCancelInstallation = async (component) => {
     const componentName = component === 'databaseController' ? 'Database Controller' :
                           component === 'instanceManager' ? 'Instance Manager' :
-                          'Monitoring Service';
+                          component === 'monitoringService' ? 'Monitoring Service' :
+                          'Redis Service';
 
     addLog(`Forcefully cancelling ${componentName} installation...`);
     setLogs(prev => ({
@@ -885,6 +943,26 @@ data:
         await window.api.executeCommand('kubectl', [
           'delete', 'clusterrolebinding', 'instance-manager-role-binding', '--ignore-not-found'
         ]);
+
+        // Clean up image caching resources
+        await window.api.executeCommand('kubectl', [
+          'delete', 'daemonset', 'image-puller', '--ignore-not-found=true'
+        ]);
+        await window.api.executeCommand('kubectl', [
+          'delete', 'cronjob', 'refresh-image-cache', '--ignore-not-found=true'
+        ]);
+        await window.api.executeCommand('kubectl', [
+          'delete', 'deployment', 'registry-mirror', '--ignore-not-found=true'
+        ]);
+        await window.api.executeCommand('kubectl', [
+          'delete', 'service', 'registry-mirror', '--ignore-not-found=true'
+        ]);
+        await window.api.executeCommand('kubectl', [
+          'delete', 'pvc', 'registry-mirror-pvc', '--ignore-not-found=true'
+        ]);
+        await window.api.executeCommand('kubectl', [
+          'delete', 'configmap', 'registry-mirror-config', '--ignore-not-found=true'
+        ]);
       }
       else if (component === 'monitoringService') {
         await checkAndDeleteExistingIngress('monitoring-service-ingress');
@@ -926,6 +1004,24 @@ data:
           console.error('Error cleaning up Prometheus/Grafana:', error);
         }
       }
+      else if (component === 'redisService') {
+        await checkAndDeleteExistingDeployment('redis');
+        await checkAndDeleteExistingService('redis');
+        await checkAndDeleteExistingIngress('redis-ingress');
+
+        // Delete RBAC resources
+        await window.api.executeCommand('kubectl', [
+          'delete', 'serviceaccount', 'redis-sa', '--ignore-not-found'
+        ]);
+
+        await window.api.executeCommand('kubectl', [
+          'delete', 'clusterrole', 'redis-role', '--ignore-not-found'
+        ]);
+
+        await window.api.executeCommand('kubectl', [
+          'delete', 'clusterrolebinding', 'redis-role-binding', '--ignore-not-found'
+        ]);
+      }
 
       // Add log message
       addLog(`Cancelled ${componentName} installation and cleaned up resources.`);
@@ -945,6 +1041,64 @@ data:
     // Reset installation state
     setIsInstalling(false);
     setActiveComponent(null);
+  };
+
+  // Add a function to uninstall Redis
+  const handleUninstallRedisService = async () => {
+    setIsInstalling(true);
+    setActiveComponent(null); // Hide console immediately
+    setInstallationStatus('redisService', 'deleting');
+    // Clear logs at the beginning of the uninstall operation
+    setLogs(prev => ({ ...prev, redisService: [] }));
+    addLog('Uninstalling Redis Service...');
+
+    try {
+      // Delete Redis Service
+      await window.api.executeCommand('kubectl', [
+        'delete',
+        'service',
+        'redis',
+        '--ignore-not-found'
+      ]);
+
+      // Delete Redis Deployment
+      await window.api.executeCommand('kubectl', [
+        'delete',
+        'deployment',
+        'redis',
+        '--ignore-not-found'
+      ]);
+
+      // Delete Redis ConfigMap
+      await window.api.executeCommand('kubectl', [
+        'delete',
+        'configmap',
+        'redis-config',
+        '--ignore-not-found'
+      ]);
+
+      // Delete Redis Credentials Secret
+      await window.api.executeCommand('kubectl', [
+        'delete',
+        'secret',
+        'redis-credentials',
+        '--ignore-not-found'
+      ]);
+
+      // Note: Redis PVC (redis-data) is preserved to maintain data
+
+      addLog('Redis Service uninstalled successfully.');
+      setInstallationStatus('redisService', 'not-started');
+
+      // Check if all components are uninstalled and remove the step from completedSteps if needed
+      checkAndRemoveComponentsStep();
+    } catch (error) {
+      console.error('Error uninstalling Redis Service:', error);
+      addLog(`Error uninstalling Redis Service: ${error.message}`);
+      setInstallationStatus('redisService', 'error');
+    } finally {
+      setIsInstalling(false);
+    }
   };
 
   const setupComponents = async () => {
@@ -1039,6 +1193,27 @@ data:
           {activeComponent === 'instanceManager' && (
             <LogDisplay logs={logs.instanceManager} maxHeight="200px" />
           )}
+
+          <div className="flex items-start mb-4">
+            <div className="flex items-center h-5">
+              <input
+                id="enableImageCaching"
+                name="enableImageCaching"
+                type="checkbox"
+                checked={instanceManager.enableImageCaching}
+                onChange={(e) => setInstanceManagerOption('enableImageCaching', e.target.checked)}
+                className="focus:ring-primary-500 h-4 w-4 text-primary-600 border-gray-300 rounded"
+              />
+            </div>
+            <div className="ml-3 text-sm">
+              <label htmlFor="enableImageCaching" className="font-medium text-gray-700">
+                Enable image caching
+              </label>
+              <p className="text-gray-500">
+                Set up image caching to improve challenge startup times when many users are active simultaneously.
+              </p>
+            </div>
+          </div>
 
           <div className="flex space-x-2 justify-end">
             {(installationStatus.instanceManager === 'not-started' ||
@@ -1138,6 +1313,63 @@ data:
               </Button>
             )}
           </div>
+        </div>
+      </Card>
+
+      {/* Redis Service */}
+      <Card>
+        <div className="flex justify-between items-start mb-4">
+          <div>
+            <h2 className="text-xl font-semibold">Redis Service</h2>
+            <p className="text-gray-500">
+              Redis provides distributed caching, queue management, and rate limiting across all components.
+            </p>
+          </div>
+          <StatusBadge status={installationStatus.redisService} />
+        </div>
+
+        <div className="space-y-4">
+          {installationStatus.redisService === 'installing' ? (
+            <div className="flex flex-col gap-4">
+              <div className="h-2 bg-blue-200 rounded-full overflow-hidden">
+                <div className="h-full bg-blue-500 animate-pulse rounded-full"></div>
+              </div>
+              <Button
+                variant="secondary"
+                onClick={() => handleForceCancelInstallation('redisService')}
+                className="w-full"
+              >
+                Cancel Installation
+              </Button>
+            </div>
+          ) : installationStatus.redisService === 'installed' ? (
+            <div className="flex flex-col gap-2">
+              <div className="flex space-x-2">
+                <Button
+                  onClick={handleRedisServiceNavigation}
+                  className="flex-1 bg-blue-500 hover:bg-blue-600"
+                  disabled={isInstalling}
+                >
+                  Configure
+                </Button>
+                <Button
+                  onClick={handleUninstallRedisService}
+                  className="flex-1 bg-red-500 hover:bg-red-600"
+                  disabled={isInstalling}
+                >
+                  Uninstall
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <Button
+              onClick={handleRedisServiceNavigation}
+              className="w-full"
+              disabled={isInstalling}
+            >
+              Install
+            </Button>
+          )}
         </div>
       </Card>
     </div>

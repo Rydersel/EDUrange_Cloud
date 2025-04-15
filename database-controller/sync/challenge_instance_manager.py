@@ -94,16 +94,20 @@ class ChallengeInstanceManager:
                 data={
                     'id': pod_name,  # Use pod_name as the ID
                     'challengeId': challenge_id,
-                    'userId': user_id,
                     'challengeUrl': challenge_url,
                     'status': status,
                     'flagSecretName': flag_secret_name,
                     'flag': new_flag,
                     'k8s_instance_name': pod_name,
-                    # Use the connect key for relation field
+                    # Use the connect key for relation fields
                     'competition': {
                         'connect': {
                             'id': competition_id
+                        }
+                    },
+                    'user': {
+                        'connect': {
+                            'id': user_id
                         }
                     }
                 }

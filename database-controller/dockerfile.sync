@@ -1,4 +1,4 @@
-# docker buildx build -f dockerfile.sync --platform linux/amd64 -t registry.rydersel.cloud/database-sync . --push
+# docker buildx build -f dockerfile.sync --platform linux/amd64 -t registry.edurange.cloud/edurange/database-sync . --push
 
 # Builder stage
 FROM python:3.10-slim AS builder

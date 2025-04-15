@@ -3,30 +3,44 @@
 import { useState, useEffect } from 'react';
 import { ChallengeList } from '@/components/challenges/ChallengeList';
 import { CompetitionNav } from '@/components/competition/CompetitionNav';
-import { ChallengeInstanceManager } from "@/components/challenges/ChallengeInstanceManager";
 import { toast } from 'sonner';
 
-// Create a client-side terminate function that calls the API
-async function terminateChallenge(instanceId: string): Promise<void> {
-  const response = await fetch('/api/challenges/terminate', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ instanceId }),
-  });
+// Create a client-side terminate function that calls the API and updates local state
+async function terminateChallenge(instanceId: string, updateInstanceStatus: (id: string, status: string) => void): Promise<void> {
+  // Immediately update local state for responsive UI feedback
+  updateInstanceStatus(instanceId, 'TERMINATING');
   
-  if (!response.ok) {
-    const errorData = await response.json();
-    throw new Error(errorData.error || 'Failed to terminate challenge');
-  }
+  try {
+    // Prevent potential race conditions with synchronous request
+    const response = await fetch('/api/challenges/terminate', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ instanceId }),
+      // Ensure we don't have caching issues
+      cache: 'no-store'
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Failed to terminate challenge');
+    }
 
-  // Get the response data - this is now a direct response from the instance-manager
-  const responseData = await response.json();
-  console.log('Termination completed:', responseData);
-  
-  // No need to wait for callbacks, response indicates termination is complete
-  return;
+    // Get the response data - this is now a direct response from the instance-manager
+    const responseData = await response.json();
+    console.log('Termination completed:', responseData);
+    
+    // Immediately update the status to TERMINATED for faster UI feedback
+    // This will be overridden by the next polling cycle if needed
+    updateInstanceStatus(instanceId, 'TERMINATED');
+    
+    return;
+  } catch (error) {
+    console.error("Error terminating challenge:", error);
+    // Even if there's an error, keep the terminating status as the database has been updated
+    toast.error("An error occurred while terminating the challenge. The process will continue in the background.");
+  }
 }
 
 interface ChallengeInstance {
@@ -34,6 +48,8 @@ interface ChallengeInstance {
   challengeUrl: string;
   status: string;
   creationTime: string;
+  challengeId?: string;
+  competitionId?: string;
 }
 
 interface ChallengesClientProps {
@@ -51,6 +67,17 @@ export function ChallengesClient({
   const [error, setError] = useState<string | null>(null);
   const [initialLoadComplete, setInitialLoadComplete] = useState(false);
 
+  // Function to update instance status immediately in the UI
+  const updateInstanceStatus = (instanceId: string, newStatus: string) => {
+    setInstances(prev => 
+      prev.map(instance => 
+        instance.id === instanceId 
+          ? { ...instance, status: newStatus } 
+          : instance
+      )
+    );
+  };
+
   // Function to fetch updated instance data
   const fetchInstances = async () => {
     try {
@@ -58,8 +85,8 @@ export function ChallengesClient({
       setIsRefreshing(true);
       setError(null);
       
-      // Fetch challenge instance data via instance manager proxy
-      const response = await fetch(`/api/instance-manager-proxy?path=list-challenge-pods`);
+      // Use a dedicated API endpoint to get challenge instances for this competition
+      const response = await fetch(`/api/challenges/instances?competitionId=${competitionId}`);
       
       if (!response.ok) {
         throw new Error('Failed to fetch challenge instances');
@@ -68,17 +95,8 @@ export function ChallengesClient({
       const data = await response.json();
       
       if (data.instances && Array.isArray(data.instances)) {
-        // Filter instances for this competition and the current user
-        const relevantInstances = data.instances
-          .filter((instance: any) => instance.groupId === competitionId)
-          .map((instance: any) => ({
-            id: instance.id,
-            challengeUrl: instance.challengeUrl || '#',
-            status: instance.status || 'UNKNOWN',
-            creationTime: instance.creationTime || new Date().toISOString()
-          }));
-        
-        setInstances(relevantInstances);
+        console.log('Received instances:', data.instances);
+        setInstances(data.instances);
       }
 
       // Mark initial load as complete
@@ -107,21 +125,20 @@ export function ChallengesClient({
     return () => clearInterval(intervalId);
   }, [competitionId]);
 
+  // Custom termination handler that includes status update function
+  const handleTerminate = (instanceId: string) => {
+    return terminateChallenge(instanceId, updateInstanceStatus);
+  };
+
   return (
     <>
       <CompetitionNav competitionId={competitionId} />
       <div className="container py-8 h-[calc(100vh-64px)] overflow-y-auto">
-        <div className="mb-8">
-          <ChallengeInstanceManager
-            instances={instances}
-            onTerminate={terminateChallenge}
-            isLoading={isInitialLoading && !initialLoadComplete}
-          />
-          {error && (
-            <p className="text-red-500 text-sm mt-2">{error}</p>
-          )}
-        </div>
-        <ChallengeList competitionId={competitionId} />
+        <ChallengeList 
+          competitionId={competitionId} 
+          activeInstances={instances}
+          onTerminateInstance={handleTerminate}
+        />
       </div>
     </>
   );

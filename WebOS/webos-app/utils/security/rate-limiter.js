@@ -19,8 +19,8 @@ import { extractInstanceId } from '../url-helpers';
 // Default configuration
 const DEFAULT_CONFIG = {
   windowMs: 60 * 1000,         // 1 minute window
-  maxAttempts: 10,              // Maximum attempts per window
-  lockoutMs: 5 * 60 * 1000,   // 5 minute lockout after exceeding limit
+  maxAttempts: 50,             
+  lockoutMs: 2 * 60 * 1000,    // 2 minutes
   cleanupIntervalMs: 5 * 60 * 1000  // Cleanup interval (5 minutes)
 };
 
@@ -217,8 +217,8 @@ export const flagVerificationLimiter = createRateLimitMiddleware(
   {
     useCustomConfig: true,
     windowMs: 60 * 1000,        // 1 minute window
-    maxAttempts: 3,             // Only 3 attempts per minute
-    lockoutMs: 15 * 60 * 1000,  // 15 minute lockout
+    maxAttempts: 10,           // Increased from 3 to 10
+    lockoutMs: 5 * 60 * 1000,  // Reduced from 15 minutes to 5 minutes
   }
 );
 

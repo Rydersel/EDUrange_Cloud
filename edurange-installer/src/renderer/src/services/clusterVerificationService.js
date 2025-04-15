@@ -363,60 +363,127 @@ export const verifyDomain = async () => {
 };
 
 /**
- * Runs all verification checks and returns the results
- * @returns {Promise<Object>} Results of all verification checks
+ * Verify Redis service installation
+ * @returns {Promise<boolean>}
+ */
+const verifyRedisService = async () => {
+  try {
+    // Check if Redis deployment exists
+    const deploymentResult = await window.api.execCommand(
+      'kubectl get deployment redis -o json --ignore-not-found'
+    );
+
+    if (deploymentResult.code !== 0 || !deploymentResult.stdout) {
+      console.log('Redis deployment not found');
+      return false;
+    }
+
+    const deployment = JSON.parse(deploymentResult.stdout);
+    const availableReplicas = deployment.status?.availableReplicas || 0;
+
+    if (availableReplicas < 1) {
+      console.log('Redis deployment exists but no replicas are available');
+      return false;
+    }
+
+    // Check if Redis service exists
+    const serviceResult = await window.api.execCommand(
+      'kubectl get service redis -o json --ignore-not-found'
+    );
+
+    if (serviceResult.code !== 0 || !serviceResult.stdout) {
+      console.log('Redis service not found');
+      return false;
+    }
+
+    // Check if Redis credentials exist
+    const secretResult = await window.api.execCommand(
+      'kubectl get secret redis-credentials -o json --ignore-not-found'
+    );
+
+    // Test Redis connectivity using authentication if credentials exist
+    let pingCommand;
+    if (secretResult.code === 0 && secretResult.stdout) {
+      // With authentication
+      pingCommand = 'kubectl exec -it deployment/redis -- sh -c "redis-cli -a \\$REDIS_PASSWORD ping 2>/dev/null || echo FAILED"';
+    } else {
+      // Without authentication (fallback)
+      pingCommand = 'kubectl exec -it deployment/redis -- redis-cli ping 2>/dev/null || echo "FAILED"';
+    }
+
+    const pingResult = await window.api.execCommand(pingCommand);
+
+    if (pingResult.code !== 0 || !pingResult.stdout.includes('PONG')) {
+      console.log('Redis connectivity test failed');
+      return false;
+    }
+
+    return true;
+  } catch (error) {
+    console.error('Error verifying Redis service:', error);
+    return false;
+  }
+};
+
+/**
+ * Verify all steps
+ * @returns {Promise<Object>}
  */
 export const verifyAllSteps = async () => {
-  const kubectlConnected = await verifyKubectlConnection();
-  
-  // If kubectl is not connected, we can't verify anything else
-  if (!kubectlConnected) {
+  try {
+    // Check for kubectl connection
+    const kubectlConnected = await verifyKubectlConnection();
+
+    // If kubectl is not connected, return early
+    if (!kubectlConnected) {
+      return { kubectlConnected };
+    }
+
+    // Run other verifications in parallel
+    const [
+      nginxIngress,
+      certManager,
+      wildcardCertificate,
+      database,
+      databaseController,
+      instanceManager,
+      monitoringService,
+      redisService,
+      oauth,
+      dashboard,
+      domainInfo,
+    ] = await Promise.all([
+      verifyNginxIngress(),
+      verifyCertManager(),
+      verifyWildcardCertificate(),
+      verifyDatabase(),
+      verifyDatabaseController(),
+      verifyInstanceManager(),
+      verifyMonitoringService(),
+      verifyRedisService(),
+      verifyOAuth(),
+      verifyDashboard(),
+      verifyDomain(),
+    ]);
+
     return {
-      kubectlConnected: false
+      kubectlConnected,
+      nginxIngress,
+      certManager,
+      wildcardCertificate,
+      database,
+      databaseController,
+      instanceManager,
+      monitoringService,
+      redisService,
+      oauth,
+      dashboard,
+      domain: domainInfo,
     };
+  } catch (error) {
+    console.error('Error verifying all steps:', error);
+    return { kubectlConnected: false };
   }
-
-  // Run all verification checks in parallel
-  const [
-    nginxIngress,
-    certManager,
-    wildcardCertificate,
-    database,
-    prismaStudio,
-    databaseController,
-    instanceManager,
-    monitoringService,
-    dashboard,
-    oauth,
-    domain
-  ] = await Promise.all([
-    verifyNginxIngress(),
-    verifyCertManager(),
-    verifyWildcardCertificate(),
-    verifyDatabase(),
-    verifyPrismaStudio(),
-    verifyDatabaseController(),
-    verifyInstanceManager(),
-    verifyMonitoringService(),
-    verifyDashboard(),
-    verifyOAuth(),
-    verifyDomain()
-  ]);
-
-  return {
-    kubectlConnected,
-    nginxIngress,
-    certManager,
-    wildcardCertificate,
-    database,
-    prismaStudio,
-    databaseController,
-    instanceManager,
-    monitoringService,
-    dashboard,
-    oauth,
-    domain
-  };
 };
 
 /**

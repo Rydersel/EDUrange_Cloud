@@ -83,7 +83,7 @@
     }
   ],
   "typeConfig": {
-    "challengeImage": "registry.rydersel.cloud/sql-injection-basic",
+    "challengeImage": "registry.edurange.cloud/challenges/sql-injection-basic",
     "databaseImage": "mysql:5.7"
   }
 }

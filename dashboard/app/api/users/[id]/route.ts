@@ -4,6 +4,13 @@ import { authOptions } from '@/lib/auth';
 import { ActivityLogger, ActivityEventType } from '@/lib/activity-logger';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
+import rateLimit from '@/lib/rate-limit';
+
+// Create a rate limiter for user operations
+const userOperationsRateLimiter = rateLimit({
+  interval: 60 * 1000, // 1 minute
+  limit: 20, // 20 requests per minute
+});
 
 const userUpdateSchema = z.object({
   name: z.string().optional(),
@@ -11,6 +18,10 @@ const userUpdateSchema = z.object({
 });
 
 export async function GET(req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  // Apply rate limiting
+  const rateLimitResult = await userOperationsRateLimiter.check(req);
+  if (rateLimitResult) return rateLimitResult;
+
   const params = await props.params;
   const { id } = params;
 
@@ -67,6 +78,10 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
 }
 
 export async function DELETE(req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  // Apply rate limiting
+  const rateLimitResult = await userOperationsRateLimiter.check(req);
+  if (rateLimitResult) return rateLimitResult;
+
   const params = await props.params;
   const { id } = params;
 
@@ -116,6 +131,10 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 export async function PATCH(req: Request, props: { params: Promise<{ id: string }> }) {
+  // Apply rate limiting - need to cast req to NextRequest for the rate limiter
+  const rateLimitResult = await userOperationsRateLimiter.check(req as NextRequest);
+  if (rateLimitResult) return rateLimitResult;
+
   const params = await props.params;
   try {
     const session = await getServerSession(authOptions);

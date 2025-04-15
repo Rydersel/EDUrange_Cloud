@@ -3,16 +3,16 @@ const url = require("url");
 const { connect, stdin } = require("./kubernetesWebSocket");
 const { RateLimiterMemory } = require('rate-limiter-flexible');
 
-// Rate limiter for connection attempts (10 connections per minute per IP)
+// Rate limiter for connection attempts (20 connections per minute per IP)
 const connectLimiter = new RateLimiterMemory({
-  points: 10, // Number of connections
-  duration: 60, // Per x seconds
+  points: 20,     
+  duration: 60,   
 });
 
-// Rate limiter for messages (60 messages per minute per connection)
+// Rate limiter for messages (200 messages per minute per connection)
 const messageLimiter = new RateLimiterMemory({
-  points: 120, // # of messages
-  duration: 60, // Per x seconds
+  points: 200,    
+  duration: 60,   
 });
 
 const wssServer = new WebSocket.Server({

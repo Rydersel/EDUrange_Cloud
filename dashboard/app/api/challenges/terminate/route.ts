@@ -25,6 +25,26 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Check if the instance exists and is already terminating or terminated
+    const existingInstance = await prisma.challengeInstance.findUnique({
+      where: { id: instanceId }
+    });
+    
+    if (!existingInstance) {
+      return NextResponse.json(
+        { error: "Instance not found" },
+        { status: 404 }
+      );
+    }
+    
+    // If already terminating or terminated, just return success without additional processing
+    if (existingInstance.status === "TERMINATING" || existingInstance.status === "TERMINATED") {
+      return NextResponse.json({
+        message: "Challenge termination already in progress or completed",
+        status: existingInstance.status.toLowerCase()
+      });
+    }
+
     // Use shared authorization utility for instance actions
     const { authorized: isAuthorized, error: authError, instance } = 
       await authorizeProxyAction(instanceId, session);
@@ -116,7 +136,7 @@ export async function POST(req: NextRequest) {
     // Return success response
     return NextResponse.json({
       message: "Challenge termination completed",
-      status: "TERMINATED"
+      status: "terminated"
     });
     
   } catch (error) {

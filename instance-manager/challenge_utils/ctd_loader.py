@@ -25,6 +25,31 @@ def get_ctd_schema():
     """Return the CTD schema."""
     return CTD_SCHEMA
 
+def _check_registry_references(ctd_data):
+    """
+    Check for registry URL references in the CTD and log them.
+    This helps debug issues with incorrect registry domains.
+    
+    Args:
+        ctd_data: The CTD data to check
+    """
+    # Log the environment variable that should be used
+    registry_url = os.getenv("REGISTRY_URL", "registry URL not set in environment")
+    logging.info(f"[REGISTRY DEBUG] Environment REGISTRY_URL: {registry_url}")
+    
+    # Check containers in podTemplate
+    if 'podTemplate' in ctd_data and 'containers' in ctd_data['podTemplate']:
+        for i, container in enumerate(ctd_data['podTemplate']['containers']):
+            if 'image' in container:
+                logging.info(f"[REGISTRY DEBUG] Container {i} ({container.get('name', 'unnamed')}): image = {container['image']}")
+    
+    # Check extension points
+    if 'extensionPoints' in ctd_data:
+        for ext_name, ext_config in ctd_data['extensionPoints'].items():
+            if 'property' in ext_config and ext_config['property'] == 'image':
+                if 'default' in ext_config:
+                    logging.info(f"[REGISTRY DEBUG] Extension point {ext_name}: default image = {ext_config['default']}")
+
 def load_ctd(challenge_type):
     """
     Load a Challenge Type Definition from the challenge_types directory.
@@ -65,6 +90,9 @@ def load_ctd(challenge_type):
         
         # Log CTD structure for debugging
         logging.info(f"Loaded CTD for challenge type '{challenge_type}' with keys: {list(ctd_data.keys())}")
+        
+        # Debug: Check registry references
+        _check_registry_references(ctd_data)
         
         # Basic sanity checks
         if 'typeId' not in ctd_data:
@@ -123,7 +151,15 @@ def resolve_ctd_template(ctd_data, variables):
     Returns:
         CTD with variables substituted
     """
-    return substitute_variables(ctd_data, variables)
+    # Debug: log variables
+    logging.info(f"[REGISTRY DEBUG] Template variables: {variables}")
+    
+    resolved_ctd = substitute_variables(ctd_data, variables)
+    
+    # Debug: Check resolved registry references
+    _check_registry_references(resolved_ctd)
+    
+    return resolved_ctd
 
 def list_available_challenge_types():
     """

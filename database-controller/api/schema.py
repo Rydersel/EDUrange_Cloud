@@ -48,7 +48,13 @@ def fetch_latest_schema() -> Tuple[bool, Dict[str, Any]]:
     
     # Attempt to fetch the latest schema
     try:
-        schema_url = f"{INSTANCE_MANAGER_URL}/api/schema"
+        # Properly handle URL construction to avoid duplicate /api
+        base_url = INSTANCE_MANAGER_URL.rstrip('/')
+        if '/api' in base_url:
+            schema_url = f"{base_url}/schema"
+        else:
+            schema_url = f"{base_url}/api/schema"
+            
         logger.info(f"Fetching latest CDF schema from {schema_url}")
         response = requests.get(schema_url, 
                                 headers={"Accept": "application/json"},
@@ -283,6 +289,10 @@ CDF_SCHEMA = {
     "type": "object",
     "required": ["metadata", "components"],
     "properties": {
+        "$schema": {
+            "type": "string",
+            "description": "JSON Schema URI for the CDF schema being used"
+        },
         "metadata": {
             "type": "object",
             "required": ["name", "version", "challenge_type"],

@@ -5,6 +5,13 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { authorizeProxyAction } from '@/lib/auth-utils';
 import { isValidUUID } from '@/lib/validation/uuid';
+import rateLimit from '@/lib/rate-limit';
+
+// Create a rate limiter for database proxy operations
+const databaseProxyRateLimiter = rateLimit({
+  interval: 60 * 1000, // 1 minute
+  limit: 60, // 60 requests per minute
+});
 
 /**
  * Proxy API endpoint for database API requests
@@ -12,6 +19,10 @@ import { isValidUUID } from '@/lib/validation/uuid';
  */
 export async function GET(req: NextRequest) {
   try {
+    // Apply rate limiting
+    const rateLimitResult = await databaseProxyRateLimiter.check(req);
+    if (rateLimitResult) return rateLimitResult;
+    
     // Check authentication
     const session = await getServerSession(authOptions);
     if (!session?.user) {
@@ -330,6 +341,10 @@ function extractChallengeTypeFromImage(imageName: string): string {
  */
 export async function POST(req: NextRequest) {
   try {
+    // Apply rate limiting
+    const rateLimitResult = await databaseProxyRateLimiter.check(req);
+    if (rateLimitResult) return rateLimitResult;
+    
     // Check authentication
     const session = await getServerSession(authOptions);
     if (!session?.user) {
@@ -435,6 +450,10 @@ export async function POST(req: NextRequest) {
  */
 export async function DELETE(req: NextRequest) {
   try {
+    // Apply rate limiting
+    const rateLimitResult = await databaseProxyRateLimiter.check(req);
+    if (rateLimitResult) return rateLimitResult;
+    
     // Check authentication
     const session = await getServerSession(authOptions);
     if (!session?.user) {

@@ -32,7 +32,10 @@ export async function POST(req: NextRequest) {
     // Check if user is authenticated
     if (!session || !session.user || !session.user.id) {
       console.error('Unauthorized access attempt - missing session or user data');
-      return new NextResponse('Unauthorized', { status: 401 });
+      return NextResponse.json({ 
+        success: false, 
+        error: 'Unauthorized access' 
+      }, { status: 401 });
     }
 
     const body = await req.json();
@@ -73,7 +76,10 @@ export async function POST(req: NextRequest) {
         code: code,
         attemptTimestamp: new Date().toISOString()
       });
-      return new NextResponse('Invalid or expired access code', { status: 400 });
+      return NextResponse.json({ 
+        success: false, 
+        error: 'Invalid or expired access code' 
+      }, { status: 400 });
     }
 
     // Check if user is already a member
@@ -89,7 +95,11 @@ export async function POST(req: NextRequest) {
     });
 
     if (existingMember) {
-      return new NextResponse('You are already a member of this competition', { status: 400 });
+      return NextResponse.json({ 
+        success: false, 
+        error: 'You are already a member of this competition',
+        competitionId: existingMember.id
+      }, { status: 400 });
     }
 
     // Add user to competition
@@ -137,6 +147,7 @@ export async function POST(req: NextRequest) {
     );
 
     return NextResponse.json({
+      success: true,
       message: 'Successfully joined competition',
       competition: accessCode.group
     });
@@ -148,6 +159,9 @@ export async function POST(req: NextRequest) {
         errors: error.errors 
       }, { status: 400 });
     }
-    return new NextResponse('Internal Server Error', { status: 500 });
+    return NextResponse.json({ 
+      success: false, 
+      error: 'Internal Server Error' 
+    }, { status: 500 });
   }
 } 

@@ -1,37 +1,65 @@
 "use client"
 
-import { useState } from 'react'
-import { ChevronUp, ChevronDown, Trophy, Target, Clock } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { ChevronUp, ChevronDown, Trophy, Target, Clock, Loader2 } from 'lucide-react'
 import { Badge } from "@/components/ui/badge"
+import { formatDistance } from 'date-fns'
+import { useToast } from '@/components/ui/use-toast'
 
-interface User {
-  rank: number
-  username: string
-  score: number
-  solvedChallenges: number
-  lastActive: string
+interface LeaderboardUser {
+  id: string;
+  rank: number;
+  username: string;
+  score: number;
+  solvedChallenges: number;
+  lastActive: string;
 }
 
-
-// Temp mock data
-const users: User[] = [
-  { rank: 1, username: "l33thax0r", score: 9500, solvedChallenges: 42, lastActive: "2025-01-18" },
-  { rank: 2, username: "cyber_ninja", score: 9200, solvedChallenges: 40, lastActive: "2025-01-17" },
-  { rank: 3, username: "binary_beast", score: 8800, solvedChallenges: 38, lastActive: "2025-01-18" },
-  { rank: 4, username: "quantum_coder", score: 8500, solvedChallenges: 37, lastActive: "2025-01-16" },
-  { rank: 5, username: "crypto_queen", score: 8200, solvedChallenges: 35, lastActive: "2025-01-18" },
-  { rank: 6, username: "exploit_master", score: 7900, solvedChallenges: 34, lastActive: "2025-01-17" },
-  { rank: 7, username: "packet_wizard", score: 7600, solvedChallenges: 33, lastActive: "2025-01-18" },
-  { rank: 8, username: "malware_hunter", score: 7300, solvedChallenges: 32, lastActive: "2025-01-15" },
-  { rank: 9, username: "firewall_breaker", score: 7000, solvedChallenges: 30, lastActive: "2025-01-18" },
-  { rank: 10, username: "zero_day_finder", score: 6700, solvedChallenges: 29, lastActive: "2025-01-16" },
-]
+interface LeaderboardProps {
+  competitionId: string;
+}
 
 type SortKey = 'rank' | 'score' | 'solvedChallenges' | 'lastActive'
 
-export function Leaderboard() {
+export function Leaderboard({ competitionId }: LeaderboardProps) {
   const [sortKey, setSortKey] = useState<SortKey>('rank')
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc')
+  const [users, setUsers] = useState<LeaderboardUser[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(false)
+  const { toast } = useToast()
+
+  useEffect(() => {
+    const fetchLeaderboard = async () => {
+      try {
+        setLoading(true)
+        setError(false)
+        
+        const response = await fetch(`/api/competition-groups/${competitionId}/leaderboard`)
+        
+        if (!response.ok) {
+          throw new Error('Failed to fetch leaderboard data')
+        }
+        
+        const data = await response.json()
+        setUsers(data)
+      } catch (error) {
+        console.error('Error fetching leaderboard:', error)
+        setError(true)
+        toast({
+          title: "Error",
+          description: "Failed to load leaderboard data",
+          variant: "destructive",
+        })
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    if (competitionId) {
+      fetchLeaderboard()
+    }
+  }, [competitionId, toast])
 
   const sortedUsers = [...users].sort((a, b) => {
     if (a[sortKey] < b[sortKey]) return sortOrder === 'asc' ? -1 : 1
@@ -48,9 +76,44 @@ export function Leaderboard() {
     }
   }
 
+  // Format date to show in a user-friendly way
+  const formatLastActive = (dateString: string) => {
+    try {
+      const date = new Date(dateString)
+      return formatDistance(date, new Date(), { addSuffix: true })
+    } catch (error) {
+      return 'Unknown'
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center p-8">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="text-center p-8 text-red-500">
+        Failed to load leaderboard. Please try again later.
+      </div>
+    )
+  }
+
+  if (users.length === 0) {
+    return (
+      <div className="text-center p-8 text-muted-foreground">
+        No participants yet. Be the first to join!
+      </div>
+    )
+  }
+
   return (
-    <div className="rounded-lg border border-[#1E2B1E] overflow-hidden">
-      <div className="grid grid-cols-5 gap-4 bg-[#0A120A] p-4 text-sm font-medium text-gray-400">
+    <div className="rounded-lg border border-[#1E2B1E] overflow-hidden flex flex-col">
+      {/* Fixed header */}
+      <div className="grid grid-cols-5 gap-4 bg-[#0A120A] p-4 text-sm font-medium text-gray-400 sticky top-0 z-10">
         <div className="cursor-pointer" onClick={() => toggleSort('rank')}>
           Rank
           {sortKey === 'rank' && (sortOrder === 'asc' ? <ChevronUp className="inline ml-2 h-4 w-4" /> : <ChevronDown className="inline ml-2 h-4 w-4" />)}
@@ -69,28 +132,32 @@ export function Leaderboard() {
           {sortKey === 'lastActive' && (sortOrder === 'asc' ? <ChevronUp className="inline ml-2 h-4 w-4" /> : <ChevronDown className="inline ml-2 h-4 w-4" />)}
         </div>
       </div>
-      {sortedUsers.map((user) => (
-        <div key={user.username} className="grid grid-cols-5 gap-4 p-4 hover:bg-[#1E2B1E]/50 transition-colors items-center border-t border-[#1E2B1E]">
-          <div className="font-medium text-gray-200 flex items-center gap-2">
-            {user.rank}
-            {user.rank <= 3 && <Trophy className="h-4 w-4 text-yellow-500" />}
+
+      {/* Scrollable body */}
+      <div className="overflow-y-auto max-h-[calc(100vh-300px)]">
+        {sortedUsers.map((user) => (
+          <div key={user.id} className="grid grid-cols-5 gap-4 p-4 hover:bg-[#1E2B1E]/50 transition-colors items-center border-t border-[#1E2B1E]">
+            <div className="font-medium text-gray-200 flex items-center gap-2">
+              {user.rank}
+              {user.rank <= 3 && <Trophy className="h-4 w-4 text-yellow-500" />}
+            </div>
+            <div className="text-gray-200">{user.username}</div>
+            <div className="flex items-center gap-2">
+              <Badge variant="secondary" className="bg-[#22C55E]/10 text-[#22C55E] hover:bg-[#22C55E]/20">
+                {user.score} pts
+              </Badge>
+            </div>
+            <div className="flex items-center gap-2 text-gray-400">
+              <Target className="h-4 w-4 text-blue-500" />
+              <span>{user.solvedChallenges}</span>
+            </div>
+            <div className="flex items-center gap-2 text-gray-400">
+              <Clock className="h-4 w-4 text-green-500" />
+              <span>{formatLastActive(user.lastActive)}</span>
+            </div>
           </div>
-          <div className="text-gray-200">{user.username}</div>
-          <div className="flex items-center gap-2">
-            <Badge variant="secondary" className="bg-[#22C55E]/10 text-[#22C55E] hover:bg-[#22C55E]/20">
-              {user.score} pts
-            </Badge>
-          </div>
-          <div className="flex items-center gap-2 text-gray-400">
-            <Target className="h-4 w-4 text-blue-500" />
-            <span>{user.solvedChallenges}</span>
-          </div>
-          <div className="flex items-center gap-2 text-gray-400">
-            <Clock className="h-4 w-4 text-green-500" />
-            <span>{user.lastActive}</span>
-          </div>
-        </div>
-      ))}
+        ))}
+      </div>
     </div>
   )
 }

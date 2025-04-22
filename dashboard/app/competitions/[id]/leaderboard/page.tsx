@@ -69,20 +69,22 @@ export default function CompetitionLeaderboardPage(props: CompetitionLeaderboard
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="flex flex-col min-h-screen bg-background">
       <CompetitionNav competitionId={competition.id} />
-      <main className="container mx-auto p-4 pt-6 md:p-8">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold">{competition.name} - Leaderboard</h1>
-          {competition.description && (
-            <p className="mt-2 text-muted-foreground">{competition.description}</p>
-          )}
-        </div>
+      <div className="flex-grow overflow-hidden">
+        <main className="container mx-auto p-4 pt-6 md:p-8 h-full flex flex-col">
+          <div className="mb-6">
+            <h1 className="text-3xl font-bold">{competition.name} - Leaderboard</h1>
+            {competition.description && (
+              <p className="mt-2 text-muted-foreground">{competition.description}</p>
+            )}
+          </div>
 
-        <div className="w-full">
-          <Leaderboard />
-        </div>
-      </main>
+          <div className="flex-grow">
+            <Leaderboard competitionId={competition.id} />
+          </div>
+        </main>
+      </div>
     </div>
   );
 }

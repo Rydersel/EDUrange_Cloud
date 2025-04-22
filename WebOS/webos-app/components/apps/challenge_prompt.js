@@ -438,14 +438,14 @@ export default function ChallengePrompt() {
   // Calculate remaining time for the rate limit
   const getRemainingTime = () => {
     if (!rateLimitResetTime) return null;
-    
+
     const diff = Math.max(0, rateLimitResetTime.getTime() - currentTime.getTime());
     const minutes = Math.floor(diff / (60 * 1000));
     const seconds = Math.floor((diff % (60 * 1000)) / 1000);
-    
+
     return { minutes, seconds, total: diff };
   };
-  
+
   // Update current time every second
   useEffect(() => {
     const interval = setInterval(() => {
@@ -453,7 +453,7 @@ export default function ChallengePrompt() {
     }, 1000);
     return () => clearInterval(interval);
   }, []);
-  
+
   // Automatically clear rate limit when time has expired
   useEffect(() => {
     if (rateLimited && rateLimitResetTime && currentTime >= rateLimitResetTime) {
@@ -635,7 +635,7 @@ export default function ChallengePrompt() {
                   console.log('✅ Flag verification via config API successful');
                   flagVerified = data.isCorrect;
                   console.log(`🏁 Flag verification result: ${flagVerified ? 'CORRECT' : 'INCORRECT'}`);
-                  
+
                   // Check if there's a note field in the response (from fallback verification)
                   if (data.note) {
                     console.log('ℹ️ Verification note:', data.note);
@@ -701,7 +701,7 @@ export default function ChallengePrompt() {
       // Reset rate limit state when trying a new submission
       setRateLimited(false);
       setRateLimitResetTime(null);
-      
+
       // First verify answer is correct
       const verifyResponse = await fetch('/api/config', {
         method: 'POST',
@@ -718,23 +718,23 @@ export default function ChallengePrompt() {
       if (verifyResponse.status === 429) {
         const rateData = await verifyResponse.json();
         console.warn('⚠️ Rate limit exceeded:', rateData);
-        
+
         // Extract reset time
         const resetTime = new Date(rateData.resetTime);
         const now = new Date();
-        
+
         // Get wait minutes from API or calculate if not provided
         const waitMinutes = rateData.waitMinutes || Math.ceil((resetTime - now) / (60 * 1000));
-        
+
         // Calculate the total wait time in milliseconds
         const totalWaitMs = resetTime.getTime() - now.getTime();
-        
+
         // Set rate limit state
         setRateLimited(true);
         setRateLimitResetTime(resetTime);
         setRateLimitStartTime(now);
         setInitialWaitTime(totalWaitMs);
-        
+
         // Set user-friendly error message
         setSubmitError(`Too many attempts. Please wait ${waitMinutes} minute${waitMinutes !== 1 ? 's' : ''} before trying again.`);
         return;
@@ -870,10 +870,10 @@ export default function ChallengePrompt() {
     const isCompleted = completedQuestions.some(q =>
       q.questionId === currentQuestionId && q.groupChallengeId === groupChallengeId
     );
-    
+
     // Get remaining time for rate limit countdown
     const remainingTime = getRemainingTime();
-    
+
     return (
       <div className="mb-4">
         <div className="flex items-center mb-2">
@@ -882,7 +882,7 @@ export default function ChallengePrompt() {
             {currentQuestion.points} pts
           </span>
         </div>
-        
+
         {rateLimited && remainingTime && (
           <div className="mb-4 p-3 rounded bg-yellow-900 text-yellow-200">
             <p className="mb-2">Too many attempts. Please wait before trying again.</p>
@@ -894,7 +894,7 @@ export default function ChallengePrompt() {
               </div>
               <span className="text-sm opacity-80">Time remaining until next attempt</span>
             </div>
-            
+
             {/* Progress bar - calculate percentage based on actual elapsed time */}
             {rateLimitResetTime && rateLimitStartTime && initialWaitTime > 0 && (
               <div className="w-full h-2 bg-black bg-opacity-30 rounded overflow-hidden">
@@ -908,13 +908,13 @@ export default function ChallengePrompt() {
             )}
           </div>
         )}
-        
+
         {submitError && !rateLimited && (
           <div className="mb-4 p-3 rounded bg-red-900 text-red-200">
             <p>{submitError}</p>
           </div>
         )}
-        
+
         <form onSubmit={handleSubmit} className="flex">
           <input
             type="text"
@@ -1045,9 +1045,6 @@ export default function ChallengePrompt() {
               </button>
             </div>
             <p className="text-green-400 mb-4">{challengeData.description}</p>
-            <p className="text-sm text-green-600">
-              {currentTime.toLocaleTimeString()}
-            </p>
           </div>
           <div className="bg-green-900 bg-opacity-20 rounded-lg shadow-lg p-4 md:p-6 mb-4 border border-green-800">
             {allQuestionsCompleted ? renderCompletionPage() : renderQuestion()}

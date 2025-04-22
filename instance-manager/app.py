@@ -284,7 +284,15 @@ def start_challenge():
             'challenge_type': challenge_type,
             'handler_class': HandlerClass.__name__,
             'timestamp': datetime.now().isoformat(),
-            'perf_task_id': task_id  # Include the performance tracking ID
+            'perf_task_id': task_id,  # Include the performance tracking ID
+            'challenge_id': cdf_data.get('id') or deployment_name  # Add explicit challenge_id
+        }
+
+        # Add challenge_id to metadata for easier reference
+        challenge_data['metadata'] = {
+            'task_id': task_id,
+            'challenge_id': cdf_data.get('id') or deployment_name,
+            'enqueued_at': datetime.now().isoformat()
         }
 
         # End preparation phase and start queue wait phase
@@ -519,10 +527,16 @@ def start_queue_worker():
                 except Exception as perf_e:
                     logging.error(f"Error recording performance failure: {perf_e}")
 
-                return {
-                    "success": False,
-                    "error": f"An internal error occurred while deploying the challenge: {str(e)}"
-                }
+            if 'handler_instance' in locals() and isinstance(handler_instance, BaseChallengeHandler):
+                try:
+                    handler_instance.cleanup()
+                except Exception as cleanup_e:
+                    logging.error(f"Failed during cleanup after error: {cleanup_e}")
+                    
+            return {
+                "success": False,
+                "error": f"An internal error occurred while deploying the challenge: {str(e)}"
+            }
 
         # Start the worker with the deploy_challenge callback
         success = queue.start_worker(deploy_challenge, interval=1)
@@ -601,7 +615,15 @@ def end_challenge():
         'namespace': namespace,
         'user_id': user_id,
         'timestamp': datetime.now().isoformat(),
-        'perf_task_id': task_id
+        'perf_task_id': task_id,
+        'challenge_id': pod_name  # Use pod_name as challenge_id for termination
+    }
+
+    # Add metadata with challenge_id for easier reference
+    termination_data['metadata'] = {
+        'task_id': task_id,
+        'challenge_id': pod_name,
+        'enqueued_at': datetime.now().isoformat()
     }
 
     # Add to the termination queue
@@ -2141,11 +2163,6 @@ def check_rate_limit(user_id):
                             except Exception as perf_e:
                                 logging.error(f"Error recording performance failure: {perf_e}")
 
-                        if 'handler_instance' in locals() and isinstance(handler_instance, BaseChallengeHandler):
-                            try:
-                                handler_instance.cleanup()
-                            except Exception as cleanup_e:
-                                logging.error(f"Failed during cleanup after error: {cleanup_e}")
                             return {
                                 "success": False,
                                 "error": f"An internal error occurred while deploying the challenge: {str(e)}"
@@ -2345,11 +2362,6 @@ def check_rate_limit(user_id):
                             except Exception as perf_e:
                                 logging.error(f"Error recording performance failure: {perf_e}")
 
-                        if 'handler_instance' in locals() and isinstance(handler_instance, BaseChallengeHandler):
-                            try:
-                                handler_instance.cleanup()
-                            except Exception as cleanup_e:
-                                logging.error(f"Failed during cleanup after error: {cleanup_e}")
                             return {
                                 "success": False,
                                 "error": f"An internal error occurred while deploying the challenge: {str(e)}"
@@ -2500,10 +2512,307 @@ def cleanup_performance_data():
         return jsonify({"error": str(e)}), 500
 
 
+# Check if parallel workers are enabled via environment variable
+enable_parallel = os.getenv("ENABLE_PARALLEL_WORKERS", "false").lower() == "true"
+
 # Initialize both queue workers at application startup
 if __name__ == '__main__':
+    if enable_parallel:
+        logging.info("Initializing queue workers with parallel processing enabled")
+        # When enabled, each worker operates independently with distributed locking
+    else:
+        logging.info("Initializing queue workers with parallel processing disabled")
+        # When disabled, only the first worker that acquires the lock will process tasks
+    
     # Initialize all workers (deployment and termination)
     init_all_workers()
 else:
     # For WSGI applications, initialize both workers
+    if enable_parallel:
+        logging.info("Initializing queue workers with parallel processing enabled (WSGI)")
+    else:
+        logging.info("Initializing queue workers with parallel processing disabled (WSGI)")
+    
     init_all_workers()
+
+
+@app.route('/api/workers', methods=['GET'])
+def list_workers():
+    """Get information about all registered workers."""
+    try:
+        from challenge_utils.worker_registry import get_worker_registry, WorkerStatus
+        from challenge_utils.heartbeat_manager import get_heartbeat_manager
+        
+        worker_registry = get_worker_registry()
+        heartbeat_manager = get_heartbeat_manager()
+        
+        # Get all workers
+        workers = worker_registry.list_workers()
+        
+        # Transform worker objects into dictionary format
+        worker_info = []
+        for worker in workers:
+            # Get health information
+            health = heartbeat_manager.get_worker_health(worker.worker_id)
+            
+            # Create worker info entry
+            info = {
+                "worker_id": worker.worker_id,
+                "queue_type": worker.queue_type,
+                "hostname": worker.hostname,
+                "pid": worker.pid,
+                "status": worker.status.value,
+                "start_time": worker.start_time,
+                "last_heartbeat": worker.last_heartbeat,
+                "tasks_processed": worker.tasks_processed,
+                "tasks_failed": worker.tasks_failed,
+                "current_task_id": worker.current_task_id,
+                "health": health
+            }
+            worker_info.append(info)
+        
+        # Get counts
+        active_count = sum(1 for w in workers if w.status == WorkerStatus.ACTIVE)
+        idle_count = sum(1 for w in workers if w.status == WorkerStatus.IDLE)
+        paused_count = sum(1 for w in workers if w.status == WorkerStatus.PAUSED)
+        failed_count = sum(1 for w in workers if w.status == WorkerStatus.FAILED)
+        deployment_count = sum(1 for w in workers if w.queue_type == ChallengeQueue.QUEUE_DEPLOYMENT)
+        termination_count = sum(1 for w in workers if w.queue_type == ChallengeQueue.QUEUE_TERMINATION)
+        
+        return jsonify({
+            "workers": worker_info,
+            "counts": {
+                "total": len(workers),
+                "active": active_count,
+                "idle": idle_count,
+                "paused": paused_count,
+                "failed": failed_count,
+                "deployment": deployment_count,
+                "termination": termination_count
+            }
+        }), 200
+    except Exception as e:
+        logging.error(f"Error listing workers: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/workers/<worker_id>', methods=['GET'])
+def get_worker_info(worker_id):
+    """Get detailed information about a specific worker."""
+    try:
+        from challenge_utils.worker_registry import get_worker_registry
+        from challenge_utils.heartbeat_manager import get_heartbeat_manager
+        from challenge_utils.worker_state import get_worker_state_manager
+        
+        # Get the worker
+        worker_registry = get_worker_registry()
+        worker = worker_registry.get_worker(worker_id)
+        
+        if not worker:
+            return jsonify({"error": f"Worker {worker_id} not found"}), 404
+        
+        # Get health information
+        heartbeat_manager = get_heartbeat_manager()
+        health = heartbeat_manager.get_worker_health(worker_id)
+        
+        # Get state history
+        state_manager = get_worker_state_manager()
+        state_history = state_manager.get_state_history(worker_id)
+        
+        # Create response
+        response = {
+            "worker_id": worker.worker_id,
+            "queue_type": worker.queue_type,
+            "hostname": worker.hostname,
+            "pid": worker.pid,
+            "status": worker.status.value,
+            "start_time": worker.start_time,
+            "last_heartbeat": worker.last_heartbeat,
+            "tasks_processed": worker.tasks_processed,
+            "tasks_failed": worker.tasks_failed,
+            "current_task_id": worker.current_task_id,
+            "health": health,
+            "state_history": state_history,
+            "metadata": worker.metadata
+        }
+        
+        return jsonify(response), 200
+    except Exception as e:
+        logging.error(f"Error getting worker info: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/workers/<worker_id>/pause', methods=['POST'])
+def pause_worker(worker_id):
+    """Pause a worker."""
+    try:
+        from challenge_utils.worker_registry import get_worker_registry
+        from challenge_utils.worker_state import get_worker_state_manager
+        
+        # Get the worker
+        worker_registry = get_worker_registry()
+        worker = worker_registry.get_worker(worker_id)
+        
+        if not worker:
+            return jsonify({"error": f"Worker {worker_id} not found"}), 404
+        
+        # Get reason from request body
+        data = request.json or {}
+        reason = data.get('reason', 'Paused by API request')
+        
+        # Update worker state to trigger pause
+        state_manager = get_worker_state_manager()
+        state_manager.update_worker_state(worker_id, {
+            'command': 'pause',
+            'reason': reason
+        })
+        
+        return jsonify({
+            "success": True, 
+            "message": f"Worker {worker_id} pause request sent",
+            "reason": reason
+        }), 200
+    except Exception as e:
+        logging.error(f"Error pausing worker: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/workers/<worker_id>/resume', methods=['POST'])
+def resume_worker(worker_id):
+    """Resume a paused worker."""
+    try:
+        from challenge_utils.worker_registry import get_worker_registry
+        from challenge_utils.worker_state import get_worker_state_manager
+        
+        # Get the worker
+        worker_registry = get_worker_registry()
+        worker = worker_registry.get_worker(worker_id)
+        
+        if not worker:
+            return jsonify({"error": f"Worker {worker_id} not found"}), 404
+        
+        # Update worker state to trigger resume
+        state_manager = get_worker_state_manager()
+        state_manager.update_worker_state(worker_id, {
+            'command': 'resume'
+        })
+        
+        return jsonify({
+            "success": True, 
+            "message": f"Worker {worker_id} resume request sent"
+        }), 200
+    except Exception as e:
+        logging.error(f"Error resuming worker: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/workers/<worker_id>/stop', methods=['POST'])
+def stop_worker(worker_id):
+    """Stop a worker."""
+    try:
+        from challenge_utils.worker_registry import get_worker_registry
+        from challenge_utils.worker_state import get_worker_state_manager
+        
+        # Get the worker
+        worker_registry = get_worker_registry()
+        worker = worker_registry.get_worker(worker_id)
+        
+        if not worker:
+            return jsonify({"error": f"Worker {worker_id} not found"}), 404
+        
+        # Get reason from request body
+        data = request.json or {}
+        reason = data.get('reason', 'Stopped by API request')
+        
+        # Update worker state to trigger stop
+        state_manager = get_worker_state_manager()
+        state_manager.update_worker_state(worker_id, {
+            'command': 'stop',
+            'reason': reason
+        })
+        
+        return jsonify({
+            "success": True, 
+            "message": f"Worker {worker_id} stop request sent",
+            "reason": reason
+        }), 200
+    except Exception as e:
+        logging.error(f"Error stopping worker: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/workers/cleanup', methods=['POST'])
+def cleanup_stale_workers():
+    """Clean up stale workers."""
+    try:
+        from challenge_utils.worker_registry import get_worker_registry
+        
+        worker_registry = get_worker_registry()
+        cleaned = worker_registry.cleanup_stale_workers()
+        
+        return jsonify({
+            "success": True,
+            "cleaned_workers": cleaned,
+            "message": f"Cleaned up {cleaned} stale workers"
+        }), 200
+    except Exception as e:
+        logging.error(f"Error cleaning up stale workers: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/workers/initialize', methods=['POST'])
+def api_init_workers():
+    """Initialize or reinitialize workers."""
+    try:
+        # Check if there are any active workers
+        from challenge_utils.worker_registry import get_worker_registry, WorkerStatus
+        
+        worker_registry = get_worker_registry()
+        workers = worker_registry.list_workers()
+        
+        active_workers = [w for w in workers if w.status in (WorkerStatus.ACTIVE, WorkerStatus.IDLE)]
+        
+        # If we have active workers, return error unless force=true
+        data = request.json or {}
+        force = data.get('force', False)
+        
+        if active_workers and not force:
+            return jsonify({
+                "success": False,
+                "message": "Active workers detected. Use force=true to reinitialize anyway.",
+                "active_workers": len(active_workers)
+            }), 400
+        
+        # Clean up existing workers if forced
+        if force and active_workers:
+            # Stop each worker
+            for worker in active_workers:
+                try:
+                    from challenge_utils.worker_state import get_worker_state_manager
+                    state_manager = get_worker_state_manager()
+                    state_manager.update_worker_state(worker.worker_id, {
+                        'command': 'stop',
+                        'reason': 'Forced stop during reinitialization'
+                    })
+                except Exception as e:
+                    logging.error(f"Error stopping worker {worker.worker_id}: {e}")
+            
+            # Wait a bit for workers to stop
+            import time
+            time.sleep(5)
+            
+            # Clean up any remaining workers
+            worker_registry.cleanup_stale_workers()
+        
+        # Initialize workers
+        from challenge_utils.queue_workers import init_all_workers
+        success = init_all_workers()
+        
+        return jsonify({
+            "success": success,
+            "message": "Workers initialized successfully" if success else "Failed to initialize workers",
+            "force_applied": force
+        }), 200 if success else 500
+    except Exception as e:
+        logging.error(f"Error initializing workers: {e}")
+        return jsonify({"error": str(e)}), 500

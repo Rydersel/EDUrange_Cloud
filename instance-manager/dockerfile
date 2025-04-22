@@ -2,7 +2,7 @@
 
 
 # Build stage
-FROM python:3.10.13-slim AS builder
+FROM python:3.13.3-slim AS builder
 
 # Set environment variables
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -29,12 +29,29 @@ COPY requirements.txt .
 RUN pip install --prefix=/install --no-cache-dir -r requirements.txt
 
 # Final stage
-FROM python:3.10.13-slim
+FROM python:3.13.3-slim
 
 # Set environment variables
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PYTHONPATH=/app
+    PYTHONPATH=/app \
+    # Worker Management Configuration
+    # Enable parallel queue processing for higher throughput
+    ENABLE_PARALLEL_WORKERS=true \
+    # Time between worker heartbeats in seconds
+    WORKER_HEARTBEAT_INTERVAL=15 \
+    # Time in seconds after which a worker without heartbeat is considered stale
+    WORKER_HEARTBEAT_TIMEOUT=60 \
+    # Time in seconds until worker registry entries expire
+    WORKER_EXPIRY_SECONDS=3600 \
+    # Maximum time in seconds a deployment task can run before timeout
+    DEPLOYMENT_TASK_TIMEOUT=900 \
+    # Maximum time in seconds a termination task can run before timeout
+    TERMINATION_TASK_TIMEOUT=300 \
+    # Maximum number of workers per queue type
+    MAX_WORKERS_PER_QUEUE=3 \
+    # Enable automatic cleanup of stale workers
+    AUTO_CLEANUP_STALE_WORKERS=true
 
 # Install only essential runtime dependencies with specific versions
 RUN apt-get update && apt-get install -y --no-install-recommends \

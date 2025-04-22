@@ -1,0 +1,81 @@
+{
+  "$schema": "https://raw.githubusercontent.com/EDURange/schema/main/schemas/cdf.schema.json",
+  "metadata": {
+    "id": "sql-injection-challenge4",
+    "pack_id": "sql-injection-series",
+    "name": "SQL Injection: Time-Based Extraction",
+    "version": "1.0.0",
+    "description": "This challenge focuses on time-based blind SQL injection techniques. After bypassing the login, you'll be presented with multiple PIN codes - but only one is real. Students must use time-based SQL injection to determine which of the supplied PIN codes is legitimate, as only the correct PIN will reveal the actual flag. The database contains multiple tables and decoy data designed to make identification challenging.",
+    "challenge_type": "sql-injection",
+    "difficulty": "advanced",
+    "estimated_time": 30
+  },
+  "components": [
+    {
+      "type": "webosApp",
+      "id": "settings",
+      "config": {
+        "title": "Settings",
+        "icon": "./icons/settings.svg",
+        "width": 50,
+        "height": 60,
+        "screen": "displaySettings",
+        "disabled": false,
+        "favourite": true,
+        "desktop_shortcut": false,
+        "launch_on_startup": false,
+        "app_type": "custom"
+      }
+    },
+    {
+      "type": "webosApp",
+      "id": "chrome",
+      "config": {
+        "title": "Browser",
+        "icon": "./icons/browser.svg",
+        "width": 70,
+        "height": 80,
+        "screen": "displayChrome",
+        "disabled": false,
+        "favourite": true,
+        "desktop_shortcut": true,
+        "launch_on_startup": false,
+        "app_type": "browser"
+      }
+    },
+    {
+      "type": "webosApp",
+      "id": "web_chal",
+      "config": {
+        "title": "SQL Challenge 4",
+        "icon": "./icons/browser.svg",
+        "width": 70,
+        "height": 80,
+        "screen": "displayWebChal",
+        "disabled": false,
+        "favourite": true,
+        "desktop_shortcut": true,
+        "launch_on_startup": true,
+        "app_type": "custom"
+      }
+    },
+    {
+      "id": "flag-question",
+      "type": "question",
+      "config": {
+        "type": "flag",
+        "text": "What is the flag value hidden in the database?",
+        "points": 100,
+        "answer": "CTF_time_based_extraction_win",
+        "hint": "After bypassing the login, you'll see multiple PIN codes, but only one is valid. Use time-based blind SQL injection to verify which PIN is actually stored in the database. Try using the SLEEP() function in MySQL which will cause a delay when a condition is true. For example: ' OR IF((SELECT pin_code FROM flags WHERE flag_type='production' AND is_active=1)='1234', SLEEP(3), 0) -- "
+      }
+    }
+  ],
+  "typeConfig": {
+    "challengeImage": "registry.edurange.cloud/challenges/sql-injection-challenge4",
+    "databaseImage": "mysql:5.7",
+    "containerPorts": {
+      "web": 8080
+    }
+  }
+}

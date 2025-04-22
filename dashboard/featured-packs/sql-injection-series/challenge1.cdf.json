@@ -1,0 +1,78 @@
+{
+  "$schema": "https://raw.githubusercontent.com/EDURange/schema/main/schemas/cdf.schema.json",
+  "metadata": {
+    "id": "sql-injection-challenge1",
+    "pack_id": "sql-injection-series",
+    "name": "SQL Injection: Basic Authentication Bypass",
+    "version": "1.0.0",
+    "description": "Learn how to bypass authentication using the classic ' OR 1=1 -- SQL injection technique. Your goal is to login as the admin user to access the admin dashboard and find the flag.",
+    "challenge_type": "sql-injection",
+    "difficulty": "beginner",
+    "estimated_time": 15
+  },
+  "components": [
+    {
+      "type": "webosApp",
+      "id": "settings",
+      "config": {
+        "title": "Settings",
+        "icon": "./icons/settings.svg",
+        "width": 50,
+        "height": 60,
+        "screen": "displaySettings",
+        "disabled": false,
+        "favourite": true,
+        "desktop_shortcut": false,
+        "launch_on_startup": false,
+        "app_type": "custom"
+      }
+    },
+    {
+      "type": "webosApp",
+      "id": "chrome",
+      "config": {
+        "title": "Browser",
+        "icon": "./icons/browser.svg",
+        "width": 70,
+        "height": 80,
+        "screen": "displayChrome",
+        "disabled": false,
+        "favourite": true,
+        "desktop_shortcut": true,
+        "launch_on_startup": false,
+        "app_type": "browser"
+      }
+    },
+    {
+      "type": "webosApp",
+      "id": "web_chal",
+      "config": {
+        "title": "SQL Challenge 1",
+        "icon": "./icons/browser.svg",
+        "width": 70,
+        "height": 80,
+        "screen": "displayWebChal",
+        "disabled": false,
+        "favourite": true,
+        "desktop_shortcut": true,
+        "launch_on_startup": true,
+        "app_type": "custom"
+      }
+    },
+    {
+      "id": "flag-question",
+      "type": "question",
+      "config": {
+        "type": "flag",
+        "text": "What is the flag you found after successfully bypassing the login authentication? (Format: CTF{...})",
+        "points": 100,
+        "answer": "CTF{or_1_equals_1_classic}",
+        "hint": "Try injecting code into the username field that will make the WHERE clause always evaluate to true. Look for the classic OR 1=1 technique with comment sequences."
+      }
+    }
+  ],
+  "typeConfig": {
+    "challengeImage": "registry.edurange.cloud/challenges/sql-injection-challenge1",
+    "databaseImage": "mysql:5.7"
+  }
+}

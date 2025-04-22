@@ -1,0 +1,56 @@
+# docker buildx build --platform linux/amd64 -t registry.edurange.cloud/edurange/webos -f Dockerfile.dev . --push
+
+# Build stage
+FROM node:18.19.1-alpine AS builder
+
+WORKDIR /app
+
+# Copy package files and install dependencies
+COPY package*.json ./
+
+# Install dependencies with specific optimizations
+RUN npm ci --only=production --no-optional && \
+    npm cache clean --force
+
+# Copy application code
+COPY . .
+
+# Build the application with development optimization flags
+RUN NODE_ENV=testing npm run build && \
+    npm prune --production
+
+# Development stage
+FROM node:18.19.1-alpine
+
+# Create non-root user and group
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+
+WORKDIR /app
+
+# Copy only the minimum required files from builder
+COPY --from=builder /app/package*.json ./
+COPY --from=builder /app/.next ./.next
+COPY --from=builder /app/public ./public
+COPY --from=builder /app/node_modules ./node_modules
+
+# Set proper ownership and permissions
+RUN chown -R appuser:appgroup /app && \
+    chmod -R 755 /app && \
+    chmod -R 440 /app/package*.json
+
+# Set environment variables for testing/debugging
+ENV NODE_ENV=testing
+ENV LOG_LEVEL=info
+
+# Switch to non-root user
+USER appuser
+
+# Expose the application port
+EXPOSE 3000
+
+# Add healthcheck
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+    CMD wget --no-verbose --tries=1 --spider http://localhost:3000/ || exit 1
+
+# Start the application with optimized flags
+CMD ["node", "--use-strict", "node_modules/.bin/next", "start"]

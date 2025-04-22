@@ -276,11 +276,11 @@ spec:
         image: redis:7.2-alpine
         resources:
           limits:
-            memory: "2Gi"
-            cpu: "1000m"
+            memory: "4Gi"
+            cpu: "2000m"
           requests:
-            memory: "128Mi"
-            cpu: "50m"
+            memory: "512Mi"
+            cpu: "250m"
         ports:
         - containerPort: 6379
         volumeMounts:
@@ -357,21 +357,21 @@ spec:
     apiVersion: apps/v1
     kind: Deployment
     name: redis
-  minReplicas: 1
-  maxReplicas: 3
+  minReplicas: 2
+  maxReplicas: 6
   metrics:
   - type: Resource
     resource:
       name: cpu
       target:
         type: Utilization
-        averageUtilization: 70
+        averageUtilization: 60
   - type: Resource
     resource:
       name: memory
       target:
         type: Utilization
-        averageUtilization: 80
+        averageUtilization: 70
   behavior:
     scaleDown:
       stabilizationWindowSeconds: 300
@@ -380,11 +380,14 @@ spec:
         value: 25
         periodSeconds: 60
     scaleUp:
-      stabilizationWindowSeconds: 60
+      stabilizationWindowSeconds: 30
       policies:
       - type: Percent
         value: 100
-        periodSeconds: 60
+        periodSeconds: 30
+      - type: Pods
+        value: 1
+        periodSeconds: 30
 `;
       const hpaResult = await applyManifestFromString(redisHpaYaml, 'redis-hpa');
       if (hpaResult.code !== 0) {

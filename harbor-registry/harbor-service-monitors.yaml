@@ -1,0 +1,115 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: harbor-core
+  namespace: monitoring
+  labels:
+    app: harbor
+    release: prometheus
+spec:
+  namespaceSelector:
+    matchNames:
+      - harbor
+  selector:
+    matchLabels:
+      app: harbor
+      component: core
+  endpoints:
+  - port: metrics
+    path: /metrics
+    interval: 30s
+    scrapeTimeout: 10s
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: harbor-registry
+  namespace: monitoring
+  labels:
+    app: harbor
+    release: prometheus
+spec:
+  namespaceSelector:
+    matchNames:
+      - harbor
+  selector:
+    matchLabels:
+      app: harbor
+      app.kubernetes.io/name: harbor
+  endpoints:
+  - port: ""  # Don't try to match a named port
+    targetPort: 8001
+    path: /metrics
+    interval: 30s
+    scrapeTimeout: 10s
+    # Use service name filtering to specifically target registry service
+    relabelings:
+    - sourceLabels: [__meta_kubernetes_service_name]
+      action: keep
+      regex: harbor-registry
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: harbor-jobservice
+  namespace: monitoring
+  labels:
+    app: harbor
+    release: prometheus
+spec:
+  namespaceSelector:
+    matchNames:
+      - harbor
+  selector:
+    matchLabels:
+      app: harbor
+      component: jobservice
+  endpoints:
+  - port: metrics
+    path: /metrics
+    interval: 30s
+    scrapeTimeout: 10s
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: harbor-exporter
+  namespace: monitoring
+  labels:
+    app: harbor
+    release: prometheus
+spec:
+  namespaceSelector:
+    matchNames:
+      - harbor
+  selector:
+    matchLabels:
+      app: harbor
+      component: exporter
+  endpoints:
+  - port: metrics
+    path: /metrics
+    interval: 30s
+    scrapeTimeout: 10s
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: harbor-redis-exporter
+  namespace: monitoring
+  labels:
+    app: harbor
+    release: prometheus
+spec:
+  namespaceSelector:
+    matchNames:
+      - harbor
+  selector:
+    matchLabels:
+      app: harbor
+      component: redis-exporter
+  endpoints:
+  - port: metrics
+    path: /metrics
+    interval: 30s
+    scrapeTimeout: 10s 

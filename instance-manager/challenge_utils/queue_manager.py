@@ -16,6 +16,8 @@ import os
 from dotenv import load_dotenv
 import threading
 from .redis_manager import get_redis
+# Import the critical section locking utilities
+from .critical_sections import CriticalSectionManager
 
 # Load environment variables
 load_dotenv()
@@ -117,6 +119,21 @@ class ChallengeQueue:
         if not self.is_connected():
             logging.error("Cannot enqueue: Redis connection not available")
             return None
+        
+        # Get challenge_id for locking if available
+        challenge_id = challenge_data.get("challenge_id") or challenge_data.get("id")
+        if challenge_id:
+            # Acquire a lock for this challenge
+            lock = CriticalSectionManager.lock_challenge_resource(str(challenge_id))
+            if not lock:
+                logging.error(f"Failed to acquire lock for challenge {challenge_id} during enqueue")
+                return None
+        else:
+            # If no challenge_id, use a queue lock instead
+            lock = CriticalSectionManager.lock_queue_operation(self.queue_type)
+            if not lock:
+                logging.error(f"Failed to acquire queue lock during enqueue")
+                return None
             
         try:
             # Use provided task_id or generate a unique task ID
@@ -130,6 +147,10 @@ class ChallengeQueue:
                 'priority': priority,
                 'status': 'queued'
             }
+            
+            # If we have a challenge_id, add it to metadata for easier locking later
+            if challenge_id:
+                challenge_data['metadata']['challenge_id'] = str(challenge_id)
             
             # Store the task data
             self.redis.set(f"challenge_task:{task_id}", json.dumps(challenge_data))
@@ -149,6 +170,9 @@ class ChallengeQueue:
         except Exception as e:
             logging.error(f"Error enqueuing challenge: {e}")
             return None
+        finally:
+            # Always release the lock
+            CriticalSectionManager.release_lock(lock)
             
     def dequeue(self):
         """
@@ -159,6 +183,12 @@ class ChallengeQueue:
         """
         if not self.is_connected():
             logging.error("Cannot dequeue: Redis connection not available")
+            return None
+        
+        # Acquire a lock for dequeue operations
+        lock = CriticalSectionManager.lock_queue_operation(f"{self.queue_type}_dequeue")
+        if not lock:
+            logging.error(f"Failed to acquire lock for dequeue operation")
             return None
             
         try:
@@ -208,6 +238,9 @@ class ChallengeQueue:
         except Exception as e:
             logging.error(f"Error dequeuing challenge: {e}")
             return None
+        finally:
+            # Always release the lock
+            CriticalSectionManager.release_lock(lock)
             
     def complete_task(self, task_id, success=True, result=None):
         """
@@ -224,9 +257,9 @@ class ChallengeQueue:
         if not self.is_connected():
             logging.error("Cannot complete task: Redis connection not available")
             return False
-            
+        
+        # First, get the task data to see if we have a challenge_id
         try:
-            # Get the task data
             task_data_json = self.redis.get(f"challenge_task:{task_id}")
             if not task_data_json:
                 logging.error(f"Task {task_id} not found")
@@ -235,32 +268,198 @@ class ChallengeQueue:
             # Parse the task data
             task_data = json.loads(task_data_json)
             
-            # Update the task status and result
-            task_data['metadata']['status'] = 'completed' if success else 'failed'
-            task_data['metadata']['completed_at'] = datetime.now().isoformat()
+            # Check if we have a challenge_id for locking
+            challenge_id = None
+            if 'metadata' in task_data and 'challenge_id' in task_data['metadata']:
+                challenge_id = task_data['metadata']['challenge_id']
+            elif 'challenge_id' in task_data:
+                challenge_id = task_data['challenge_id']
             
-            if result:
-                task_data['result'] = result
-                
-            # Store the updated task data
-            self.redis.set(f"challenge_task:{task_id}", json.dumps(task_data))
-            
-            # Remove from processing set
-            self.redis.zrem(self.processing_key, task_id)
-            
-            # Update metrics
-            self.redis.hincrby(self.metrics_key, "total_completed", 1)
-            if success:
-                self.redis.hincrby(self.metrics_key, "successful_completions", 1)
+            # Acquire appropriate lock
+            if challenge_id:
+                lock = CriticalSectionManager.lock_challenge_resource(str(challenge_id))
+                if not lock:
+                    logging.error(f"Failed to acquire lock for challenge {challenge_id} during complete_task")
+                    return False
             else:
-                self.redis.hincrby(self.metrics_key, "failed_completions", 1)
+                # Use task_id as the lock key if no challenge_id
+                lock = CriticalSectionManager.lock_resource(f"task:{task_id}")
+                if not lock:
+                    logging.error(f"Failed to acquire lock for task {task_id} during complete_task")
+                    return False
                 
-            logging.info(f"Completed task {task_id} with {'success' if success else 'failure'}")
-            return True
-            
+            try:
+                # Update the task status and result
+                task_data['metadata']['status'] = 'completed' if success else 'failed'
+                task_data['metadata']['completed_at'] = datetime.now().isoformat()
+                
+                if result:
+                    task_data['result'] = result
+                    
+                # Store the updated task data
+                self.redis.set(f"challenge_task:{task_id}", json.dumps(task_data))
+                
+                # Remove from processing set
+                self.redis.zrem(self.processing_key, task_id)
+                
+                # Update metrics
+                self.redis.hincrby(self.metrics_key, "total_completed", 1)
+                if success:
+                    self.redis.hincrby(self.metrics_key, "successful_completions", 1)
+                else:
+                    self.redis.hincrby(self.metrics_key, "failed_completions", 1)
+                    
+                logging.info(f"Completed task {task_id} with {'success' if success else 'failure'}")
+                return True
+            finally:
+                # Always release the lock
+                CriticalSectionManager.release_lock(lock)
+                
         except Exception as e:
             logging.error(f"Error completing task {task_id}: {e}")
             return False
+    
+    def recover_stalled_tasks(self, max_age_seconds=300):
+        """
+        Recover tasks that have been stuck in 'processing' for too long.
+        
+        Args:
+            max_age_seconds (int, optional): Maximum age for a task to be considered stalled.
+                Defaults to 300 seconds (5 minutes).
+                
+        Returns:
+            int: Number of tasks recovered.
+        """
+        if not self.is_connected():
+            logging.error("Cannot recover stalled tasks: Redis connection not available")
+            return 0
+        
+        # Acquire a lock for recovery operations
+        lock = CriticalSectionManager.lock_queue_operation(f"{self.queue_type}_recovery")
+        if not lock:
+            logging.error(f"Failed to acquire lock for task recovery operation")
+            return 0
+            
+        try:
+            # Get all tasks in the processing set
+            tasks = self.redis.zrange(self.processing_key, 0, -1, withscores=True)
+            
+            now = int(time.time())
+            recovered_count = 0
+            
+            for task_bytes, start_time in tasks:
+                task_id = task_bytes.decode('utf-8') if isinstance(task_bytes, bytes) else task_bytes
+                
+                # Check if the task has been processing for too long
+                if (now - int(start_time)) > max_age_seconds:
+                    # Get the task data
+                    task_data_json = self.redis.get(f"challenge_task:{task_id}")
+                    if not task_data_json:
+                        # Task data is missing, just remove from processing
+                        self.redis.zrem(self.processing_key, task_id)
+                        continue
+                        
+                    # Parse the task data
+                    task_data = json.loads(task_data_json)
+                    
+                    # Try to acquire a task-specific lock to prevent multiple workers
+                    # from recovering the same task
+                    task_lock_key = f"task_recovery:{task_id}"
+                    task_lock = CriticalSectionManager.lock_resource(task_lock_key)
+                    if not task_lock:
+                        # Skip if we can't get a lock - another worker might be handling it
+                        logging.warning(f"Skipping recovery of task {task_id}: could not acquire lock")
+                        continue
+                    
+                    try:
+                        # Re-check the processing status to ensure it hasn't been completed
+                        # by another worker in the meantime
+                        if not self.redis.zscore(self.processing_key, task_id):
+                            # Task is no longer in processing, skip
+                            continue
+                            
+                        # Update the task status to indicate recovery
+                        task_data['metadata']['status'] = 'recovered'
+                        task_data['metadata']['recovered_at'] = datetime.now().isoformat()
+                        task_data['metadata']['original_start_time'] = int(start_time)
+                        
+                        # Store the updated task data
+                        self.redis.set(f"challenge_task:{task_id}", json.dumps(task_data))
+                        
+                        # Re-queue the task with high priority
+                        score = self.PRIORITY_HIGH * 1000000000 + int(time.time())
+                        self.redis.zadd(self.queue_key, {task_id: score})
+                        
+                        # Remove from processing set
+                        self.redis.zrem(self.processing_key, task_id)
+                        
+                        # Update metrics
+                        self.redis.hincrby(self.metrics_key, "total_recovered", 1)
+                        
+                        logging.info(f"Recovered stalled task {task_id} (stalled for {now - int(start_time)} seconds)")
+                        recovered_count += 1
+                    finally:
+                        # Always release the task lock
+                        CriticalSectionManager.release_lock(task_lock)
+            
+            return recovered_count
+            
+        except Exception as e:
+            logging.error(f"Error recovering stalled tasks: {e}")
+            return 0
+        finally:
+            # Always release the main recovery lock
+            CriticalSectionManager.release_lock(lock)
+
+    def clear_queue(self):
+        """
+        Clear all tasks from the queue (for admin use only).
+        
+        Returns:
+            bool: True if successful, False otherwise.
+        """
+        if not self.is_connected():
+            logging.error("Cannot clear queue: Redis connection not available")
+            return False
+        
+        # Acquire a lock for queue clearing operations
+        lock = CriticalSectionManager.lock_queue_operation(f"{self.queue_type}_clear")
+        if not lock:
+            logging.error(f"Failed to acquire lock for queue clearing operation")
+            return False
+            
+        try:
+            # Get all task IDs
+            queued_tasks = self.redis.zrange(self.queue_key, 0, -1)
+            processing_tasks = self.redis.zrange(self.processing_key, 0, -1)
+            
+            # Create a pipeline
+            pipe = self.redis.pipeline()
+            
+            # Delete all task data
+            for task_id in queued_tasks + processing_tasks:
+                task_id = task_id.decode('utf-8') if isinstance(task_id, bytes) else task_id
+                pipe.delete(f"challenge_task:{task_id}")
+                
+            # Clear the queues
+            pipe.delete(self.queue_key)
+            pipe.delete(self.processing_key)
+            
+            # Reset metrics
+            pipe.delete(self.metrics_key)
+            
+            # Execute the pipeline
+            pipe.execute()
+            
+            logging.warning("Challenge queue cleared")
+            return True
+            
+        except Exception as e:
+            logging.error(f"Error clearing queue: {e}")
+            return False
+        finally:
+            # Always release the lock
+            CriticalSectionManager.release_lock(lock)
             
     def get_task_status(self, task_id):
         """
@@ -372,47 +571,6 @@ class ChallengeQueue:
                 }
             }
             
-    def clear_queue(self):
-        """
-        Clear all tasks from the queue (for admin use only).
-        
-        Returns:
-            bool: True if successful, False otherwise.
-        """
-        if not self.is_connected():
-            logging.error("Cannot clear queue: Redis connection not available")
-            return False
-            
-        try:
-            # Get all task IDs
-            queued_tasks = self.redis.zrange(self.queue_key, 0, -1)
-            processing_tasks = self.redis.zrange(self.processing_key, 0, -1)
-            
-            # Create a pipeline
-            pipe = self.redis.pipeline()
-            
-            # Delete all task data
-            for task_id in queued_tasks + processing_tasks:
-                task_id = task_id.decode('utf-8') if isinstance(task_id, bytes) else task_id
-                pipe.delete(f"challenge_task:{task_id}")
-                
-            # Clear the queues
-            pipe.delete(self.queue_key)
-            pipe.delete(self.processing_key)
-            
-            # Reset metrics
-            pipe.delete(self.metrics_key)
-            
-            # Execute the pipeline
-            pipe.execute()
-            
-            logging.warning("Challenge queue cleared")
-            return True
-            
-        except Exception as e:
-            logging.error(f"Error clearing queue: {e}")
-            return False
-
     def start_worker(self, callback, interval=1):
         """
         Start a worker thread that processes queue items.
@@ -559,77 +717,6 @@ class ChallengeQueue:
             return False
             
         return True
-            
-    def recover_stalled_tasks(self, max_age_seconds=300):
-        """
-        Recover tasks that have been stuck in 'processing' for too long.
-        
-        Args:
-            max_age_seconds (int, optional): Maximum time a task can be in 
-                processing state. Defaults to 300 (5 minutes).
-                
-        Returns:
-            int: Number of recovered tasks.
-        """
-        if not self.is_connected():
-            logging.error("Cannot recover tasks: Redis connection not available")
-            return 0
-            
-        try:
-            # Get current time
-            now = int(time.time())
-            cutoff = now - max_age_seconds
-            
-            # Get tasks that have been processing for too long
-            stalled_tasks = self.redis.zrangebyscore(
-                self.processing_key, 0, cutoff
-            )
-            
-            recovered = 0
-            
-            for task_id in stalled_tasks:
-                task_id = task_id.decode('utf-8') if isinstance(task_id, bytes) else task_id
-                
-                # Get the task data
-                task_data_json = self.redis.get(f"challenge_task:{task_id}")
-                if not task_data_json:
-                    # Task data is missing, just remove from processing
-                    self.redis.zrem(self.processing_key, task_id)
-                    continue
-                    
-                # Parse the task data
-                task_data = json.loads(task_data_json)
-                
-                # Update the task status
-                task_data['metadata']['status'] = 'recovered'
-                task_data['metadata']['recovered_at'] = datetime.now().isoformat()
-                task_data['metadata']['recovery_reason'] = f"Task processing time exceeded {max_age_seconds} seconds"
-                
-                # Re-queue the task
-                priority = task_data['metadata'].get('priority', self.PRIORITY_NORMAL)
-                
-                # Store the updated task data
-                self.redis.set(f"challenge_task:{task_id}", json.dumps(task_data))
-                
-                # Remove from processing set
-                self.redis.zrem(self.processing_key, task_id)
-                
-                # Add back to queue
-                score = priority * 1000000000 + int(time.time())
-                self.redis.zadd(self.queue_key, {task_id: score})
-                
-                logging.info(f"Recovered stalled task {task_id} with priority {priority}")
-                recovered += 1
-                
-            if recovered > 0:
-                # Update metrics
-                self.redis.hincrby(self.metrics_key, "recovered_tasks", recovered)
-                
-            return recovered
-            
-        except Exception as e:
-            logging.error(f"Error recovering stalled tasks: {e}")
-            return 0
 
 # Create singleton instances for different queue types
 _deployment_queue = None

@@ -1,0 +1,63 @@
+persistence:
+  enabled: true
+  storageClassName: linode-block-storage
+  size: 5Gi
+
+admin:
+  existingSecret: grafana-admin-credentials
+  userKey: admin-user
+  passwordKey: admin-password
+
+ingress:
+  enabled: true
+  ingressClassName: nginx
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+  hosts:
+    - grafana.edurange.cloud
+  tls:
+    - hosts:
+        - grafana.edurange.cloud
+      secretName: wildcard-domain-certificate-prod
+
+datasources:
+  datasources.yaml:
+    apiVersion: 1
+    datasources:
+    - name: Prometheus
+      type: prometheus
+      url: http://prometheus-kube-prometheus-prometheus.monitoring.svc.cluster.local:9090
+      access: proxy
+      isDefault: true
+    - name: Loki
+      type: loki
+      url: http://loki-stack:3100
+      access: proxy
+      version: 1
+      editable: true
+      jsonData:
+        maxLines: 1000
+        derivedFields:
+          - datasourceUid: Prometheus
+            matcherRegex: "(?:trace_id|traceID|traceid)=([0-9a-f]+)"
+            name: TraceID
+        timeout: 60
+        healthCheck:
+          enabled: true
+          query: "{instance=~\".+\"} |= \".*\" limit 1"
+
+serviceMonitor:
+  enabled: true
+
+timeouts:
+  connectTimeout: 30s
+  readTimeout: 30s
+
+resources:
+  limits:
+    cpu: 200m
+    memory: 256Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi

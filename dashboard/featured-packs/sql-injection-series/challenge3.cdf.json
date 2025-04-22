@@ -1,0 +1,78 @@
+{
+  "$schema": "https://raw.githubusercontent.com/EDURange/schema/main/schemas/cdf.schema.json",
+  "metadata": {
+    "id": "sql-injection-challenge3",
+    "pack_id": "sql-injection-series",
+    "name": "SQL Injection: UNION-Based Attacks",
+    "version": "1.0.0",
+    "description": "Learn how to use UNION-based SQL injection to extract data from hidden tables in the database.",
+    "challenge_type": "sql-injection",
+    "difficulty": "intermediate",
+    "estimated_time": 25
+  },
+  "components": [
+    {
+      "type": "webosApp",
+      "id": "settings",
+      "config": {
+        "title": "Settings",
+        "icon": "./icons/settings.svg",
+        "width": 50,
+        "height": 60,
+        "screen": "displaySettings",
+        "disabled": false,
+        "favourite": true,
+        "desktop_shortcut": false,
+        "launch_on_startup": false,
+        "app_type": "custom"
+      }
+    },
+    {
+      "type": "webosApp",
+      "id": "chrome",
+      "config": {
+        "title": "Browser",
+        "icon": "./icons/browser.svg",
+        "width": 70,
+        "height": 80,
+        "screen": "displayChrome",
+        "disabled": false,
+        "favourite": true,
+        "desktop_shortcut": true,
+        "launch_on_startup": false,
+        "app_type": "browser"
+      }
+    },
+    {
+      "type": "webosApp",
+      "id": "web_chal",
+      "config": {
+        "title": "SQL Challenge 3",
+        "icon": "./icons/browser.svg",
+        "width": 70,
+        "height": 80,
+        "screen": "displayWebChal",
+        "disabled": false,
+        "favourite": true,
+        "desktop_shortcut": true,
+        "launch_on_startup": true,
+        "app_type": "custom"
+      }
+    },
+    {
+      "id": "flag-question",
+      "type": "question",
+      "config": {
+        "type": "flag",
+        "text": "What is the flag you found in the secrets table? (Format: CTF{...})",
+        "points": 100,
+        "answer": "CTF{basic_union}",
+        "hint": "Use the UNION operator to combine the results of the original query with a query that selects data from the hidden 'secrets' table."
+      }
+    }
+  ],
+  "typeConfig": {
+    "challengeImage": "registry.edurange.cloud/challenges/sql-injection-challenge3",
+    "databaseImage": "mysql:5.7"
+  }
+}

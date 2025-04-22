@@ -1,7 +1,7 @@
 # docker buildx build -f dockerfile.sync --platform linux/amd64 -t registry.edurange.cloud/edurange/database-sync . --push
 
 # Builder stage
-FROM python:3.10-slim AS builder
+FROM python:3.13.3-slim  AS builder
 
 # Set environment variables for better Python performance
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -23,7 +23,7 @@ RUN apt-get update && \
     # Generate Python Prisma client
     prisma generate --generator client_py && \
     # Ensure generated files are accessible
-    chmod -R a+rX /usr/local/lib/python3.10/site-packages/prisma/ && \
+    chmod -R a+rX /usr/local/lib/python3.13/site-packages/prisma/ && \
     # Clean up
     apt-get purge -y gcc && \
     apt-get autoremove -y && \
@@ -31,7 +31,7 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 
 # Final stage
-FROM python:3.10-slim
+FROM python:3.13.3-slim
 
 # Set working directory to /app
 WORKDIR /app
@@ -41,17 +41,24 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PYTHONMALLOC=default
 
-# Copy Python modules from builder stage
-COPY --from=builder /usr/local/lib/python3.10/site-packages /usr/local/lib/python3.10/site-packages
-COPY --from=builder /usr/local/bin/prisma /usr/local/bin/prisma
-COPY --from=builder /root/.cache/prisma-python/ /root/.cache/prisma-python/
-COPY --from=builder /build/schema.prisma .
-
-# Copy application code
+# Copy application code and files needed for installation
 COPY sync/ .
-
-# Copy environment variables
+COPY schema.prisma .
+COPY requirements.txt .
 COPY .env .
+
+# Install Python dependencies directly in the final image
+# This ensures all dependencies are properly installed in the correct site-packages directory
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy Prisma client files and cache from builder
+COPY --from=builder /usr/local/lib/python3.13/site-packages/prisma/ /usr/local/lib/python3.13/site-packages/prisma/
+COPY --from=builder /root/.cache/prisma-python/ /root/.cache/prisma-python/
+
+# Verify installation and show debug info
+RUN python -m pip list && \
+    python -c "from prisma import Prisma; print('Prisma client properly installed')" && \
+    echo "PATH=$PATH"
 
 # Run the application
 CMD ["python", "main.py"]

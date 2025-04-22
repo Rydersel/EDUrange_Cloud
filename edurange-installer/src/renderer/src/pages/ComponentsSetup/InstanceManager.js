@@ -170,11 +170,11 @@ spec:
               key: redis-password
         resources:
           limits:
-            cpu: "1"
-            memory: "1Gi"
+            cpu: "1500m"
+            memory: "2Gi"
           requests:
-            cpu: "250m"
-            memory: "512Mi"
+            cpu: "500m"
+            memory: "1Gi"
         volumeMounts:
         - name: terminal-credentials
           mountPath: /etc/terminal-credentials
@@ -249,21 +249,21 @@ spec:
     apiVersion: apps/v1
     kind: Deployment
     name: instance-manager
-  minReplicas: 1
-  maxReplicas: 5
+  minReplicas: 2
+  maxReplicas: 10
   metrics:
   - type: Resource
     resource:
       name: cpu
       target:
         type: Utilization
-        averageUtilization: 70
+        averageUtilization: 60
   - type: Resource
     resource:
       name: memory
       target:
         type: Utilization
-        averageUtilization: 80
+        averageUtilization: 70
   behavior:
     scaleDown:
       stabilizationWindowSeconds: 300
@@ -272,11 +272,14 @@ spec:
         value: 25
         periodSeconds: 60
     scaleUp:
-      stabilizationWindowSeconds: 60
+      stabilizationWindowSeconds: 30
       policies:
       - type: Percent
         value: 100
-        periodSeconds: 60
+        periodSeconds: 30
+      - type: Pods
+        value: 2
+        periodSeconds: 30
 `;
 
     const hpaResult = await applyManifestFromString(hpaYaml, 'hpa');

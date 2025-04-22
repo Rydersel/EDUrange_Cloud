@@ -1,7 +1,7 @@
 import logging
 import sys
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 
 # Try both import styles to support both structures
 try:
@@ -36,7 +36,7 @@ class ChallengeInstanceManager:
         Add a new challenge instance to the database.
         
         Args:
-            instance_data (dict): Data for the new challenge instance
+            instance_data (dict): Data for the challenge instance
             
         Returns:
             The created challenge instance
@@ -46,42 +46,34 @@ class ChallengeInstanceManager:
             self.prisma = self.db_manager.prisma
             if not self.prisma:
                 raise Exception("Database not connected")
-        
-        # Get required fields from instance data
+                
+        # Extract instance data
         pod_name = instance_data.get('pod_name', '')
-        flag_secret_name = instance_data.get('flag_secret_name', '')
-        challenge_name = instance_data.get('challenge_name', '')
-        challenge_id = instance_data.get('challenge_id', challenge_name)
-        new_flag = instance_data.get('flag', None)
-        competition_id = instance_data.get('competition_id', '')
+        challenge_id = instance_data.get('challenge_id', '')
         user_id = instance_data.get('user_id', '')
+        competition_id = instance_data.get('competition_id', '')
         challenge_url = instance_data.get('challenge_url', '')
-        k8s_status = instance_data.get('k8s_status', 'pending')
-        pod_status = instance_data.get('pod_status', None)
+        flag_secret_name = instance_data.get('flag_secret_name', '')
+        new_flag = instance_data.get('flag')
+        k8s_status = instance_data.get('k8s_status', '').lower()
+        pod_status = instance_data.get('pod_status', '').lower()
         
-        logging.info(f"Adding new challenge instance: {pod_name} to database")
+        # Apply status transformation/normalization
+        status = "CREATING"  # Default status
         
-        # Use StatusManager to map the k8s status to a challenge status
-        status = ChallengeStatusManager.get_status_for_new_pod(k8s_status, pod_status)
+        if k8s_status or pod_status:
+            logging.info(f"Mapping new pod status - K8s status: '{k8s_status}', pod status: '{pod_status}'")
             
-        # Check if a competition ID is provided
-        if not competition_id:
-            # Find or create a default competition
-            default_competition = await self.db_manager.find_or_create_default_competition()
-            competition_id = default_competition.id
-            logging.info(f"Using default competition with ID: {competition_id}")
+            # If we have k8s_status, use it to determine the status
+            if k8s_status == 'active' or pod_status == 'active':
+                logging.info(f"Pod status override: '{k8s_status}' -> ACTIVE")
+                status = "ACTIVE"
+            elif k8s_status == 'error' or pod_status == 'error':
+                status = "ERROR"
+            elif k8s_status == 'queued' or pod_status == 'queued':
+                status = "QUEUED"
             
-        # Try to find the challenge if only a name is provided
-        if challenge_name and (not challenge_id or challenge_id == challenge_name):
-            try:
-                challenge = await self.db_manager.find_challenge_by_name(challenge_name)
-                if challenge:
-                    challenge_id = challenge.id
-                    logging.info(f"Found matching challenge ID {challenge_id} for name {challenge_name}")
-                else:
-                    logging.warning(f"No matching challenge found for {challenge_name}")
-            except Exception as e:
-                logging.error(f"Error finding challenge for name {challenge_name}: {str(e)}")
+            logging.info(f"Final status for new pod: {status}")
         
         # Ensure challengeUrl is not empty as it's a required field
         if not challenge_url:
@@ -89,44 +81,114 @@ class ChallengeInstanceManager:
             logging.info(f"Setting default challenge URL: {challenge_url}")
         
         try:
-            # Create the challenge instance
-            challenge_instance = await self.prisma.challengeinstance.create(
-                data={
-                    'id': pod_name,  # Use pod_name as the ID
-                    'challengeId': challenge_id,
-                    'challengeUrl': challenge_url,
-                    'status': status,
-                    'flagSecretName': flag_secret_name,
-                    'flag': new_flag,
-                    'k8s_instance_name': pod_name,
-                    # Use the connect key for relation fields
-                    'competition': {
-                        'connect': {
-                            'id': competition_id
-                        }
-                    },
-                    'user': {
-                        'connect': {
-                            'id': user_id
-                        }
+            # Check if the competition exists before attempting to create the instance
+            competition_exists = False
+            if competition_id:
+                try:
+                    competition = await self.prisma.competitiongroup.find_unique(
+                        where={'id': competition_id}
+                    )
+                    if competition:
+                        competition_exists = True
+                    else:
+                        logging.warning(f"Competition ID {competition_id} not found in database")
+                except Exception as comp_err:
+                    logging.warning(f"Error checking competition existence: {str(comp_err)}")
+            
+            # Create instance data based on whether competition exists
+            create_data = {
+                'id': pod_name,  # Use pod_name as the ID
+                'challengeId': challenge_id,
+                'challengeUrl': challenge_url,
+                'status': status,
+                'flagSecretName': flag_secret_name,
+                'flag': new_flag,
+                'k8s_instance_name': pod_name,
+                # Always connect to user
+                'user': {
+                    'connect': {
+                        'id': user_id
                     }
                 }
+            }
+            
+            # Only include competition relation if it exists
+            if competition_exists:
+                create_data['competition'] = {
+                    'connect': {
+                        'id': competition_id
+                    }
+                }
+            else:
+                # If competition doesn't exist but we need to provide a value
+                # Create a temporary competition group for standalone instances
+                try:
+                    # Check if fallback competition exists
+                    fallback_id = "standalone-instances-group"
+                    fallback_comp = await self.prisma.competitiongroup.find_unique(
+                        where={'id': fallback_id}
+                    )
+                    
+                    if not fallback_comp:
+                        # Create fallback competition group if it doesn't exist
+                        today = datetime.now()
+                        future = today + timedelta(days=365)  # One year from now
+                        fallback_comp = await self.prisma.competitiongroup.create(
+                            data={
+                                'id': fallback_id,
+                                'name': "Standalone Instances",
+                                'description': "Automatically created group for instances without a valid competition",
+                                'startDate': today,
+                                'endDate': future
+                            }
+                        )
+                        logging.info(f"Created fallback competition group: {fallback_id}")
+                    
+                    # Connect to fallback competition
+                    create_data['competition'] = {
+                        'connect': {
+                            'id': fallback_id
+                        }
+                    }
+                    logging.info(f"Using fallback competition for instance {pod_name}")
+                except Exception as fallback_err:
+                    logging.error(f"Failed to create or use fallback competition: {str(fallback_err)}")
+                    # At this point, we can't create the instance because the competition relation is required
+                    # Return a dummy instance object with error info
+                    return {
+                        "id": pod_name,
+                        "error": "Cannot create instance without valid competition",
+                        "status": "ERROR"
+                    }
+            
+            # Create the challenge instance
+            challenge_instance = await self.prisma.challengeinstance.create(
+                data=create_data
             )
             
             logging.info(f"Added new challenge instance {pod_name} to database with status {status}")
             
             # Log the instance creation
-            await safe_log_activity(self.prisma, {
-                'eventType': 'CHALLENGE_INSTANCE_CREATED',
-                'userId': user_id,
-                'challengeId': challenge_id,
-                'groupId': competition_id,
-                'metadata': {
-                    'instanceId': pod_name,
-                    'creationTime': datetime.now().isoformat(),
-                    'status': status
+            try:
+                activity_log_data = {
+                    'eventType': 'CHALLENGE_INSTANCE_CREATED',
+                    'userId': user_id,
+                    'challengeId': challenge_id,
+                    'metadata': {
+                        'instanceId': pod_name,
+                        'creationTime': datetime.now().isoformat(),
+                        'status': status
+                    }
                 }
-            })
+                
+                # Only include groupId if a valid competition was used
+                if competition_exists or 'competition' in create_data:
+                    comp_id = competition_id if competition_exists else fallback_id
+                    activity_log_data['groupId'] = comp_id
+                
+                await safe_log_activity(self.prisma, activity_log_data)
+            except Exception as log_err:
+                logging.error(f"Failed to log activity: {str(log_err)}")
             
             return challenge_instance
         except Exception as e:

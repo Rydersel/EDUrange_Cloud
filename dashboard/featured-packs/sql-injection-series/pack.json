@@ -1,0 +1,25 @@
+{
+  "id": "sql-injection-series",
+  "name": "SQL Injection Series",
+  "version": "1.0.0",
+  "description": "A comprehensive series of challenges covering SQL injection vulnerabilities from basic to advanced techniques",
+  "author": "EDURange Team",
+  "license": "MIT",
+  "website": "https://edurange.org",
+  "challenges": [
+    "challenge1.cdf.json",
+    "challenge2.cdf.json",
+    "challenge3.cdf.json",
+    "challenge4.cdf.json",
+    "challenge5.cdf.json",
+    "challenge6.cdf.json"
+  ],
+  "tags": [
+    "web security",
+    "sql injection",
+    "authentication bypass",
+    "data extraction",
+    "blind injection",
+    "advanced injection"
+  ]
+}

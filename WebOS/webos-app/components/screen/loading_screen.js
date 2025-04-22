@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { getShortVersion } from '../../utils/version';
 
 const LoadingScreen = ({ isLoading, progress, statusMessage }) => {
   return (
@@ -55,7 +56,7 @@ const LoadingScreen = ({ isLoading, progress, statusMessage }) => {
 
       {/* System Info */}
       <div className="absolute bottom-6 left-6 text-gray-600 text-sm font-light tracking-wider">
-        v1.0
+        {getShortVersion()}
       </div>
 
       {/* Performance Monitor Tip */}

@@ -181,6 +181,7 @@ model Challenge {
   appConfigs        ChallengeAppConfig[]
   groupChallenges   GroupChallenge[]
   activityLogs      ActivityLog[]
+  instances         ChallengeInstance[]  // Add relation to instances
   createdAt         DateTime             @default(now())
   updatedAt         DateTime             @updatedAt
 
@@ -235,6 +236,9 @@ model ChallengeInstance {
   activityLogs      ActivityLog[]
   competition       CompetitionGroup @relation(fields: [competitionId], references: [id], onDelete: Cascade)
   user              User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  challenge         Challenge        @relation(fields: [challengeId], references: [id])
+  
+  @@index([challengeId])
 }
 
 model Account {

@@ -315,11 +315,11 @@ spec:
           value: "1"
         resources:
           requests:
-            memory: "256Mi"
-            cpu: "100m"
-          limits:
             memory: "512Mi"
-            cpu: "300m"
+            cpu: "200m"
+          limits:
+            memory: "2056Mi"
+            cpu: "1200m"
         livenessProbe:
           httpGet:
             path: /status
@@ -386,7 +386,7 @@ spec:
               name: redis-credentials
               key: redis-password
         - name: DATABASE_CONNECTION_LIMIT
-          value: "10"
+          value: "20"
         - name: DATABASE_CONNECTION_RETRY_INTERVAL
           value: "5"
         - name: DATABASE_CONNECTION_MAX_RETRIES
@@ -401,9 +401,10 @@ spec:
           value: "1"
         resources:
           requests:
-            memory: "400Mi"
-            cpu: "50m"
+            memory: "512Mi"
+            cpu: "100m"
           limits:
+            memory: "1024Mi"
             cpu: "200m"
 `;
 
@@ -498,21 +499,21 @@ spec:
     apiVersion: apps/v1
     kind: Deployment
     name: database-controller
-  minReplicas: 1
-  maxReplicas: 6
+  minReplicas: 2
+  maxReplicas: 8
   metrics:
   - type: Resource
     resource:
       name: cpu
       target:
         type: Utilization
-        averageUtilization: 70
+        averageUtilization: 60
   - type: Resource
     resource:
       name: memory
       target:
         type: Utilization
-        averageUtilization: 75
+        averageUtilization: 70
   behavior:
     scaleDown:
       stabilizationWindowSeconds: 300
@@ -521,11 +522,14 @@ spec:
         value: 25
         periodSeconds: 60
     scaleUp:
-      stabilizationWindowSeconds: 60
+      stabilizationWindowSeconds: 30
       policies:
       - type: Percent
         value: 100
-        periodSeconds: 60
+        periodSeconds: 30
+      - type: Pods
+        value: 2
+        periodSeconds: 30
 `;
 
     const hpaResult = await applyManifestFromString(hpaYaml, 'hpa');

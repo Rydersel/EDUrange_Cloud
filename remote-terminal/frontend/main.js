@@ -53,7 +53,8 @@ const TERMINAL_OPTIONS = {
   allowProposedApi: true,
   convertEol: true,
   rightClickSelectsWord: true,
-  drawBoldTextInBrightColors: true
+  drawBoldTextInBrightColors: true,
+  bracketedPaste: false  // Disable bracketed paste mode
 };
 
 
@@ -132,6 +133,7 @@ let lastContainer = null;
 let currentFontSize = TERMINAL_CONFIG.FONT.DEFAULT_SIZE;
 let sessionId = null;
 let eventSource = null;
+let lastCtrlCTime = 0; // Track last Ctrl+C time for debouncing
 
 const updateConnectionStatusDisplay = (message, type = 'info') => {
   connectionStatus.textContent = message;
@@ -212,15 +214,85 @@ const initializeTerminal = () => {
 
   // Setup keyboard event handlers
   term.attachCustomKeyEventHandler((event) => {
+    // Only handle keydown events for special keys
+    if (event.type !== 'keydown') {
+      return true;
+    }
+
     // Ctrl+Shift+C to copy
     if (event.ctrlKey && event.shiftKey && event.code === 'KeyC') {
       const selection = term.getSelection();
       if (selection) copyToClipboard(selection);
+      event.preventDefault();
+      event.stopPropagation();
       return false;
     }
     // Ctrl+Shift+F to search
     if (event.ctrlKey && event.shiftKey && event.code === 'KeyF') {
       searchAddon.show();
+      event.preventDefault();
+      event.stopPropagation();
+      return false;
+    }
+    // Ctrl+C to interrupt (when no text is selected)
+    if ((event.ctrlKey || event.metaKey) && event.code === 'KeyC' && !term.hasSelection()) {
+      // Prevent default browser behavior
+      event.preventDefault();
+      event.stopPropagation();
+      
+      // Debounce multiple rapid Ctrl+C presses
+      const now = Date.now();
+      if (now - lastCtrlCTime < 300) { // Ignore if less than 300ms since last Ctrl+C
+        return false;
+      }
+      lastCtrlCTime = now;
+      
+      // Send the interrupt character exactly once
+      if (sessionId) {
+        fetch(`/terminal/input/${sessionId}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ data: '\x03' }) // Send ETX character (Ctrl+C)
+        }).catch(error => {
+          console.error('Error sending interrupt signal:', error);
+        });
+      }
+      return false;
+    }
+    // Ctrl+U to clear line (delete from cursor to beginning of line)
+    if (event.ctrlKey && event.code === 'KeyU') {
+      event.preventDefault();
+      event.stopPropagation();
+      
+      if (sessionId) {
+        fetch(`/terminal/input/${sessionId}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ data: '\x15' }) // Send NAK character (Ctrl+U)
+        }).catch(error => {
+          console.error('Error sending clear line signal:', error);
+        });
+      }
+      return false;
+    }
+    // Tab key for autocomplete
+    if (event.key === 'Tab') {
+      // Send tab character to terminal
+      if (sessionId) {
+        fetch(`/terminal/input/${sessionId}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ data: '\t' })
+        }).catch(error => {
+          console.error('Error sending tab character:', error);
+        });
+      }
+      event.preventDefault();
+      event.stopPropagation();
       return false;
     }
     return true;
@@ -308,10 +380,7 @@ const connectToTerminalSession = async (pod, container) => {
   // Display the EDURange logo only on first connect
   if (reconnectAttempts === 0) {
     term.clear();
-    term.writeln(EDURANGE_LOGO);
-    term.writeln('');
-    term.writeln('\r\n' + STATUS_MESSAGES.CONNECTING.INITIAL);
-    term.writeln(STATUS_MESSAGES.CONNECTING.ATTEMPT + '\r\n');
+    // Skip displaying the logo and connecting messages
   }
 
   updateConnectionStatusDisplay('Connecting...', 'info');
@@ -362,7 +431,19 @@ const connectToTerminalSession = async (pod, container) => {
         // Clear the terminal after connection is established
         setTimeout(() => {
           term.clear();
-          term.write('\r\n# ');
+          
+          // Send a command to the terminal to display the prompt
+          if (sessionId) {
+            fetch(`/terminal/input/${sessionId}`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({ data: '\r' })
+            }).catch(error => {
+              console.error('Error sending initial prompt:', error);
+            });
+          }
         }, 1000); // Wait 1 second before clearing
       }
     };

@@ -638,26 +638,6 @@ data:
       @@unique([userId, groupChallengeId])
     }
     
-    model ChallengeAppConfig {
-      id                String     @id @default(cuid())
-      challengeId       String
-      appId             String
-      title             String
-      icon              String
-      width             Int
-      height            Int
-      screen            String
-      disabled          Boolean    @default(false)
-      favourite         Boolean    @default(false)
-      desktop_shortcut  Boolean    @default(false)
-      launch_on_startup Boolean    @default(false)
-      additional_config Json?      @default("{}")
-      createdAt         DateTime   @default(now())
-      updatedAt         DateTime   @updatedAt
-      challenge         Challenge  @relation(fields: [challengeId], references: [id], onDelete: Cascade)
-
-      @@unique([challengeId, appId])
-    }
     
     model Challenge {
       id                String               @id @default(cuid())

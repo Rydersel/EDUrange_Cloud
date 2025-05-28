@@ -1,6 +1,6 @@
 # EDURANGE Cloud (WORK IN PROGRESS)
  
- ## [Public Documentation](https://docs.edurange.cloud/)
+ ## [Documentation](https://docs.edurange.cloud/)
  
  
  ### Introduction to EDUrange Cloud

@@ -24,6 +24,7 @@ class ChallengeType(Enum):
     METASPLOIT = "metasploit"  # Metasploit framework challenges
     CONTAINER = "container"    # General containerized challenges
     SQL_INJECTION = "sql-injection"  # SQL injection challenges
+    RED_BLUE = "redblue"  # Red-Blue challenge with shared defender
 
     @classmethod
     def from_string(cls, value: str) -> Optional['ChallengeType']:
@@ -62,6 +63,10 @@ LEGACY_TYPE_MAP: Dict[str, str] = {
     "sqlinjection": ChallengeType.SQL_INJECTION.value,
     "sql_injection": ChallengeType.SQL_INJECTION.value,
     "sqli": ChallengeType.SQL_INJECTION.value,
+    # Red-Blue variants
+    "red_blue": ChallengeType.RED_BLUE.value,
+    "red-blue": ChallengeType.RED_BLUE.value,
+    "redbluechallenge": ChallengeType.RED_BLUE.value,
 }
 
 

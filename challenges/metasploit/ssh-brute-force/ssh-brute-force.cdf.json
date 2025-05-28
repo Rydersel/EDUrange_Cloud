@@ -1,0 +1,102 @@
+{
+  "metadata": {
+    "name": "SSH Brute Force",
+    "version": "1.0.0",
+    "challenge_type": "metasploit",
+    "description": "Learn to use Metasploit to perform SSH brute force attacks and gain access to systems with weak credentials.",
+    "difficulty": "beginner",
+    "estimated_time": 30
+  },
+  "typeConfig": {
+    "attackImage": "registry.edurange.cloud/challenges/ssh-brute-force-attack",
+    "defenseImage": "registry.edurange.cloud/challenges/ssh-brute-force-defense"
+  },
+  "components": [
+    {
+      "id": "challenge-prompt",
+      "type": "webosApp",
+      "config": {
+        "icon": "./icons/terminal.svg",
+        "title": "SSH Brute Force Challenge",
+        "width": 800,
+        "height": 600,
+        "screen": "displayChallengePrompt",
+        "favourite": true,
+        "desktop_shortcut": true,
+        "launch_on_startup": true,
+        "challenge": {
+          "title": "SSH Brute Force Attack",
+          "type": "single",
+          "description": "Learn to use Metasploit's SSH brute force capabilities to discover credentials and gain access to a system.",
+          "instructions": "In this challenge, you'll use Metasploit to brute force SSH credentials for a target system.\n\n1. Open the terminal and launch Metasploit with `msfconsole`\n2. Find and use the SSH login scanner module\n3. Configure the module with the appropriate settings\n4. Execute the brute force attack to find valid credentials\n5. Use the discovered credentials to log in via SSH\n6. Find and submit the flag\n\nThe target SSH server is running on localhost:22 with username 'target'.\nA password list is provided at /home/kali/challenge/passwords.txt.",
+          "pages": [
+            {
+              "instructions": "Use Metasploit to brute force SSH credentials for the target system. Once you have access, find the flag in the target user's home directory.",
+              "questions": [
+                {
+                  "id": "q1",
+                  "type": "flag",
+                  "content": "What is the flag you found after gaining SSH access?",
+                  "points": 5
+                },
+                {
+                  "id": "q2",
+                  "type": "text",
+                  "content": "What was the password you discovered through the brute force attack?",
+                  "answer": "password123",
+                  "points": 2
+                },
+                {
+                  "id": "q3",
+                  "type": "text",
+                  "content": "Name the Metasploit module you used for the SSH brute force attack:",
+                  "answer": "auxiliary/scanner/ssh/ssh_login",
+                  "points": 2
+                },
+                {
+                  "id": "q4",
+                  "type": "text",
+                  "content": "Why is password brute forcing often successful against SSH servers? (choose the best answer)",
+                  "answer": "Users often choose weak, common, or default passwords",
+                  "points": 1
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "terminal",
+      "type": "webosApp",
+      "config": {
+        "icon": "./icons/terminal.svg",
+        "title": "Attack Terminal",
+        "width": 900,
+        "height": 600,
+        "screen": "displayTerminal",
+        "favourite": true,
+        "desktop_shortcut": true,
+        "launch_on_startup": false
+      }
+    },
+    {
+      "id": "metasploit-guide",
+      "type": "webosApp",
+      "config": {
+        "icon": "./icons/book.svg",
+        "title": "Metasploit Guide",
+        "width": 800,
+        "height": 600,
+        "screen": "displayMarkdown",
+        "favourite": true,
+        "desktop_shortcut": true,
+        "launch_on_startup": false,
+        "markdown": "# Metasploit SSH Brute Force Guide\n\n## Introduction\nMetasploit is a powerful penetration testing framework that includes modules for a variety of attacks. In this challenge, you'll use its SSH brute force capabilities.\n\n## Basic Metasploit Commands\n\n- Start Metasploit: `msfconsole`\n- Search for modules: `search keyword`\n- View module info: `info module/path`\n- Use a module: `use module/path`\n- Show options: `show options`\n- Set an option: `set OPTION VALUE`\n- Run the module: `run` or `exploit`\n\n## SSH Brute Force\n\nThe SSH brute force module tests multiple passwords against an SSH server:\n\n```\nuse auxiliary/scanner/ssh/ssh_login\nshow options\nset RHOSTS target_ip\nset USERNAME username\nset PASS_FILE path/to/wordlist\nset VERBOSE true\nexploit\n```\n\n## Tips\n\n- Metasploit commands are case-insensitive\n- Use tab completion to quickly enter commands\n- Use `back` to exit a module\n- Use `help` to see all available commands\n- The `sessions` command shows active sessions\n- Use `sessions -i NUM` to interact with a session\n\n## After Gaining Access\n\nOnce logged in:\n- Navigate with `cd`, `ls`, etc.\n- Look for interesting files with `find` or `grep`\n- Check user permissions with `id`\n- Look for files containing sensitive data"
+      }
+    }
+  ],
+  "variables": {
+    "FLAG": "CTF{M3taspl0it_SSH_Brut3f0rc3_Mast3r}"
+  }
+} 

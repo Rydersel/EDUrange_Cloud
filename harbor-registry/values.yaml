@@ -163,11 +163,11 @@ chartmuseum:
   # Resource configuration
   resources:
     requests:
-      memory: 256Mi
-      cpu: 100m
-    limits:
+      cpu: 250m
       memory: 512Mi
-      cpu: 500m
+    limits:
+      cpu: '1'
+      memory: 1Gi
 
 # Trivy for container vulnerability scanning
 trivy:
@@ -201,11 +201,11 @@ redis:
     # Redis resource configuration
     resources:
       requests:
-        memory: 256Mi
-        cpu: 100m
-      limits:
         memory: 512Mi
-        cpu: 500m
+        cpu: 200m
+      limits:
+        memory: 1024Mi
+        cpu: 1000m
   # Enable Redis metrics
   metrics:
     enabled: true

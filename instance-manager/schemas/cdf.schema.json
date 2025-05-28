@@ -22,7 +22,75 @@
     "typeConfig": {
       "type": "object",
       "description": "Configuration specific to this challenge type. Values override defaults in the Challenge Type Definition.",
-      "additionalProperties": true
+      "additionalProperties": true,
+      "properties": {
+        "securityContext": {
+          "type": "object",
+          "description": "Security context settings for the challenge",
+          "properties": {
+            "pod": {
+              "type": "object",
+              "description": "Pod-level security context",
+              "properties": {
+                "fsGroup": {
+                  "type": "number",
+                  "description": "The filesystem group ID to use"
+                },
+                "runAsUser": {
+                  "type": "number",
+                  "description": "The user ID to run processes as"
+                },
+                "runAsGroup": {
+                  "type": "number",
+                  "description": "The group ID to run processes as"
+                }
+              }
+            },
+            "container": {
+              "type": "object",
+              "description": "Default container-level security context",
+              "properties": {
+                "runAsNonRoot": {
+                  "type": "boolean",
+                  "description": "Require the container to run as a non-root user"
+                },
+                "runAsUser": {
+                  "type": "number",
+                  "description": "The user ID to run the entrypoint process"
+                },
+                "runAsGroup": {
+                  "type": "number",
+                  "description": "The group ID to run the entrypoint process"
+                },
+                "allowPrivilegeEscalation": {
+                  "type": "boolean",
+                  "description": "Allow privilege escalation from the process"
+                },
+                "capabilities": {
+                  "type": "object",
+                  "description": "Linux capabilities for the container",
+                  "properties": {
+                    "add": {
+                      "type": "array",
+                      "description": "Capabilities to add to the container",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "drop": {
+                      "type": "array",
+                      "description": "Capabilities to drop from the container",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
     },
     "variables": {
       "type": "object",
@@ -62,7 +130,7 @@
         "challenge_type": {
           "type": "string",
           "description": "Identifier for the challenge type.",
-          "enum": ["fullOS", "web", "container", "metasploit", "sql-injection"]
+          "enum": ["fullOS", "web", "container", "metasploit", "sql-injection", "redblue"]
         },
         "difficulty": {
           "type": "string",
@@ -295,6 +363,48 @@
               }
             }
           }
+        },
+        "securityContext": {
+          "type": "object",
+          "description": "Security context for this specific container",
+          "properties": {
+            "runAsNonRoot": {
+              "type": "boolean",
+              "description": "Require the container to run as a non-root user"
+            },
+            "runAsUser": {
+              "type": "number",
+              "description": "The user ID to run the entrypoint process"
+            },
+            "runAsGroup": {
+              "type": "number",
+              "description": "The group ID to run the entrypoint process"
+            },
+            "allowPrivilegeEscalation": {
+              "type": "boolean",
+              "description": "Allow privilege escalation from the process"
+            },
+            "capabilities": {
+              "type": "object",
+              "description": "Linux capabilities for the container",
+              "properties": {
+                "add": {
+                  "type": "array",
+                  "description": "Capabilities to add to the container",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "drop": {
+                  "type": "array",
+                  "description": "Capabilities to drop from the container",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
         }
       }
     },
@@ -373,7 +483,7 @@
           "oneOf": [
             { "type": "string" },
             { "type": "number" },
-            { 
+            {
               "type": "array",
               "items": {
                 "oneOf": [
@@ -440,4 +550,4 @@
       }
     }
   }
-} 
+}

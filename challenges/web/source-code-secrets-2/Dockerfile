@@ -22,7 +22,6 @@ RUN mkdir -p /var/cache/nginx/client_temp \
 
 # Copy web files
 COPY index.html /usr/share/nginx/html/
-COPY script.js /usr/share/nginx/html/
 COPY style.css /usr/share/nginx/html/
 COPY security.png /usr/share/nginx/html/
 
@@ -40,4 +39,4 @@ EXPOSE 8080
 ENTRYPOINT ["/entrypoint.sh"]
 
 # Start nginx
-CMD ["nginx", "-g", "daemon off;"] 
+CMD ["nginx", "-g", "daemon off;"]

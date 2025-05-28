@@ -187,6 +187,137 @@
         }
       }
     },
+    "networkPolicies": {
+      "type": "array",
+      "description": "Network policies for this challenge type.",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Name of the network policy"
+          },
+          "podSelector": {
+            "type": "object",
+            "description": "Labels to select the pods this policy applies to"
+          },
+          "policyTypes": {
+            "type": "array",
+            "description": "Types of policy to enforce (Ingress, Egress, or both)",
+            "items": {
+              "type": "string",
+              "enum": ["Ingress", "Egress"]
+            }
+          },
+          "ingress": {
+            "type": "array",
+            "description": "Rules for ingress traffic",
+            "items": {
+              "type": "object",
+              "properties": {
+                "from": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "podSelector": {
+                        "type": "object"
+                      },
+                      "namespaceSelector": {
+                        "type": "object"
+                      },
+                      "ipBlock": {
+                        "type": "object",
+                        "properties": {
+                          "cidr": {
+                            "type": "string"
+                          },
+                          "except": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                "ports": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "port": {
+                        "type": ["integer", "string"]
+                      },
+                      "protocol": {
+                        "type": "string",
+                        "enum": ["TCP", "UDP"],
+                        "default": "TCP"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "egress": {
+            "type": "array",
+            "description": "Rules for egress traffic",
+            "items": {
+              "type": "object",
+              "properties": {
+                "to": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "podSelector": {
+                        "type": "object"
+                      },
+                      "namespaceSelector": {
+                        "type": "object"
+                      },
+                      "ipBlock": {
+                        "type": "object",
+                        "properties": {
+                          "cidr": {
+                            "type": "string"
+                          },
+                          "except": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                "ports": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "port": {
+                        "type": ["integer", "string"]
+                      },
+                      "protocol": {
+                        "type": "string",
+                        "enum": ["TCP", "UDP"],
+                        "default": "TCP"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "extensionPoints": {
       "type": "object",
       "description": "Points where challenge-specific configuration can override defaults.",

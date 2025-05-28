@@ -1,0 +1,190 @@
+{
+  "$schema": "https://raw.githubusercontent.com/EDURange/schema/main/schemas/cdf.schema.json",
+  "metadata": {
+    "id": "vim-privesc-part3",
+    "pack_id": "metasploit-challenges",
+    "name": "Vim Privilege Escalation Challenge Part 3: Missing Flag",
+    "version": "1.0.0",
+    "description": "The final challenge in the vim privilege escalation series, this time the flag is not where we expect. Students must bypass shell restrictions, locate the hidden vim editor, perform privilege escalation, and find and decode a hidden flag.",
+    "challenge_type": "metasploit",
+    "difficulty": "advanced",
+    "author": "EDURange Team",
+    "estimated_time": 45
+  },
+  "components": [
+    {
+      "type": "container",
+      "id": "attack-container",
+      "config": {
+        "image": "registry.edurange.cloud/challenges/vim-privesc-part3-attack",
+        "resources": {
+          "cpu_limit": "500m",
+          "mem_limit": "1Gi"
+        },
+        "securityContext": {
+          "runAsNonRoot": false,
+          "runAsUser": 0,
+          "runAsGroup": 0,
+          "allowPrivilegeEscalation": true,
+          "privileged": true,
+          "capabilities": {
+            "add": ["CHOWN", "SETGID", "SETUID", "DAC_OVERRIDE", "SYS_ADMIN", "NET_ADMIN", "NET_BIND_SERVICE"]
+          }
+        }
+      }
+    },
+    {
+      "type": "container",
+      "id": "defense-container",
+      "config": {
+        "image": "registry.edurange.cloud/challenges/vim-privesc-part3-defense",
+        "resources": {
+          "cpu_limit": "300m",
+          "mem_limit": "512Mi"
+        },
+       "securityContext": {
+          "runAsNonRoot": false,
+          "runAsUser": 0,
+          "runAsGroup": 0,
+          "allowPrivilegeEscalation": true,
+          "privileged": true,
+          "capabilities": {
+            "add": ["CHOWN", "SETGID", "SETUID", "DAC_OVERRIDE", "SYS_ADMIN", "NET_ADMIN", "NET_BIND_SERVICE"]
+          }
+        }
+      }
+    },
+    {
+      "type": "webosApp",
+      "id": "terminal",
+      "config": {
+        "title": "Terminal",
+        "icon": "./icons/Remote-Terminal.svg",
+        "width": 60,
+        "height": 55,
+        "screen": "displayTerminal",
+        "disabled": false,
+        "favourite": true,
+        "desktop_shortcut": true,
+        "launch_on_startup": true,
+        "additional_config": {
+          "disableScrolling": true
+        },
+        "app_type": "terminal"
+      }
+    },
+    {
+      "type": "webosApp",
+      "id": "chrome",
+      "config": {
+        "title": "Browser",
+        "icon": "./icons/browser.svg",
+        "width": 70,
+        "height": 80,
+        "screen": "displayChrome",
+        "disabled": false,
+        "favourite": true,
+        "desktop_shortcut": true,
+        "launch_on_startup": false,
+        "app_type": "browser"
+      }
+    },
+    {
+      "type": "webosApp",
+      "id": "calc",
+      "config": {
+        "title": "Calculator",
+        "icon": "./icons/calculator.svg",
+        "width": 5,
+        "height": 50,
+        "screen": "displayTerminalCalc",
+        "disabled": false,
+        "favourite": true,
+        "desktop_shortcut": false,
+        "launch_on_startup": false,
+        "app_type": "terminal"
+      }
+    },
+    {
+      "type": "webosApp",
+      "id": "codeeditor",
+      "config": {
+        "title": "Code Editor",
+        "icon": "./icons/code-editor.svg",
+        "width": 60,
+        "height": 75,
+        "screen": "displayCodeEditor",
+        "disabled": false,
+        "favourite": true,
+        "desktop_shortcut": false,
+        "launch_on_startup": false,
+        "app_type": "editor"
+      }
+    },
+    {
+      "type": "webosApp",
+      "id": "settings",
+      "config": {
+        "title": "Settings",
+        "icon": "./icons/settings.svg",
+        "width": 50,
+        "height": 60,
+        "screen": "displaySettings",
+        "disabled": false,
+        "favourite": true,
+        "desktop_shortcut": false,
+        "launch_on_startup": false,
+        "app_type": "custom"
+      }
+    },
+    {
+      "type": "webosApp",
+      "id": "cyberchef",
+      "config": {
+        "title": "Cyber Chef",
+        "icon": "./icons/cyberchef.svg",
+        "width": 75,
+        "height": 85,
+        "screen": "Cyberchef",
+        "disabled": false,
+        "favourite": true,
+        "desktop_shortcut": true,
+        "launch_on_startup": false,
+        "app_type": "custom"
+      }
+    },
+    {
+      "type": "question",
+      "id": "q1_hidden_vim",
+      "config": {
+        "text": "What is the full path to the hidden vim binary?",
+        "type": "text",
+        "points": 15,
+        "answer": "/opt/.hidden/editor",
+        "order": 1
+      }
+    },
+    {
+      "type": "question",
+      "id": "q2_root_flag",
+      "config": {
+        "text": "What is the decoded flag you found?",
+        "type": "flag",
+        "points": 100,
+        "answer": "CTF{vim_escalation_and_recon_master}",
+        "order": 2
+      }
+    }
+  ],
+  "typeConfig": {
+    "attackImage": "registry.edurange.cloud/challenges/vim-privesc-part3-attack",
+    "defenseImage": "registry.edurange.cloud/challenges/vim-privesc-part3-defense",
+    "securityContext": {
+      "pod": {
+        "fsGroup": 0,
+        "runAsUser": 0,
+        "runAsGroup": 0
+      }
+    }
+  }
+}

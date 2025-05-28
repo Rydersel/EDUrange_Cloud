@@ -1,0 +1,38 @@
+================== STAGE 4: COMMAND INJECTION ==================
+
+OBJECTIVE: 
+Exploit command injection vulnerability in the 'run' command.
+
+INSTRUCTIONS:
+1. Connect to the service on port 4444 using netcat
+2. Use the admin credentials discovered in Stage 3
+3. Authenticate with the 'login' command (which is now available)
+4. Exploit the 'run' command to execute arbitrary system commands
+
+COMMANDS:
+  $ nc defense-service 4444
+  
+Once connected and authenticated:
+  > login admin [password]   (use the credentials from Stage 3)
+  > run [command]            (try running authorized commands)
+  > run backup               (a legitimate command)
+  > run status               (another legitimate command)
+  > run backup; ls           (try command injection)
+
+EXPECTED OUTCOME:
+You should be able to inject arbitrary shell commands after a legitimate
+command by using shell command separators like ";", "&&", or "|".
+
+HINTS:
+- Common command separators include: ; && | || $(command)
+- Try injecting simple commands like 'ls', 'id', or 'whoami'
+- Once you can execute commands, try exploring the system
+- Look for ways to enumerate directories and files
+
+The goal is to get command execution on the system to advance to the
+final stage.
+
+Once any student completes this stage, everyone will automatically
+advance to Stage 5.
+
+================================================================ 

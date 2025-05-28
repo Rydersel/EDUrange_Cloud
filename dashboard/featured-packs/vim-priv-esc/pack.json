@@ -1,0 +1,19 @@
+{
+  "$schema": "https://raw.githubusercontent.com/EDURange/schema/main/schemas/pack.schema.json",
+  "id": "vim-priv-esc",
+  "name": "Vim Privilege Escalation",
+  "version": "1.0.0",
+  "description": "A collection of basic challenges for EDURange",
+  "author": "EDURange Team",
+  "license": "MIT",
+  "challenges": [
+    "challenges/vim-privesc.cdf.json",
+    "challenges/vim-privesc-2.cdf.json",
+    "challenges/vim-privesc-3.cdf.json",
+    "challenges/redblue-test.cdf.json",
+    "challenges/ssh-brute-force.cdf.json",
+    "challenges/port-scanner.cdf.json",
+    "challenges/network-infiltration.cdf.json"
+
+  ]
+}

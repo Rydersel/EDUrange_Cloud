@@ -1,0 +1,34 @@
+================== STAGE 2: SERVICE DISCOVERY ==================
+
+OBJECTIVE: 
+Connect to the network service on port 4444 and learn its commands.
+
+INSTRUCTIONS:
+1. Connect to the service on port 4444 using netcat (nc)
+2. Use the 'help' command to discover available commands
+3. Try each command to understand its functionality
+
+COMMANDS:
+  $ nc defense-service 4444
+
+Once connected, type 'help' to see available commands.
+
+EXPECTED OUTCOME:
+You should discover that the service has several commands including:
+- help - Shows available commands
+- list - Lists available files
+- get <filename> - Gets contents of a file
+- run <command> - Runs a system command (admin only)
+
+Your goal is to explore all commands and discover the 'explore' command
+that will help you progress to the next stage.
+
+HINTS:
+- Try each command to see what it does
+- The service might have hidden or undocumented commands
+- Try 'explore' or 'explore services' to trigger progression
+
+Once any student completes this stage, everyone will automatically
+advance to Stage 3.
+
+================================================================ 

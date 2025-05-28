@@ -16,7 +16,7 @@ session_start();
 if (!isset($_SESSION['possible_pins'])) {
     // The real PIN from config
     $real_pin = defined('PIN_CODE') ? PIN_CODE : "1337";
-    
+
     // Generate 5 fake PINs
     generatePossiblePins($real_pin);
 }
@@ -30,10 +30,10 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['username'], $_POST['pa
     $username = $_POST['username'];
     $password = $_POST['password'];
     $login_attempted = true;
-    
+
     // Get database connection
     $conn = getDbConnection();
-    
+
     if ($conn) {
         try {
             // VULNERABLE QUERY - susceptible to time-based SQL injection
@@ -45,14 +45,14 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['username'], $_POST['pa
             if (DEBUG_MODE) {
                 error_log("[DEBUG] SQL Query: $query");
             }
-            
+
             // Increase default timeout to prevent timeouts during long queries
             // FIXME: This is a security risk! Remove before deployment!
-            set_time_limit(QUERY_TIMEOUT); 
-            
+            set_time_limit(QUERY_TIMEOUT);
+
             // Execute the query - could trigger time delay if exploited
             $result = $conn->query($query);
-            
+
             if ($result && $result->rowCount() > 0) {
                 $authenticated = true;
                 // Successful login
@@ -61,7 +61,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['username'], $_POST['pa
                 // Generic error for security in production
                 $message = "Invalid username or password.";
             }
-            
+
         } catch (PDOException $e) {
             // Show SQL error in debug mode
             if (DEBUG_MODE) {
@@ -71,7 +71,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['username'], $_POST['pa
                 $message = "Invalid username or password.";
             }
         }
-        
+
         // DEV ONLY: Log database info
         // FIXME: Remove all this before production!
         if (DEBUG_MODE) {
@@ -83,7 +83,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['username'], $_POST['pa
                     $tables[] = $row['table_name'];
                 }
                 error_log("[DEBUG] Database tables: " . implode(", ", $tables));
-                
+
                 // DEV ONLY: Check flag table structure
                 $flag_query = "DESCRIBE flags";
                 $flag_result = $conn->query($flag_query);
@@ -92,7 +92,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['username'], $_POST['pa
                     $flag_columns[] = $row['Field'];
                 }
                 error_log("[DEBUG] Flag table columns: " . implode(", ", $flag_columns));
-                
+
                 // DEV ONLY: Double check the pin code is set
                 $flag_check = $conn->query("SELECT pin_code FROM flags LIMIT 1");
                 $flag_data = $flag_check->fetch(PDO::FETCH_ASSOC);
@@ -106,44 +106,42 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['username'], $_POST['pa
     }
 }
 
-// Process pin code submission 
+// Process pin code submission
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['pin_code'])) {
     $submitted_pin = $_POST['pin_code'];
-    
+
     // Get database connection
     $conn = getDbConnection();
-    
+
     if ($conn) {
         try {
             // Check if pin code is correct
             $pin_query = "SELECT _s3cr3t_flag FROM flags WHERE pin_code = ?";
             $stmt = $conn->prepare($pin_query);
             $stmt->execute([$submitted_pin]);
-            
+
             if ($stmt->rowCount() > 0) {
                 $result = $stmt->fetch(PDO::FETCH_ASSOC);
                 $flag_revealed = true;
                 $flag_value = $result['_s3cr3t_flag'];
                 $pin_code_correct = true;
-                
-                // Additional debug logging
-                error_log("[DEBUG] Flag revealed: $flag_value");
+
             } else {
                 $message = "Incorrect PIN code. Try again.";
                 $invalid_attempts++;
-                
+
                 // Generate a completely new PIN and update it in the database
                 $new_pin = sprintf("%04d", mt_rand(1000, 9999));
-                
+
                 try {
                     // Update the PIN in the database
                     $update_query = "UPDATE flags SET pin_code = ? WHERE id = 1";
                     $update_stmt = $conn->prepare($update_query);
                     $update_stmt->execute([$new_pin]);
-                    
+
                     // Now regenerate the possible PINs with this new PIN
                     generatePossiblePins($new_pin);
-                    
+
                     error_log("[DEBUG] PIN randomized to: $new_pin after incorrect attempt");
                 } catch (Exception $e) {
                     error_log("[ERROR] Error updating PIN code: " . $e->getMessage());
@@ -159,7 +157,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['pin_code'])) {
 // Function to generate possible PINs (1 real, 5 fake)
 function generatePossiblePins($real_pin) {
     $possible_pins = array($real_pin);
-    
+
     // Generate 5 unique fake PINs
     while (count($possible_pins) < 6) {
         $fake_pin = sprintf("%04d", mt_rand(1000, 9999));
@@ -167,10 +165,10 @@ function generatePossiblePins($real_pin) {
             $possible_pins[] = $fake_pin;
         }
     }
-    
+
     // Shuffle to randomize position of real PIN
     shuffle($possible_pins);
-    
+
     $_SESSION['possible_pins'] = $possible_pins;
     // We don't store the real PIN in the session for security
     return $possible_pins;
@@ -305,7 +303,7 @@ function generatePossiblePins($real_pin) {
             margin-top: 20px;
             padding: 15px;
             background-color: #e6f3ff;
-            border-radius: 4px; 
+            border-radius: 4px;
             border: 1px solid #b3d7ff;
         }
         .timer {
@@ -318,12 +316,11 @@ function generatePossiblePins($real_pin) {
             border-radius: 4px;
             font-family: monospace;
         }
-        
-        /* FIXME: Remove this dev-only class before production */
+
         .dev-info {
             display: none;
         }
-        
+
         .flag-display {
             margin-top: 20px;
             padding: 20px;
@@ -333,11 +330,11 @@ function generatePossiblePins($real_pin) {
             color: #0c5460;
             text-align: center;
         }
-        
+
         .flag-display h2 {
             margin-top: 0;
         }
-        
+
         .flag-value {
             font-family: monospace;
             font-size: 24px;
@@ -347,7 +344,7 @@ function generatePossiblePins($real_pin) {
             display: inline-block;
             margin-top: 10px;
         }
-        
+
         .pin-form {
             margin-top: 30px;
             padding: 20px;
@@ -360,7 +357,7 @@ function generatePossiblePins($real_pin) {
 <body>
     <div class="container">
         <h1>Secure Login Portal</h1>
-        
+
         <?php if ($flag_revealed): ?>
             <div class="flag-display">
                 <h2>Congratulations!</h2>
@@ -384,7 +381,7 @@ Role: Administrator
 Last Login: <?php echo date('Y-m-d H:i:s'); ?>
                 </pre>
             </div>
-            
+
             <div class="pin-form">
                 <h3>Secure Area Access</h3>
                 <p>Enter the 4-digit PIN code to access the flag:</p>
@@ -416,12 +413,12 @@ Last Login: <?php echo date('Y-m-d H:i:s'); ?>
                 </div>
                 <button type="submit" class="login-button">Login</button>
             </form>
-            
+
             <?php if ($login_attempted): ?>
                 <div class="message <?php echo $authenticated ? 'success' : 'error'; ?>">
                     <?php echo $message; ?>
                 </div>
-                
+
                 <!-- DEV-ONLY: Remove in production! -->
                 <?php if (DEBUG_MODE && !empty($raw_query)): ?>
                 <div class="debug-info">
@@ -431,14 +428,14 @@ Last Login: <?php echo date('Y-m-d H:i:s'); ?>
                 </div>
                 <?php endif; ?>
             <?php endif; ?>
-            
+
             <button class="hint-button" onclick="toggleHint()">Need Help?</button>
-            
+
             <div class="hint" id="hint-box">
                 <h3>SQL Injection Challenge</h3>
-                
+
                 <p>This login form appears to have SQL injection vulnerabilities that can be exploited.</p>
-                
+
                 <p><strong>Hints:</strong></p>
                 <ul>
                     <li>SQL injection often works by manipulating the query structure</li>
@@ -449,24 +446,24 @@ Last Login: <?php echo date('Y-m-d H:i:s'); ?>
                     <li>Focus on extracting the 4-digit PIN code, not the flag directly</li>
                     <li>Look for possible PIN codes in the debug logs, then submit the correct one to access the flag</li>
                 </ul>
-                
+
                 <p><strong>Try different payloads to test for vulnerabilities.</strong></p>
             </div>
-            
+
         <?php endif; ?>
-        
+
         <!-- FIXME: Remove this debug element before production -->
         <div id="debug-data" class="dev-info"></div>
     </div>
-    
+
     <div id="timer" class="timer">Loading...</div>
-    
+
     <script>
         // Function to toggle hint visibility
         function toggleHint() {
             var hintBox = document.getElementById("hint-box");
             var hintButton = document.querySelector(".hint-button");
-            
+
             if (hintBox.style.display === "block") {
                 hintBox.style.display = "none";
                 hintButton.textContent = "Need Help?";
@@ -475,7 +472,7 @@ Last Login: <?php echo date('Y-m-d H:i:s'); ?>
                 hintButton.textContent = "Hide Help";
             }
         }
-        
+
         // DEV-ONLY: Performance metrics tracking
         // FIXME: Remove before production!
         var _debugData = {
@@ -488,13 +485,13 @@ Last Login: <?php echo date('Y-m-d H:i:s'); ?>
             },
             testQueries: {
                 bypass: "' OR 1=1 -- ",
-                union: "' UNION SELECT 1, _s3cr3t_flag FROM flags -- ", 
+                union: "' UNION SELECT 1, _s3cr3t_flag FROM flags -- ",
                 timeBased: "' OR IF(SUBSTR((SELECT pin_code FROM flags LIMIT 0,1),1,1)='1', SLEEP(3), 0) -- "
             },
             possiblePINCodes: <?php echo json_encode($_SESSION['possible_pins'] ?? []); ?>,
             timeout: <?php echo QUERY_TIMEOUT; ?>,
             invalidAttempts: <?php echo $invalid_attempts; ?>,
-            correctPIN: "<?php 
+            correctPIN: "<?php
                 // Fetch the current correct PIN directly from the database for testing
                 $conn = getDbConnection();
                 $correct_pin = "unknown";
@@ -509,14 +506,14 @@ Last Login: <?php echo date('Y-m-d H:i:s'); ?>
                 echo $correct_pin;
             ?>"
         };
-        
+
         var timerElement = document.getElementById("timer");
         var debugElement = document.getElementById("debug-data");
-        
+
         window.onload = function() {
             var loadTime = new Date().getTime() - _debugData.pageLoadStart;
             timerElement.textContent = "Page loaded in " + loadTime + "ms";
-            
+
             // DEV-ONLY: Debug logging
             // FIXME: REMOVE ALL THIS BEFORE PRODUCTION DEPLOYMENT!!!
             console.log("[DEV DEBUG] Environment: development");
@@ -529,23 +526,20 @@ Last Login: <?php echo date('Y-m-d H:i:s'); ?>
             console.log("[DEV DEBUG] Flag stored in database with obscured column name (_s3cr3t_flag)");
             console.log("[DEV DEBUG] Direct flag access via basic SQL injection: difficult due to non-standard column name");
             console.log("[DEV DEBUG] Query timeout set to: " + _debugData.timeout + "s (ALERT: security risk!)");
-            
-            // Log the correct PIN code for testing purposes (remove in production)
-            console.log("[DEV DEBUG] *** CORRECT-CODE: " + _debugData.correctPIN + " ***");
-            
+
             console.log("[DEV DEBUG] Possible PIN codes (only one is correct, randomized after each failed attempt):");
-            
+
             // Log possible PIN codes
             if (_debugData.possiblePINCodes && _debugData.possiblePINCodes.length > 0) {
                 _debugData.possiblePINCodes.forEach(function(pin, index) {
                     console.log("[DEV DEBUG]   PIN Option " + (index + 1) + ": " + pin);
                 });
             }
-            
+
             console.log("[DEV DEBUG] Test query examples:");
             console.log("[DEV DEBUG] - Login bypass: " + _debugData.testQueries.bypass);
             console.log("[DEV DEBUG] - UNION tests: " + _debugData.testQueries.union);
-            
+
             // Generate time-based example for first digit of first possible PIN
             if (_debugData.possiblePINCodes && _debugData.possiblePINCodes.length > 0) {
                 var firstDigit = _debugData.possiblePINCodes[0].charAt(0);
@@ -553,13 +547,13 @@ Last Login: <?php echo date('Y-m-d H:i:s'); ?>
             } else {
                 console.log("[DEV DEBUG] - Time-based test: " + _debugData.testQueries.timeBased);
             }
-            
+
             console.log("[DEV DEBUG] Time-based attacks detected: no (use SLEEP() logging to monitor)");
             console.log("[DEV DEBUG] REMEMBER TO REMOVE ALL DEBUG INFO BEFORE PRODUCTION!");
-            
+
             // Store debug data for development
             debugElement.textContent = JSON.stringify(_debugData, null, 2);
         };
     </script>
 </body>
-</html> 
+</html>

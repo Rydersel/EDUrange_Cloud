@@ -1,0 +1,32 @@
+================== STAGE 3: CREDENTIAL EXTRACTION ==================
+
+OBJECTIVE: 
+Discover credentials by exploring the data command in the network service.
+
+INSTRUCTIONS:
+1. Connect to the service on port 4444 using netcat
+2. Experiment with the newly available 'data' command
+3. Find the right parameter to extract user credentials
+
+COMMANDS:
+  $ nc defense-service 4444
+  
+Once connected:
+  > data --help       (shows available options)
+  > data --users      (try this to list users)
+  > data --[option]   (try different options)
+
+EXPECTED OUTCOME:
+You should be able to find the admin credentials that will be needed
+for the next stage.
+
+HINTS:
+- Try different parameters with the data command
+- Common parameters might include: --users, --credentials, --show-users, etc.
+- Look for authentication credentials in the output
+- The data command will process "--" style parameters
+
+Once any student completes this stage, everyone will automatically
+advance to Stage 4.
+
+================================================================ 

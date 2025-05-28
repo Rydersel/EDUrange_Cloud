@@ -1,0 +1,112 @@
+apiVersion: v1
+kind: ChallengeDefinition
+metadata:
+  name: SQL Injection
+  description: |
+    Learn to identify and exploit SQL injection vulnerabilities in a web application.
+    
+    In this challenge, you'll explore a vulnerable web application, identify SQL injection points,
+    and use Metasploit and other tools to extract a hidden flag from the database.
+    
+    This challenge demonstrates common web application security flaws and teaches you
+    how to use Metasploit for web application security testing.
+  challenge_type: metasploit
+  difficulty: Beginner
+  category: Web Security
+  points: 100
+  
+typeConfig:
+  defenseContainerImage: registry.edurange.cloud/challenges/sql-injection-defense
+  attackContainerImage: registry.edurange.cloud/challenges/sql-injection-attack
+  
+components:
+  - id: challenge-prompt
+    type: webosApp
+    config:
+      title: SQL Injection Challenge
+      screen: displayChallengePrompt
+      width: 800
+      height: 600
+      favourite: true
+      desktop_shortcut: true
+      launch_on_startup: true
+      challenge:
+        title: SQL Injection Challenge
+        instructions: |
+          # SQL Injection Challenge
+          
+          ## Scenario
+          
+          You are a security tester assigned to test a company's e-commerce website for vulnerabilities. Your mission is to:
+          
+          1. Explore the web application via the terminal
+          2. Identify SQL injection vulnerabilities in forms and URL parameters
+          3. Exploit these vulnerabilities to access the database
+          4. Find and extract the hidden flag
+          
+          ## Getting Started
+          
+          - The target defense machine is accessible at `defense-[competition-id]` 
+          - Use the attack machine to perform your assessment
+          - Start by exploring the web application using `curl` to see what pages are available
+          - Test forms and URL parameters for SQL injection vulnerabilities
+          - Use Metasploit's web scanning capabilities to help identify injection points
+          - Extract the flag from the database
+          
+          ## Tips
+          
+          - Use `curl` to interact with web pages and forms
+          - Common SQL injection payloads are available in `/home/kali/payloads/sql_injection.txt`
+          - SQLMap is available for automated SQL injection testing
+          - Check HELP.md for useful commands
+          
+          ## Submit your findings
+          
+          Once you have found the flag, submit it in the form below.
+          
+  - id: question-1
+    type: question
+    config:
+      type: flag
+      prompt: What is the flag you extracted from the database?
+      points: 100
+      
+  - id: hint-1
+    type: question
+    config:
+      type: text
+      text: How can you view the contents of a web page using the terminal?
+      answer: "Use curl -s http://defense-[competition-id]/page.php | less"
+      points: 0
+      
+  - id: hint-2
+    type: question
+    config:
+      type: text
+      text: What SQL injection payload can you use to bypass login forms?
+      answer: "' OR '1'='1"
+      points: 0
+      
+  - id: hint-3
+    type: question
+    config:
+      type: text
+      text: Which Metasploit module can help scan for SQL injection vulnerabilities?
+      answer: auxiliary/scanner/http/sql_injection
+      points: 0
+      
+  - id: hint-4
+    type: question
+    config:
+      type: text
+      text: How can you find all the tables in a database using SQL injection?
+      answer: "Query the information_schema.tables view with a UNION query"
+      points: 0
+      
+  - id: hint-5
+    type: question
+    config:
+      type: text
+      text: What table might contain the flag?
+      answer: Look for a table named 'flags' in the database schema
+      points: 0 

@@ -23,6 +23,18 @@
                 "key": "flag"
               }
             }
+          },
+          {
+            "name": "POD_IP",
+            "value": "localhost"
+          },
+          {
+            "name": "DEFENSE_CONTAINER_HOST",
+            "value": "localhost"
+          },
+          {
+            "name": "DEFENSE_CONTAINER_PORT",
+            "value": "4444"
           }
         ]
       },
@@ -39,6 +51,11 @@
             "containerPort": 80,
             "name": "http",
             "protocol": "TCP"
+          },
+          {
+            "containerPort": 4444,
+            "name": "vuln-service",
+            "protocol": "TCP"
           }
         ],
         "env": [
@@ -47,11 +64,21 @@
             "valueFrom": {
               "secretKeyRef": {
                 "name": "{{FLAG_SECRET_NAME}}",
-                "key": "target_flag"
+                "key": "flag"
               }
             }
           }
-        ]
+        ],
+        "securityContext": {
+          "runAsNonRoot": false,
+          "runAsUser": 0,
+          "runAsGroup": 0,
+          "allowPrivilegeEscalation": true,
+          "privileged": true,
+          "capabilities": {
+            "add": ["CHOWN", "SETGID", "SETUID", "DAC_OVERRIDE", "SYS_ADMIN", "NET_ADMIN", "NET_BIND_SERVICE"]
+          }
+        }
       },
       {
         "name": "webos",
@@ -123,7 +150,7 @@
         "nginx.ingress.kubernetes.io/proxy-read-timeout": "3600",
         "nginx.ingress.kubernetes.io/proxy-send-timeout": "3600",
         "nginx.ingress.kubernetes.io/proxy-connect-timeout": "3600",
-        "nginx.ingress.kubernetes.io/websocket-services": "service-{{INSTANCE_NAME}}"
+        "nginx.ingress.kubernetes.io/backend-protocol": "HTTP"
       },
       "rules": [
         {
@@ -176,6 +203,7 @@
       ]
     }
   ],
+
   "extensionPoints": {
     "attackImage": {
       "container": "attack-container",
@@ -193,3 +221,4 @@
     }
   }
 }
+

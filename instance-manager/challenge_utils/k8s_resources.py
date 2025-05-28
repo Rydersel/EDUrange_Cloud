@@ -669,3 +669,159 @@ def delete_resources(resources_list, namespace="default"):
             })
     
     return results
+
+def create_network_policy_from_definition(network_policy_def, instance_name, resolved_variables):
+    """
+    Create a Kubernetes NetworkPolicy from a CTD network policy definition.
+
+    Args:
+        network_policy_def (dict): Network policy definition from CTD
+        instance_name (str): Instance name for labels and naming
+        resolved_variables (dict): Dictionary of resolved template variables
+
+    Returns:
+        object: Created NetworkPolicy object or None if definition is invalid
+    
+    Raises:
+        ApiException: If API call fails
+    """
+    try:
+        # Validate required fields
+        if not isinstance(network_policy_def, dict):
+            logging.error(f"Invalid network_policy_def format: Expected dict, got {type(network_policy_def)}")
+            return None
+        
+        name_template = network_policy_def.get('name', f"np-{instance_name}")
+        if not name_template:
+            logging.error("Network policy definition missing required 'name'")
+            return None
+            
+        # Resolve name and labels
+        name = replace_template_variables(name_template, resolved_variables)
+        labels = {
+            "app": "ctfchal",
+            "instance": instance_name
+        }
+        # Add additional labels from definition, resolving templates
+        for key, value in network_policy_def.get('labels', {}).items():
+            resolved_value = replace_template_variables(str(value), resolved_variables)
+            labels[sanitize_k8s_label(key)] = sanitize_k8s_label(resolved_value)
+
+        # Prepare metadata
+        metadata = client.V1ObjectMeta(
+            name=name,
+            namespace=network_policy_def.get('namespace', 'default'),
+            labels=labels
+        )
+        
+        # Parse pod selector - resolve templates
+        pod_selector_template = network_policy_def.get('podSelector')
+        if not pod_selector_template or not isinstance(pod_selector_template.get('matchLabels'), dict):
+            logging.error(f"Invalid or missing podSelector/matchLabels in network policy {name}")
+            return None # Pod selector with matchLabels is required
+            
+        resolved_pod_selector_labels = {
+            sanitize_k8s_label(k): sanitize_k8s_label(replace_template_variables(str(v), resolved_variables)) 
+            for k, v in pod_selector_template['matchLabels'].items()
+        }
+        pod_selector = client.V1LabelSelector(match_labels=resolved_pod_selector_labels)
+        
+        # Parse ingress rules
+        ingress_rules = []
+        for rule_template in network_policy_def.get('ingress', []):
+            ingress_rule = client.V1NetworkPolicyIngressRule()
+            # Parse 'from' rules
+            if 'from' in rule_template:
+                from_peers = []
+                for peer_template in rule_template['from']:
+                    network_peer = client.V1NetworkPolicyPeer()
+                    if 'podSelector' in peer_template and isinstance(peer_template['podSelector'].get('matchLabels'), dict):
+                        resolved_peer_labels = {
+                            sanitize_k8s_label(k): sanitize_k8s_label(replace_template_variables(str(v), resolved_variables)) 
+                            for k, v in peer_template['podSelector']['matchLabels'].items()
+                        }
+                        # IMPORTANT FIX: Ensure matchLabels is a dict
+                        network_peer.pod_selector = client.V1LabelSelector(match_labels=resolved_peer_labels)
+                    # Add namespaceSelector and ipBlock parsing if needed
+                    if 'namespaceSelector' in peer_template and isinstance(peer_template['namespaceSelector'].get('matchLabels'), dict):
+                        resolved_ns_labels = {
+                            sanitize_k8s_label(k): sanitize_k8s_label(replace_template_variables(str(v), resolved_variables))
+                            for k,v in peer_template['namespaceSelector']['matchLabels'].items()
+                        }
+                        network_peer.namespace_selector = client.V1LabelSelector(match_labels=resolved_ns_labels)
+                    if 'ipBlock' in peer_template:
+                         block_cidr = replace_template_variables(str(peer_template['ipBlock'].get('cidr')), resolved_variables)
+                         block_except = [replace_template_variables(str(ex), resolved_variables) for ex in peer_template['ipBlock'].get('except', [])]
+                         network_peer.ip_block = client.V1IPBlock(cidr=block_cidr, except_=block_except)
+                         
+                    from_peers.append(network_peer)
+                ingress_rule._from = from_peers # Use underscore for reserved keyword
+            # Parse ports
+            if 'ports' in rule_template:
+                ports = [
+                    client.V1NetworkPolicyPort(port=p.get('port'), protocol=p.get('protocol', 'TCP'))
+                    for p in rule_template['ports'] if isinstance(p, dict) and 'port' in p
+                ]
+                ingress_rule.ports = ports
+            ingress_rules.append(ingress_rule)
+        
+        # Parse egress rules (similar structure to ingress)
+        egress_rules = []
+        for rule_template in network_policy_def.get('egress', []):
+            egress_rule = client.V1NetworkPolicyEgressRule()
+            if 'to' in rule_template:
+                to_peers = []
+                for peer_template in rule_template['to']:
+                     network_peer = client.V1NetworkPolicyPeer()
+                     if 'podSelector' in peer_template and isinstance(peer_template['podSelector'].get('matchLabels'), dict):
+                        resolved_peer_labels = {
+                            sanitize_k8s_label(k): sanitize_k8s_label(replace_template_variables(str(v), resolved_variables))
+                            for k, v in peer_template['podSelector']['matchLabels'].items()
+                        }
+                        network_peer.pod_selector = client.V1LabelSelector(match_labels=resolved_peer_labels)
+                     # Add namespaceSelector and ipBlock parsing if needed
+                     if 'namespaceSelector' in peer_template and isinstance(peer_template['namespaceSelector'].get('matchLabels'), dict):
+                        resolved_ns_labels = {
+                            sanitize_k8s_label(k): sanitize_k8s_label(replace_template_variables(str(v), resolved_variables))
+                            for k,v in peer_template['namespaceSelector']['matchLabels'].items()
+                        }
+                        network_peer.namespace_selector = client.V1LabelSelector(match_labels=resolved_ns_labels)
+                     if 'ipBlock' in peer_template:
+                         block_cidr = replace_template_variables(str(peer_template['ipBlock'].get('cidr')), resolved_variables)
+                         block_except = [replace_template_variables(str(ex), resolved_variables) for ex in peer_template['ipBlock'].get('except', [])]
+                         network_peer.ip_block = client.V1IPBlock(cidr=block_cidr, except_=block_except)
+                         
+                     to_peers.append(network_peer)
+                egress_rule.to = to_peers
+            if 'ports' in rule_template:
+                ports = [
+                    client.V1NetworkPolicyPort(port=p.get('port'), protocol=p.get('protocol', 'TCP'))
+                    for p in rule_template['ports'] if isinstance(p, dict) and 'port' in p
+                ]
+                egress_rule.ports = ports
+            egress_rules.append(egress_rule)
+        
+        # Create network policy spec
+        spec = client.V1NetworkPolicySpec(
+            pod_selector=pod_selector,
+            policy_types=network_policy_def.get('policyTypes', ['Ingress']),
+            ingress=ingress_rules if ingress_rules else None,
+            egress=egress_rules if egress_rules else None
+        )
+        
+        # Create network policy object
+        network_policy = client.V1NetworkPolicy(
+            api_version="networking.k8s.io/v1",
+            kind="NetworkPolicy",
+            metadata=metadata,
+            spec=spec
+        )
+        
+        logging.info(f"Generated NetworkPolicy object {name}")
+        return network_policy
+        
+    except Exception as e:
+        logging.error(f"Error generating NetworkPolicy object {network_policy_def.get('name', 'unknown')}: {e}")
+        # Log the problematic definition for debugging
+        logging.debug(f"Problematic NetworkPolicy Definition: {network_policy_def}")
+        raise # Re-raise the exception to be caught by the caller

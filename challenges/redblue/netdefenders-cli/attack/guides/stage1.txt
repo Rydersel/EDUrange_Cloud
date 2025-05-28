@@ -1,0 +1,27 @@
+================== STAGE 1: INITIAL RECONNAISSANCE ==================
+
+OBJECTIVE: 
+Scan the defense system to identify available services.
+
+INSTRUCTIONS:
+1. Use the provided scan-target.sh script to scan the defense system.
+
+COMMANDS:
+  $ scan-target
+
+This will run a basic scan on the defense system to identify common services.
+
+EXPECTED OUTCOME:
+You should see several open ports, particularly port 4444 which hosts a
+network service that we'll exploit in later stages.
+
+HINTS:
+- The default target is "defense-service", but you can set a custom target
+  with: export DEFENSE_CONTAINER_HOST=<target_ip>
+- When the scan completes, try connecting to port 4444 with:
+  $ nc defense-service 4444
+
+Once any student completes this stage, everyone will automatically
+advance to Stage 2.
+
+================================================================ 

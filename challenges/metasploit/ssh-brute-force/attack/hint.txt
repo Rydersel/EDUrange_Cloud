@@ -1,0 +1,20 @@
+SSH BRUTE FORCE CHALLENGE - HINT
+
+To complete this challenge, you'll need to use Metasploit's SSH login scanner module to perform a dictionary attack against the SSH server.
+
+Here's how to get started:
+
+1. In Metasploit, search for SSH-related modules using: search ssh
+
+2. The module you want is auxiliary/scanner/ssh/ssh_login
+
+3. When using this module, you'll need to set:
+   - RHOSTS (the target IP/hostname)
+   - USERNAME (the target username is "target")
+   - PASS_FILE (the path to the password list file)
+
+4. Remember that the password file is located at /home/kali/challenge/passwords.txt
+
+5. After you find the correct credentials, connect with SSH and look for the flag file.
+
+Good luck! 

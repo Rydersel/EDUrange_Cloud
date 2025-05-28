@@ -527,16 +527,10 @@ def start_queue_worker():
                 except Exception as perf_e:
                     logging.error(f"Error recording performance failure: {perf_e}")
 
-            if 'handler_instance' in locals() and isinstance(handler_instance, BaseChallengeHandler):
-                try:
-                    handler_instance.cleanup()
-                except Exception as cleanup_e:
-                    logging.error(f"Failed during cleanup after error: {cleanup_e}")
-                    
-            return {
-                "success": False,
-                "error": f"An internal error occurred while deploying the challenge: {str(e)}"
-            }
+                return {
+                    "success": False,
+                    "error": f"An internal error occurred while deploying the challenge: {str(e)}"
+                }
 
         # Start the worker with the deploy_challenge callback
         success = queue.start_worker(deploy_challenge, interval=1)
@@ -2816,3 +2810,69 @@ def api_init_workers():
     except Exception as e:
         logging.error(f"Error initializing workers: {e}")
         return jsonify({"error": str(e)}), 500
+
+
+# --- Test Endpoints --- #
+
+@app.route('/api/test/redblue', methods=['POST'])
+def test_redblue_challenge():
+    """Endpoint specifically for testing the Red-Blue challenge deployment."""
+    try:
+        # Get user_id and competition_id from request
+        json_data = request.json
+        validation_result, error_message = validate_request_json(json_data, ['user_id', 'competition_id'])
+        if not validation_result:
+            logging.error(f"Red-Blue test request validation failed: {error_message}")
+            return jsonify({"error": error_message}), 400
+
+        user_id = json_data['user_id']
+        competition_id = json_data['competition_id']
+
+        # Load the specific CDF for the test
+        cdf_path = os.path.join(os.path.dirname(__file__), '..', 'corporate-network-breach.cdf.json') # Assuming it's one level up
+        if not os.path.exists(cdf_path):
+            logging.error(f"Test CDF file not found: {cdf_path}")
+            return jsonify({"error": "Corporate Network Breach CDF file not found."}), 500
+        
+        with open(cdf_path, 'r') as f:
+            cdf_data = json.load(f)
+        
+        # Generate a unique deployment name for the test
+        deployment_name = f"redblue-test-{user_id[:8]}-{uuid.uuid4().hex[:8]}"
+        challenge_type = "redblue" # Hardcode the type for this test endpoint
+        
+        logging.info(f"Starting Red-Blue test deployment: user_id={user_id}, competition_id={competition_id}, name={deployment_name}")
+        
+        # Get the handler class
+        HandlerClass = CHALLENGE_HANDLERS.get(challenge_type)
+        if not HandlerClass:
+            logging.error(f"Handler not found for challenge type: {challenge_type}")
+            return jsonify({"error": f"Handler not found for {challenge_type}"}), 500
+            
+        # Instantiate the handler
+        logging.info(f"Instantiating handler {HandlerClass.__name__} for type {challenge_type}")
+        handler_instance = HandlerClass(user_id, cdf_data, competition_id, deployment_name)
+        
+        # Deploy the challenge directly (bypassing queue for immediate testing)
+        logging.info(f"Deploying Red-Blue test instance {deployment_name}")
+        deployment_info = handler_instance.deploy()
+        
+        log_deployment_name = deployment_info.get('deployment_name', deployment_name)
+        
+        if deployment_info.get("success"):
+            logging.info(f"Red-Blue test deployment successful for instance {log_deployment_name}")
+            return jsonify(deployment_info), 200
+        else:
+            logging.error(f"Red-Blue test deployment failed for {log_deployment_name}: {deployment_info.get('error')}")
+            # Attempt cleanup on failure
+            try:
+                handler_instance.cleanup()
+            except Exception as cleanup_e:
+                logging.error(f"Error during cleanup after failed test deployment: {cleanup_e}")
+            return jsonify(deployment_info), 500
+
+    except Exception as e:
+        stack_trace = traceback.format_exc()
+        logging.exception(f"Unexpected error during Red-Blue test deployment: {e}")
+        logging.error(f"Stack trace: {stack_trace}")
+        return jsonify({"error": f"An internal error occurred: {str(e)}"}), 500

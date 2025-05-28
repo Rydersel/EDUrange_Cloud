@@ -132,7 +132,7 @@ export default function CompetitionsPage() {
                 </Button>
                 {canViewDetails && (
                     <Button className="w-full" variant="outline" asChild>
-                      <Link href={`/dashboard/app/admin/competitions/${competition.id}`}>
+                      <Link href={`/admin/competitions/${competition.id}`}>
                         View Details
                       </Link>
                     </Button>

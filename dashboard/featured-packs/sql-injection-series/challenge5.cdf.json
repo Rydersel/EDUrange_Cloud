@@ -1,0 +1,78 @@
+{
+  "$schema": "https://raw.githubusercontent.com/EDURange/schema/main/schemas/cdf.schema.json",
+  "metadata": {
+    "id": "sql-injection-challenge5",
+    "pack_id": "sql-injection-series",
+    "name": "SQL Injection: Advanced UNION-Based Table Exploration",
+    "version": "1.0.0",
+    "description": "Learn how to use UNION-based SQL injection to extract data from hidden database tables.",
+    "challenge_type": "sql-injection",
+    "difficulty": "intermediate",
+    "estimated_time": 30
+  },
+  "components": [
+    {
+      "type": "webosApp",
+      "id": "settings",
+      "config": {
+        "title": "Settings",
+        "icon": "./icons/settings.svg",
+        "width": 50,
+        "height": 60,
+        "screen": "displaySettings",
+        "disabled": false,
+        "favourite": true,
+        "desktop_shortcut": false,
+        "launch_on_startup": false,
+        "app_type": "custom"
+      }
+    },
+    {
+      "type": "webosApp",
+      "id": "chrome",
+      "config": {
+        "title": "Browser",
+        "icon": "./icons/browser.svg",
+        "width": 70,
+        "height": 80,
+        "screen": "displayChrome",
+        "disabled": false,
+        "favourite": true,
+        "desktop_shortcut": true,
+        "launch_on_startup": false,
+        "app_type": "browser"
+      }
+    },
+    {
+      "type": "webosApp",
+      "id": "web_chal",
+      "config": {
+        "title": "SQL Challenge 5",
+        "icon": "./icons/browser.svg",
+        "width": 70,
+        "height": 80,
+        "screen": "displayWebChal",
+        "disabled": false,
+        "favourite": true,
+        "desktop_shortcut": true,
+        "launch_on_startup": true,
+        "app_type": "custom"
+      }
+    },
+    {
+      "id": "flag-question",
+      "type": "question",
+      "config": {
+        "type": "flag",
+        "text": "What is the flag you found after extracting data from the secret_documents table? (Format: CTF{...})",
+        "points": 100,
+        "answer": "CTF{UNION_all_the_things_for_data_extraction}",
+        "hint": "Try using UNION to combine your query with the original query. Remember to match the number of columns (5) and data types. You can use information_schema to discover table names."
+      }
+    }
+  ],
+  "typeConfig": {
+    "challengeImage": "registry.edurange.cloud/challenges/sql-injection-challenge5",
+    "databaseImage": "mysql:5.7"
+  }
+}

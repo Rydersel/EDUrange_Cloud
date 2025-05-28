@@ -1,0 +1,56 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: harbor-core-metrics
+  namespace: harbor
+  labels:
+    app: harbor
+    app.kubernetes.io/name: harbor
+    component: core
+spec:
+  selector:
+    app: harbor
+    app.kubernetes.io/component: core
+  ports:
+  - name: metrics
+    port: 8001
+    targetPort: 8001
+  type: ClusterIP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: harbor-jobservice-metrics
+  namespace: harbor
+  labels:
+    app: harbor
+    app.kubernetes.io/name: harbor
+    component: jobservice
+spec:
+  selector:
+    app: harbor
+    app.kubernetes.io/component: jobservice
+  ports:
+  - name: metrics
+    port: 8001
+    targetPort: 8001
+  type: ClusterIP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: harbor-exporter-metrics
+  namespace: harbor
+  labels:
+    app: harbor
+    app.kubernetes.io/name: harbor
+    component: exporter
+spec:
+  selector:
+    app: harbor
+    component: exporter
+  ports:
+  - name: metrics
+    port: 8001
+    targetPort: 8001
+  type: ClusterIP 

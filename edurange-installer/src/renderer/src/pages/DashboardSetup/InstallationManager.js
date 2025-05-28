@@ -61,7 +61,7 @@ export const installDashboard = async ({
     const { databaseUrl, postgresPassword } = await verifyDatabaseCredentials({
       componentLog
     });
-    
+
     // Create a direct database URL based on the databaseUrl
     // If it contains pgbouncer:6432, replace with postgres:5432
     let directDatabaseUrl = '';
@@ -252,8 +252,11 @@ spec:
           value: "https://${domain.monitoringSubdomain}.${domain.name}/metrics/health"
         resources:
           requests:
-            cpu: 100m
-            memory: 256Mi
+            cpu: 1000m
+            memory: 2048Mi
+          limits:
+            cpu: 2000m
+            memory: 3648Mi
         livenessProbe:
           httpGet:
             path: /api/health
@@ -362,21 +365,21 @@ spec:
     apiVersion: apps/v1
     kind: Deployment
     name: dashboard
-  minReplicas: 1
-  maxReplicas: 5
+  minReplicas: 2
+  maxReplicas: 10
   metrics:
   - type: Resource
     resource:
       name: cpu
       target:
         type: Utilization
-        averageUtilization: 70
+        averageUtilization: 60
   - type: Resource
     resource:
       name: memory
       target:
         type: Utilization
-        averageUtilization: 80
+        averageUtilization: 70
   behavior:
     scaleDown:
       stabilizationWindowSeconds: 300
@@ -385,11 +388,14 @@ spec:
         value: 25
         periodSeconds: 60
     scaleUp:
-      stabilizationWindowSeconds: 60
+      stabilizationWindowSeconds: 30
       policies:
       - type: Percent
         value: 100
-        periodSeconds: 60
+        periodSeconds: 30
+      - type: Pods
+        value: 2
+        periodSeconds: 30
 `;
 
     const hpaResult = await window.api.applyManifestFromString(hpaYaml);

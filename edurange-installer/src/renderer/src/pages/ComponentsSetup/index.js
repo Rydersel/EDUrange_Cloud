@@ -3,7 +3,17 @@ import Card from '../../components/Card';
 import Button from '../../components/Button';
 import StatusBadge from '../../components/StatusBadge';
 import useInstallStore from '../../store/installStore';
-import { installMonitoringService } from './MonitoringService';
+import { installPrometheusService, uninstallPrometheusService } from './PrometheusService';
+import { installLokiGrafanaService, uninstallLokiService, uninstallGrafanaService, uninstallPromtailService } from './LokiGrafanaService';
+import { isPrometheusInstalled, installPrometheus } from '../../utils/prometheusUtils';
+import { 
+  isLokiInstalled, 
+  isGrafanaInstalled, 
+  isPromtailInstalled,
+  installLoki,
+  installGrafana,
+  installPromtail
+} from '../../utils/lokiGrafanaUtils';
 import { installDatabaseController } from './DatabaseController';
 import { installInstanceManager } from './InstanceManager';
 import { setupDatabaseController } from './DatabaseController';
@@ -46,6 +56,10 @@ const ComponentsSetup = () => {
     databaseController: [],
     instanceManager: [],
     monitoringService: [],
+    prometheusService: [],
+    lokiService: [],
+    grafanaService: [],
+    promtailService: [],
     redisService: []
   });
 
@@ -75,14 +89,29 @@ const ComponentsSetup = () => {
         ]);
         const instanceManagerInstalled = instanceManagerResult.code === 0 && instanceManagerResult.stdout.includes('instance-manager');
 
-        // Check Monitoring Service
-        const monitoringServiceResult = await window.api.executeCommand('kubectl', [
-          'get',
-          'deployment',
-          'monitoring-service',
-          '--ignore-not-found'
-        ]);
-        const monitoringServiceInstalled = monitoringServiceResult.code === 0 && monitoringServiceResult.stdout.includes('monitoring-service');
+        // Check Monitoring Service - Using our utility functions
+        console.log('Checking monitoring components status...');
+        
+        const prometheusCheck = await isPrometheusInstalled((message) => {
+          console.log('Prometheus check:', message);
+        });
+        
+        const lokiCheck = await isLokiInstalled((message) => {
+          console.log('Loki check:', message);
+        });
+        
+        const grafanaCheck = await isGrafanaInstalled((message) => {
+          console.log('Grafana check:', message);
+        });
+        
+        const promtailCheck = await isPromtailInstalled((message) => {
+          console.log('Promtail check:', message);
+        });
+        
+        const monitoringServiceInstalled = 
+          prometheusCheck.success && prometheusCheck.installed &&
+          lokiCheck.success && lokiCheck.installed &&
+          grafanaCheck.success && grafanaCheck.installed;
 
         // Check Redis Service
         const redisServiceResult = await window.api.executeCommand('kubectl', [
@@ -106,8 +135,36 @@ const ComponentsSetup = () => {
           setInstallationStatus('instanceManager', 'not-started');
         }
 
+        // Set individual monitoring component statuses
+        if (prometheusCheck.success && prometheusCheck.installed) {
+          setInstallationStatus('prometheus', 'installed');
+        } else {
+          setInstallationStatus('prometheus', 'not-started');
+        }
+
+        if (lokiCheck.success && lokiCheck.installed) {
+          setInstallationStatus('loki', 'installed');
+        } else {
+          setInstallationStatus('loki', 'not-started');
+        }
+
+        if (grafanaCheck.success && grafanaCheck.installed) {
+          setInstallationStatus('grafana', 'installed');
+        } else {
+          setInstallationStatus('grafana', 'not-started');
+        }
+
+        if (promtailCheck.success && promtailCheck.installed) {
+          setInstallationStatus('promtail', 'installed');
+        } else {
+          setInstallationStatus('promtail', 'not-started');
+        }
+
         if (monitoringServiceInstalled) {
           setInstallationStatus('monitoringService', 'installed');
+        } else if (prometheusCheck.installed && (!lokiCheck.installed || !grafanaCheck.installed)) {
+          // Partial installation - only Prometheus is installed
+          setInstallationStatus('monitoringService', 'error');
         } else {
           setInstallationStatus('monitoringService', 'not-started');
         }
@@ -119,7 +176,13 @@ const ComponentsSetup = () => {
         }
 
         // If all components are installed, mark the step as completed
-        if (dbControllerInstalled && instanceManagerInstalled && monitoringServiceInstalled && redisServiceInstalled) {
+        if (dbControllerInstalled && 
+            instanceManagerInstalled && 
+            installationStatus.prometheus === 'installed' &&
+            installationStatus.loki === 'installed' &&
+            installationStatus.grafana === 'installed' &&
+            installationStatus.promtail === 'installed' &&
+            redisServiceInstalled) {
           markStepCompleted('components-setup');
         } else {
           // If not all components are installed, make sure it's not marked as completed
@@ -227,37 +290,115 @@ const ComponentsSetup = () => {
   const waitForPod = async (selector, namespace = 'default', timeoutSeconds = 360) => {
     setWaitingForPod(true);
     try {
+      // First, list all pods in the namespace to debug
+      const listPodsResult = await window.api.executeCommand('kubectl', [
+        'get',
+        'pods',
+        '-n',
+        namespace,
+        '--show-labels'
+      ]);
+      
+      addLog(`Pods in namespace ${namespace}:\n${listPodsResult.stdout}`);
+      
       const startTime = Date.now();
       const timeoutMs = timeoutSeconds * 1000;
 
       while (Date.now() - startTime < timeoutMs) {
-        const result = await window.api.executeCommand('kubectl', [
+        // Try checking for any pod with the selector first
+        const podCountResult = await window.api.executeCommand('kubectl', [
           'get',
           'pods',
           '-l',
           selector,
           '-n',
           namespace,
-          '-o',
-          'jsonpath={.items[0].status.phase},{.items[0].status.containerStatuses[*].ready}'
+          '--no-headers'
         ]);
+        
+        if (podCountResult.stdout && podCountResult.stdout.trim() !== '') {
+          // There are some pods with this selector, check their status
+          const result = await window.api.executeCommand('kubectl', [
+            'get',
+            'pods',
+            '-l',
+            selector,
+            '-n',
+            namespace,
+            '-o',
+            'jsonpath={.items[0].status.phase},{.items[0].status.containerStatuses[*].ready}'
+          ]);
 
-        if (result.stdout) {
-          const [phase, readyStatus] = result.stdout.split(',');
+          if (result.stdout) {
+            const [phase, readyStatus] = result.stdout.split(',');
+            addLog(`Pod phase: ${phase}, Ready status: ${readyStatus}`);
 
-          // Check if phase is Running and all containers are ready
-          // readyStatus will be a string like "true" or "true,true" or "true,false,true"
-          const allContainersReady = readyStatus && !readyStatus.split(',').includes('false');
+            // Check if phase is Running and all containers are ready
+            // readyStatus will be a string like "true" or "true,true" or "true,false,true"
+            const allContainersReady = readyStatus && !readyStatus.split(',').includes('false');
 
-          if (phase === 'Running' && allContainersReady) {
-            setWaitingForPod(false);
-            return { success: true };
+            if (phase === 'Running' && allContainersReady) {
+              setWaitingForPod(false);
+              return { success: true };
+            }
+          }
+        } else {
+          // No pods found with that selector, try a more permissive search
+          addLog(`No pods found with selector ${selector}, trying alternative selector...`);
+          
+          // Try with a more generic selector based on the app name
+          const appName = selector.split('=')[1]?.split(',')[0];
+          if (appName) {
+            const altSelector = `app=${appName}`;
+            const altResult = await window.api.executeCommand('kubectl', [
+              'get',
+              'pods',
+              '-l',
+              altSelector,
+              '-n',
+              namespace,
+              '--no-headers'
+            ]);
+            
+            if (altResult.stdout && altResult.stdout.trim() !== '') {
+              addLog(`Found pods with alternative selector ${altSelector}`);
+              
+              // Get the phase of the first pod
+              const phaseResult = await window.api.executeCommand('kubectl', [
+                'get',
+                'pods',
+                '-l',
+                altSelector,
+                '-n',
+                namespace,
+                '-o',
+                'jsonpath={.items[0].status.phase}'
+              ]);
+              
+              if (phaseResult.stdout && phaseResult.stdout.trim() === 'Running') {
+                setWaitingForPod(false);
+                addLog(`Pod with alternative selector ${altSelector} is running.`);
+                return { success: true };
+              }
+            }
           }
         }
 
         // Sleep for 2 seconds before checking again
         await new Promise(resolve => setTimeout(resolve, 2000));
       }
+
+      // If we reach here, the timeout occurred
+      // Get all pod statuses one more time for debugging
+      const finalPodStatus = await window.api.executeCommand('kubectl', [
+        'get',
+        'pods',
+        '-n',
+        namespace,
+        '--show-labels'
+      ]);
+      
+      addLog(`Timeout waiting for pod. Current pods in namespace ${namespace}:\n${finalPodStatus.stdout}`);
 
       setWaitingForPod(false);
       return {
@@ -460,10 +601,13 @@ spec:
       addLog(`Retrieved domain name from certificate: ${useInstallStore.getState().domain.name}`);
     }
 
-    const result = await installMonitoringService({
+    // Install both Prometheus and Loki/Grafana services
+    addLog('Starting installation of the complete monitoring stack...');
+    
+    // First install Prometheus
+    const prometheusResult = await installPrometheusService({
       setActiveComponent,
       setInstallationStatus,
-      setIsCancelling: () => {}, // Empty function as placeholder
       addLog,
       setLogs,
       logs,
@@ -478,10 +622,40 @@ spec:
       setIsInstalling
     });
 
-    // Ensure the status is set correctly based on the result
-    if (result && result.success) {
-      setInstallationStatus('monitoringService', 'installed');
+    // If Prometheus installation succeeds, proceed with Loki/Grafana
+    if (prometheusResult && prometheusResult.success) {
+      addLog('Prometheus installed successfully. Proceeding with Loki and Grafana installation...');
+      
+      const lokiGrafanaResult = await installLokiGrafanaService({
+        setActiveComponent,
+        setInstallationStatus,
+        addLog,
+        setLogs,
+        logs,
+        checkAndDeleteExistingDeployment,
+        checkAndDeleteExistingService,
+        checkAndDeleteExistingIngress,
+        waitForPod,
+        checkAndUpdateWildcardCertificate,
+        renderIngressYaml,
+        domain: useInstallStore.getState().domain,
+        registry,
+        setIsInstalling: () => {} // We'll handle the isInstalling state outside
+      });
+
+      if (lokiGrafanaResult && lokiGrafanaResult.success) {
+        addLog('Complete monitoring stack installed successfully.');
+        setInstallationStatus('monitoringService', 'installed');
+      } else {
+        addLog('Loki/Grafana installation failed, but Prometheus was installed successfully.');
+        setInstallationStatus('monitoringService', 'error');
+      }
+    } else {
+      addLog('Prometheus installation failed. Aborting monitoring stack installation.');
+      setInstallationStatus('monitoringService', 'error');
     }
+    
+    setIsInstalling(false);
   };
 
   // Handle uninstall functions
@@ -621,84 +795,64 @@ spec:
     setInstallationStatus('monitoringService', 'deleting');
     // Clear logs at the beginning of the uninstall operation
     setLogs(prev => ({ ...prev, monitoringService: [] }));
-    addLog('Uninstalling Monitoring Service...');
+    addLog('Uninstalling Monitoring Services...');
 
     try {
-      // Delete monitoring service resources
-      addLog('Deleting monitoring-service resources...');
-      await checkAndDeleteExistingIngress('monitoring-service-ingress');
-      await checkAndDeleteExistingService('monitoring-service');
-      await checkAndDeleteExistingDeployment('monitoring-service');
+      // First uninstall Loki/Grafana components
+      addLog('Uninstalling Loki, Grafana, and Promtail components...');
+      
+      // Uninstall Promtail first
+      await uninstallPromtailService({
+        addLog,
+        setLogs,
+        updateCurrentStep: (step) => addLog(`Current step: ${step}`)
+      });
+      
+      // Then uninstall Loki
+      await uninstallLokiService({
+        addLog,
+        setLogs,
+        updateCurrentStep: (step) => addLog(`Current step: ${step}`)
+      });
+      
+      // Then uninstall Grafana
+      await uninstallGrafanaService({
+        addLog,
+        setLogs,
+        updateCurrentStep: (step) => addLog(`Current step: ${step}`)
+      });
+      
+      // Finally uninstall Prometheus
+      addLog('Uninstalling Prometheus components...');
+      await uninstallPrometheusService({
+        addLog,
+        setLogs,
+        updateCurrentStep: (step) => addLog(`Current step: ${step}`)
+      });
 
-      // Force delete any stuck pods
-      addLog('Checking for stuck monitoring-service pods...');
-      const stuckPodsResult = await window.api.executeCommand('kubectl', [
-        'get', 'pods', '--selector', 'app=monitoring-service', '-o', 'name'
+      // Delete monitoring namespace if empty
+      addLog('Checking if monitoring namespace is empty...');
+      const podsResult = await window.api.executeCommand('kubectl', [
+        'get', 'pods', '--namespace', 'monitoring', '--ignore-not-found'
       ]);
-
-      if (stuckPodsResult.stdout) {
-        const podNames = stuckPodsResult.stdout.split('\n').filter(name => name);
-        for (const podName of podNames) {
-          addLog(`Force deleting pod: ${podName}`);
-          await window.api.executeCommand('kubectl', [
-            'delete', podName, '--force', '--grace-period=0'
-          ]);
-        }
+      
+      if (!podsResult.stdout || podsResult.stdout.trim() === '') {
+        addLog('Monitoring namespace is empty. Deleting namespace...');
+        await window.api.executeCommand('kubectl', [
+          'delete', 'namespace', 'monitoring', '--ignore-not-found'
+        ]);
+      } else {
+        addLog('Monitoring namespace still has resources. Skipping namespace deletion.');
       }
 
-      // Delete RBAC resources
-      addLog('Deleting RBAC resources...');
-      await window.api.executeCommand('kubectl', [
-        'delete', 'serviceaccount', 'monitoring-service-sa', '--ignore-not-found'
-      ]);
-
-      await window.api.executeCommand('kubectl', [
-        'delete', 'clusterrole', 'monitoring-service-role', '--ignore-not-found'
-      ]);
-
-      await window.api.executeCommand('kubectl', [
-        'delete', 'clusterrolebinding', 'monitoring-service-role-binding', '--ignore-not-found'
-      ]);
-
-      // Delete ServiceMonitor
-      addLog('Deleting ServiceMonitor...');
-      await window.api.executeCommand('kubectl', [
-        'delete', 'servicemonitor', 'monitoring-service-metrics', '--ignore-not-found'
-      ]);
-
-      // Delete Prometheus and Grafana
-      addLog('Deleting Prometheus and Grafana...');
-      await window.api.executeCommand('helm', [
-        'uninstall', 'prometheus', '--namespace', 'monitoring', '--ignore-not-found'
-      ]);
-
-      // Delete Grafana resources
-      await window.api.executeCommand('kubectl', [
-        'delete', 'deployment', 'grafana', '--namespace', 'monitoring', '--ignore-not-found'
-      ]);
-
-      await window.api.executeCommand('kubectl', [
-        'delete', 'service', 'grafana', '--namespace', 'monitoring', '--ignore-not-found'
-      ]);
-
-      await window.api.executeCommand('kubectl', [
-        'delete', 'ingress', 'grafana-ingress', '--namespace', 'monitoring', '--ignore-not-found'
-      ]);
-
-      // Delete monitoring namespace
-      addLog('Deleting monitoring namespace...');
-      await window.api.executeCommand('kubectl', [
-        'delete', 'namespace', 'monitoring', '--ignore-not-found'
-      ]);
-
-      addLog('Monitoring Service uninstalled successfully.');
+      addLog('Monitoring Services uninstalled successfully.');
       setInstallationStatus('monitoringService', 'not-started');
 
       // Check if all components are uninstalled and remove the step from completedSteps if needed
       checkAndRemoveComponentsStep();
     } catch (error) {
-      console.error('Error uninstalling Monitoring Service:', error);
-      addLog(`Error uninstalling Monitoring Service: ${error.message}`);
+      console.error('Error uninstalling Monitoring Services:', error);
+      addLog(`Error uninstalling Monitoring Services: ${error.message}`);
       setInstallationStatus('monitoringService', 'error');
     } finally {
       setIsInstalling(false);
@@ -710,7 +864,10 @@ spec:
     const allComponentsUninstalled =
       installationStatus.databaseController !== 'installed' &&
       installationStatus.instanceManager !== 'installed' &&
-      installationStatus.monitoringService !== 'installed' &&
+      installationStatus.prometheus !== 'installed' &&
+      installationStatus.loki !== 'installed' &&
+      installationStatus.grafana !== 'installed' &&
+      installationStatus.promtail !== 'installed' &&
       installationStatus.redisService !== 'installed';
 
     if (allComponentsUninstalled) {
@@ -894,13 +1051,17 @@ data:
   const handleForceCancelInstallation = async (component) => {
     const componentName = component === 'databaseController' ? 'Database Controller' :
                           component === 'instanceManager' ? 'Instance Manager' :
+                          component === 'prometheus' ? 'Prometheus' :
+                          component === 'loki' ? 'Loki' :
+                          component === 'grafana' ? 'Grafana' :
+                          component === 'promtail' ? 'Promtail' :
                           component === 'monitoringService' ? 'Monitoring Service' :
                           'Redis Service';
 
     addLog(`Forcefully cancelling ${componentName} installation...`);
     setLogs(prev => ({
       ...prev,
-      [component]: [...prev[component], `Forcefully cancelling ${componentName} installation...`]
+      [component]: [...(prev[component] || []), `Forcefully cancelling ${componentName} installation...`]
     }));
 
     // Reset the installation status
@@ -964,6 +1125,118 @@ data:
           'delete', 'configmap', 'registry-mirror-config', '--ignore-not-found=true'
         ]);
       }
+      else if (component === 'prometheus') {
+        // Delete Prometheus resources
+        try {
+          await window.api.executeCommand('helm', [
+            'uninstall', 'prometheus', '--namespace', 'monitoring', '--ignore-not-found'
+          ]);
+
+          // Clean up Prometheus PVCs
+          const pvcResult = await window.api.executeCommand('kubectl', [
+            'get', 'pvc', '--namespace', 'monitoring', '-o', 'name'
+          ]);
+          
+          if (pvcResult.stdout) {
+            const pvcs = pvcResult.stdout.split('\n').filter(name => name);
+            for (const pvc of pvcs) {
+              if (pvc.includes('prometheus')) {
+                addLog(`Force deleting PVC: ${pvc}`);
+                
+                // Remove finalizers first
+                await window.api.executeCommand('kubectl', [
+                  'patch', pvc, '-n', 'monitoring', '-p', '{"metadata":{"finalizers":null}}', '--type=merge'
+                ]).catch(() => {});
+                
+                // Delete the PVC
+                await window.api.executeCommand('kubectl', [
+                  'delete', pvc, '-n', 'monitoring', '--force', '--grace-period=0'
+                ]).catch(() => {});
+              }
+            }
+          }
+        } catch (error) {
+          console.error('Error cleaning up Prometheus components:', error);
+        }
+      }
+      else if (component === 'loki') {
+        // Delete Loki resources
+        try {
+          await window.api.executeCommand('helm', [
+            'uninstall', 'loki', '--namespace', 'monitoring', '--ignore-not-found'
+          ]);
+
+          // Clean up Loki PVCs
+          const pvcResult = await window.api.executeCommand('kubectl', [
+            'get', 'pvc', '--namespace', 'monitoring', '-o', 'name'
+          ]);
+          
+          if (pvcResult.stdout) {
+            const pvcs = pvcResult.stdout.split('\n').filter(name => name);
+            for (const pvc of pvcs) {
+              if (pvc.includes('loki')) {
+                addLog(`Force deleting PVC: ${pvc}`);
+                
+                // Remove finalizers first
+                await window.api.executeCommand('kubectl', [
+                  'patch', pvc, '-n', 'monitoring', '-p', '{"metadata":{"finalizers":null}}', '--type=merge'
+                ]).catch(() => {});
+                
+                // Delete the PVC
+                await window.api.executeCommand('kubectl', [
+                  'delete', pvc, '-n', 'monitoring', '--force', '--grace-period=0'
+                ]).catch(() => {});
+              }
+            }
+          }
+        } catch (error) {
+          console.error('Error cleaning up Loki components:', error);
+        }
+      }
+      else if (component === 'grafana') {
+        // Delete Grafana resources
+        try {
+          await window.api.executeCommand('helm', [
+            'uninstall', 'grafana', '--namespace', 'monitoring', '--ignore-not-found'
+          ]);
+
+          // Clean up Grafana PVCs
+          const pvcResult = await window.api.executeCommand('kubectl', [
+            'get', 'pvc', '--namespace', 'monitoring', '-o', 'name'
+          ]);
+          
+          if (pvcResult.stdout) {
+            const pvcs = pvcResult.stdout.split('\n').filter(name => name);
+            for (const pvc of pvcs) {
+              if (pvc.includes('grafana')) {
+                addLog(`Force deleting PVC: ${pvc}`);
+                
+                // Remove finalizers first
+                await window.api.executeCommand('kubectl', [
+                  'patch', pvc, '-n', 'monitoring', '-p', '{"metadata":{"finalizers":null}}', '--type=merge'
+                ]).catch(() => {});
+                
+                // Delete the PVC
+                await window.api.executeCommand('kubectl', [
+                  'delete', pvc, '-n', 'monitoring', '--force', '--grace-period=0'
+                ]).catch(() => {});
+              }
+            }
+          }
+        } catch (error) {
+          console.error('Error cleaning up Grafana components:', error);
+        }
+      }
+      else if (component === 'promtail') {
+        // Delete Promtail resources
+        try {
+          await window.api.executeCommand('helm', [
+            'uninstall', 'promtail', '--namespace', 'monitoring', '--ignore-not-found'
+          ]);
+        } catch (error) {
+          console.error('Error cleaning up Promtail components:', error);
+        }
+      }
       else if (component === 'monitoringService') {
         await checkAndDeleteExistingIngress('monitoring-service-ingress');
         await checkAndDeleteExistingService('monitoring-service');
@@ -982,26 +1255,51 @@ data:
           'delete', 'clusterrolebinding', 'monitoring-service-role-binding', '--ignore-not-found'
         ]);
 
-        // Try to clean up Prometheus and Grafana
+        // Try to clean up Prometheus, Grafana, Loki, and Promtail components
         try {
+          // Uninstall Prometheus via Helm
           await window.api.executeCommand('helm', [
             'uninstall', 'prometheus', '--namespace', 'monitoring', '--ignore-not-found'
           ]);
-
-          // Delete Grafana resources
-          await window.api.executeCommand('kubectl', [
-            'delete', 'deployment', 'grafana', '--namespace', 'monitoring', '--ignore-not-found'
+          
+          // Uninstall Grafana via Helm
+          await window.api.executeCommand('helm', [
+            'uninstall', 'grafana', '--namespace', 'monitoring', '--ignore-not-found'
+          ]);
+          
+          // Uninstall Loki via Helm
+          await window.api.executeCommand('helm', [
+            'uninstall', 'loki', '--namespace', 'monitoring', '--ignore-not-found'
+          ]);
+          
+          // Uninstall Promtail via Helm
+          await window.api.executeCommand('helm', [
+            'uninstall', 'promtail', '--namespace', 'monitoring', '--ignore-not-found'
           ]);
 
-          await window.api.executeCommand('kubectl', [
-            'delete', 'service', 'grafana', '--namespace', 'monitoring', '--ignore-not-found'
+          // Clean up PVCs for Prometheus, Grafana, and Loki
+          const pvcResult = await window.api.executeCommand('kubectl', [
+            'get', 'pvc', '--namespace', 'monitoring', '-o', 'name'
           ]);
-
-          await window.api.executeCommand('kubectl', [
-            'delete', 'ingress', 'grafana-ingress', '--namespace', 'monitoring', '--ignore-not-found'
-          ]);
+          
+          if (pvcResult.stdout) {
+            const pvcs = pvcResult.stdout.split('\n').filter(name => name);
+            for (const pvc of pvcs) {
+              addLog(`Force deleting PVC: ${pvc}`);
+              
+              // Remove finalizers first
+              await window.api.executeCommand('kubectl', [
+                'patch', pvc, '-n', 'monitoring', '-p', '{"metadata":{"finalizers":null}}', '--type=merge'
+              ]).catch(() => {});
+              
+              // Delete the PVC
+              await window.api.executeCommand('kubectl', [
+                'delete', pvc, '-n', 'monitoring', '--force', '--grace-period=0'
+              ]).catch(() => {});
+            }
+          }
         } catch (error) {
-          console.error('Error cleaning up Prometheus/Grafana:', error);
+          console.error('Error cleaning up monitoring components:', error);
         }
       }
       else if (component === 'redisService') {
@@ -1027,14 +1325,14 @@ data:
       addLog(`Cancelled ${componentName} installation and cleaned up resources.`);
       setLogs(prev => ({
         ...prev,
-        [component]: [...prev[component], `Cancelled ${componentName} installation and cleaned up resources.`]
+        [component]: [...(prev[component] || []), `Cancelled ${componentName} installation and cleaned up resources.`]
       }));
     } catch (error) {
       console.error(`Error cleaning up after cancellation:`, error);
       addLog(`Error cleaning up after cancellation: ${error.message}`);
       setLogs(prev => ({
         ...prev,
-        [component]: [...prev[component], `Error cleaning up after cancellation: ${error.message}`]
+        [component]: [...(prev[component] || []), `Error cleaning up after cancellation: ${error.message}`]
       }));
     }
 
@@ -1107,6 +1405,593 @@ data:
     } catch (error) {
       // ... existing code ...
     }
+  };
+
+  // Individual handlers for monitoring components
+  const handleInstallPrometheus = async () => {
+    setIsInstalling(true);
+    setActiveComponent('prometheusService');
+    setInstallationStatus('prometheus', 'installing');
+
+    // Check if domain is set, try to get it from certificate if not
+    if (!domain.name || domain.name.trim() === '') {
+      addLog('Domain name not set. Attempting to retrieve from wildcard certificate...');
+      const domainSet = await useInstallStore.getState().updateDomainFromCertificate();
+      if (!domainSet) {
+        addLog('Could not retrieve domain from certificate. Please set the domain name in the Domain Setup step.');
+        setIsInstalling(false);
+        return;
+      }
+      addLog(`Retrieved domain name from certificate: ${useInstallStore.getState().domain.name}`);
+    }
+
+    try {
+      // Install Prometheus
+      const prometheusResult = await installPrometheusService({
+        setActiveComponent,
+        setInstallationStatus,
+        addLog,
+        setLogs,
+        logs,
+        checkAndDeleteExistingDeployment,
+        checkAndDeleteExistingService,
+        checkAndDeleteExistingIngress,
+        waitForPod,
+        checkAndUpdateWildcardCertificate,
+        renderIngressYaml,
+        domain: useInstallStore.getState().domain,
+        registry,
+        setIsInstalling: () => {} // We'll handle isInstalling state ourselves
+      });
+
+      if (prometheusResult && prometheusResult.success) {
+        addLog('Prometheus installed successfully.');
+        setInstallationStatus('prometheus', 'installed');
+      } else {
+        // Double-check if Prometheus is actually installed despite the error
+        addLog('Installation reported an error. Verifying if Prometheus is actually working...');
+        
+        // Check if Prometheus pods are running with a direct command
+        const prometheusPodsResult = await window.api.executeCommand('kubectl', [
+          'get', 
+          'pods', 
+          '-n', 
+          'monitoring', 
+          '-l', 
+          'app.kubernetes.io/instance=prometheus', 
+          '--no-headers'
+        ]);
+        
+        if (prometheusPodsResult.stdout && prometheusPodsResult.stdout.includes('Running')) {
+          addLog('Prometheus pods are actually running despite reported error. Marking as installed.');
+          setInstallationStatus('prometheus', 'installed');
+        } else {
+          addLog('Prometheus installation failed.');
+          setInstallationStatus('prometheus', 'error');
+        }
+      }
+    } catch (error) {
+      addLog(`Error during Prometheus installation: ${error.message}`);
+      setInstallationStatus('prometheus', 'error');
+    } finally {
+      // Ensure isInstalling is always set to false
+      setIsInstalling(false);
+      setWaitingForPod(false); // Also reset waitingForPod state if it was stuck
+    }
+  };
+
+  const handleUninstallPrometheus = async () => {
+    setIsInstalling(true);
+    setActiveComponent(null);
+    setInstallationStatus('prometheus', 'deleting');
+    setLogs(prev => ({ ...prev, prometheusService: [] }));
+    addLog('Uninstalling Prometheus...');
+
+    try {
+      await uninstallPrometheusService({
+        addLog,
+        setLogs,
+        updateCurrentStep: (step) => addLog(`Current step: ${step}`)
+      });
+
+      addLog('Prometheus uninstalled successfully.');
+      setInstallationStatus('prometheus', 'not-started');
+      checkAndRemoveComponentsStep();
+    } catch (error) {
+      console.error('Error uninstalling Prometheus:', error);
+      addLog(`Error uninstalling Prometheus: ${error.message}`);
+      setInstallationStatus('prometheus', 'error');
+    } finally {
+      setIsInstalling(false);
+    }
+  };
+
+  const handleInstallLoki = async () => {
+    setIsInstalling(true);
+    setActiveComponent('lokiService');
+    setInstallationStatus('loki', 'installing');
+
+    // Initialize logs array if it doesn't exist
+    setLogs(prev => ({
+      ...prev,
+      lokiService: prev.lokiService || []
+    }));
+
+    const addComponentLog = (message) => {
+      console.log(`Loki installation: ${message}`);
+      addLog(message);
+      setLogs(prev => ({
+        ...prev,
+        lokiService: [...(prev.lokiService || []), message]
+      }));
+    };
+
+    // Check if domain is set, try to get it from certificate if not
+    if (!domain.name || domain.name.trim() === '') {
+      addComponentLog('Domain name not set. Attempting to retrieve from wildcard certificate...');
+      const domainSet = await useInstallStore.getState().updateDomainFromCertificate();
+      if (!domainSet) {
+        addComponentLog('Could not retrieve domain from certificate. Please set the domain name in the Domain Setup step.');
+        setIsInstalling(false);
+        return;
+      }
+      addComponentLog(`Retrieved domain name from certificate: ${useInstallStore.getState().domain.name}`);
+    }
+
+    // Check for Prometheus, as Loki depends on it
+    const prometheusCheck = await isPrometheusInstalled((message) => {
+      addComponentLog(`Prometheus check: ${message}`);
+    });
+    
+    if (!prometheusCheck.installed) {
+      addComponentLog('Prometheus is required before installing Loki. Please install Prometheus first.');
+      setInstallationStatus('loki', 'error');
+      setIsInstalling(false);
+      return;
+    }
+
+    // Only install Loki, not the whole stack
+    try {
+      addComponentLog('Starting Loki installation...');
+      
+      // Check and create monitoring namespace if needed
+      addComponentLog('Ensuring monitoring namespace exists...');
+      await window.api.executeCommand('kubectl', [
+        'create', 
+        'namespace', 
+        'monitoring', 
+        '--dry-run=client', 
+        '-o', 
+        'yaml'
+      ]).then(result => {
+        return window.api.applyManifestFromString(result.stdout);
+      }).catch(e => {
+        addComponentLog(`Note: ${e.message}`);
+      });
+
+      // Get storage class
+      let storageClassName = await getStorageClassName(addComponentLog);
+      
+      // Define waitForPod function
+      const waitForPod = async (params) => {
+        const { namespace, labelSelector, timeout } = params;
+        try {
+          let retries = 0;
+          const maxRetries = Math.floor(timeout / 5);
+          
+          while (retries < maxRetries) {
+            retries++;
+            addComponentLog(`Checking for pod with selector ${labelSelector} (attempt ${retries}/${maxRetries})...`);
+            
+            const result = await window.api.executeCommand('kubectl', [
+              'get',
+              'pods',
+              '-n',
+              namespace,
+              '-l',
+              labelSelector,
+              '-o',
+              'jsonpath={.items[0].status.phase}'
+            ]);
+            
+            if (result.stdout && result.stdout.trim() === 'Running') {
+              return { success: true };
+            }
+            
+            await new Promise(resolve => setTimeout(resolve, 5000));
+          }
+          
+          return { success: false, error: `Timed out waiting for pod with selector ${labelSelector}` };
+        } catch (error) {
+          return { success: false, error: error.message };
+        }
+      };
+
+      // Install just Loki
+      const installResult = await installLoki({
+        addComponentLog,
+        updateCurrentStep: (step) => addComponentLog(`Current step: ${step}`),
+        storageClassName,
+        waitForPod
+      });
+
+      if (installResult.success) {
+        addComponentLog('Loki installed successfully.');
+        setInstallationStatus('loki', 'installed');
+      } else {
+        throw new Error(installResult.error || 'Failed to install Loki');
+      }
+    } catch (error) {
+      addComponentLog(`Error installing Loki: ${error.message}`);
+      setInstallationStatus('loki', 'error');
+    } finally {
+      setIsInstalling(false);
+    }
+  };
+
+  const handleUninstallLoki = async () => {
+    setIsInstalling(true);
+    setActiveComponent(null);
+    setInstallationStatus('loki', 'deleting');
+    setLogs(prev => ({ ...prev, lokiService: [] }));
+    addLog('Uninstalling Loki...');
+
+    try {
+      await uninstallLokiService({
+        addLog,
+        setLogs,
+        updateCurrentStep: (step) => addLog(`Current step: ${step}`)
+      });
+
+      addLog('Loki uninstalled successfully.');
+      setInstallationStatus('loki', 'not-started');
+      checkAndRemoveComponentsStep();
+    } catch (error) {
+      console.error('Error uninstalling Loki:', error);
+      addLog(`Error uninstalling Loki: ${error.message}`);
+      setInstallationStatus('loki', 'error');
+    } finally {
+      setIsInstalling(false);
+    }
+  };
+
+  const handleInstallGrafana = async () => {
+    setIsInstalling(true);
+    setActiveComponent('grafanaService');
+    setInstallationStatus('grafana', 'installing');
+
+    // Initialize logs array if it doesn't exist
+    setLogs(prev => ({
+      ...prev,
+      grafanaService: prev.grafanaService || []
+    }));
+
+    const addComponentLog = (message) => {
+      console.log(`Grafana installation: ${message}`);
+      addLog(message);
+      setLogs(prev => ({
+        ...prev,
+        grafanaService: [...(prev.grafanaService || []), message]
+      }));
+    };
+
+    // Check if domain is set, try to get it from certificate if not
+    if (!domain.name || domain.name.trim() === '') {
+      addComponentLog('Domain name not set. Attempting to retrieve from wildcard certificate...');
+      const domainSet = await useInstallStore.getState().updateDomainFromCertificate();
+      if (!domainSet) {
+        addComponentLog('Could not retrieve domain from certificate. Please set the domain name in the Domain Setup step.');
+        setIsInstalling(false);
+        return;
+      }
+      addComponentLog(`Retrieved domain name from certificate: ${useInstallStore.getState().domain.name}`);
+    }
+
+    // Check for Prometheus and Loki, as Grafana depends on them
+    const prometheusCheck = await isPrometheusInstalled((message) => {
+      addComponentLog(`Prometheus check: ${message}`);
+    });
+    
+    const lokiCheck = await isLokiInstalled((message) => {
+      addComponentLog(`Loki check: ${message}`);
+    });
+    
+    if (!prometheusCheck.installed) {
+      addComponentLog('Prometheus is required before installing Grafana. Please install Prometheus first.');
+      setInstallationStatus('grafana', 'error');
+      setIsInstalling(false);
+      return;
+    }
+
+    // Install Grafana
+    try {
+      addComponentLog('Starting Grafana installation...');
+      
+      // Check and create monitoring namespace if needed
+      addComponentLog('Ensuring monitoring namespace exists...');
+      await window.api.executeCommand('kubectl', [
+        'create', 
+        'namespace', 
+        'monitoring', 
+        '--dry-run=client', 
+        '-o', 
+        'yaml'
+      ]).then(result => {
+        return window.api.applyManifestFromString(result.stdout);
+      }).catch(e => {
+        addComponentLog(`Note: ${e.message}`);
+      });
+
+      // Get storage class
+      let storageClassName = await getStorageClassName(addComponentLog);
+      
+      // Define waitForPod function
+      const waitForPod = async (params) => {
+        const { namespace, labelSelector, timeout } = params;
+        try {
+          let retries = 0;
+          const maxRetries = Math.floor(timeout / 5);
+          
+          while (retries < maxRetries) {
+            retries++;
+            addLog(`Checking for pod with selector ${labelSelector} (attempt ${retries}/${maxRetries})...`);
+            
+            const result = await window.api.executeCommand('kubectl', [
+              'get',
+              'pods',
+              '-n',
+              namespace,
+              '-l',
+              labelSelector,
+              '-o',
+              'jsonpath={.items[0].status.phase}'
+            ]);
+            
+            if (result.stdout && result.stdout.trim() === 'Running') {
+              return { success: true };
+            }
+            
+            await new Promise(resolve => setTimeout(resolve, 5000));
+          }
+          
+          return { success: false, error: `Timed out waiting for pod with selector ${labelSelector}` };
+        } catch (error) {
+          return { success: false, error: error.message };
+        }
+      };
+
+      // Install just Grafana
+      const currentDomain = useInstallStore.getState().domain;
+      const installResult = await installGrafana({
+        addComponentLog: addLog,
+        updateCurrentStep: (step) => addLog(`Current step: ${step}`),
+        storageClassName,
+        waitForPod,
+        domain: currentDomain
+      });
+
+      if (installResult.success) {
+        addLog('Grafana installed successfully.');
+        addLog(`Grafana URL: ${installResult.url}`);
+        addLog(`Grafana credentials: Username - ${installResult.credentials.username}, Password - ${installResult.credentials.password}`);
+        setInstallationStatus('grafana', 'installed');
+      } else {
+        throw new Error(installResult.error || 'Failed to install Grafana');
+      }
+    } catch (error) {
+      console.error('Error installing Grafana:', error);
+      addLog(`Error installing Grafana: ${error.message}`);
+      setInstallationStatus('grafana', 'error');
+    }
+    
+    setIsInstalling(false);
+  };
+
+  const handleUninstallGrafana = async () => {
+    setIsInstalling(true);
+    setActiveComponent(null);
+    setInstallationStatus('grafana', 'deleting');
+    setLogs(prev => ({ ...prev, grafanaService: [] }));
+    addLog('Uninstalling Grafana...');
+
+    try {
+      await uninstallGrafanaService({
+        addLog,
+        setLogs,
+        updateCurrentStep: (step) => addLog(`Current step: ${step}`)
+      });
+
+      addLog('Grafana uninstalled successfully.');
+      setInstallationStatus('grafana', 'not-started');
+      checkAndRemoveComponentsStep();
+    } catch (error) {
+      console.error('Error uninstalling Grafana:', error);
+      addLog(`Error uninstalling Grafana: ${error.message}`);
+      setInstallationStatus('grafana', 'error');
+    } finally {
+      setIsInstalling(false);
+    }
+  };
+
+  const handleInstallPromtail = async () => {
+    setIsInstalling(true);
+    setActiveComponent('promtailService');
+    setInstallationStatus('promtail', 'installing');
+
+    // Initialize logs array if it doesn't exist
+    setLogs(prev => ({
+      ...prev,
+      promtailService: prev.promtailService || []
+    }));
+
+    const addComponentLog = (message) => {
+      console.log(`Promtail installation: ${message}`);
+      addLog(message);
+      setLogs(prev => ({
+        ...prev,
+        promtailService: [...(prev.promtailService || []), message]
+      }));
+    };
+
+    // Check if domain is set, try to get it from certificate if not
+    if (!domain.name || domain.name.trim() === '') {
+      addComponentLog('Domain name not set. Attempting to retrieve from wildcard certificate...');
+      const domainSet = await useInstallStore.getState().updateDomainFromCertificate();
+      if (!domainSet) {
+        addComponentLog('Could not retrieve domain from certificate. Please set the domain name in the Domain Setup step.');
+        setIsInstalling(false);
+        return;
+      }
+      addComponentLog(`Retrieved domain name from certificate: ${useInstallStore.getState().domain.name}`);
+    }
+
+    // Check for Loki, as Promtail depends on it
+    const lokiCheck = await isLokiInstalled((message) => {
+      addComponentLog(`Loki check: ${message}`);
+    });
+    
+    if (!lokiCheck.installed) {
+      addComponentLog('Loki is required before installing Promtail. Please install Loki first.');
+      setInstallationStatus('promtail', 'error');
+      setIsInstalling(false);
+      return;
+    }
+
+    // Install Promtail
+    try {
+      addComponentLog('Starting Promtail installation...');
+      
+      // Check and create monitoring namespace if needed
+      addComponentLog('Ensuring monitoring namespace exists...');
+      await window.api.executeCommand('kubectl', [
+        'create', 
+        'namespace', 
+        'monitoring', 
+        '--dry-run=client', 
+        '-o', 
+        'yaml'
+      ]).then(result => {
+        return window.api.applyManifestFromString(result.stdout);
+      }).catch(e => {
+        addComponentLog(`Note: ${e.message}`);
+      });
+      
+      // Define waitForPod function
+      const waitForPod = async (params) => {
+        const { namespace, labelSelector, timeout } = params;
+        try {
+          let retries = 0;
+          const maxRetries = Math.floor(timeout / 5);
+          
+          while (retries < maxRetries) {
+            retries++;
+            addComponentLog(`Checking for pod with selector ${labelSelector} (attempt ${retries}/${maxRetries})...`);
+            
+            const result = await window.api.executeCommand('kubectl', [
+              'get',
+              'pods',
+              '-n',
+              namespace,
+              '-l',
+              labelSelector,
+              '-o',
+              'jsonpath={.items[0].status.phase}'
+            ]);
+            
+            if (result.stdout && result.stdout.trim() === 'Running') {
+              return { success: true };
+            }
+            
+            await new Promise(resolve => setTimeout(resolve, 5000));
+          }
+          
+          return { success: false, error: `Timed out waiting for pod with selector ${labelSelector}` };
+        } catch (error) {
+          return { success: false, error: error.message };
+        }
+      };
+
+      // Install just Promtail
+      const installResult = await installPromtail({
+        addComponentLog,
+        updateCurrentStep: (step) => addComponentLog(`Current step: ${step}`),
+        waitForPod
+      });
+
+      if (installResult.success) {
+        addComponentLog('Promtail installed successfully.');
+        setInstallationStatus('promtail', 'installed');
+      } else {
+        throw new Error(installResult.error || 'Failed to install Promtail');
+      }
+    } catch (error) {
+      addComponentLog(`Error installing Promtail: ${error.message}`);
+      setInstallationStatus('promtail', 'error');
+    } finally {
+      setIsInstalling(false);
+    }
+  };
+
+  const handleUninstallPromtail = async () => {
+    setIsInstalling(true);
+    setActiveComponent(null);
+    setInstallationStatus('promtail', 'deleting');
+    setLogs(prev => ({ ...prev, promtailService: [] }));
+    addLog('Uninstalling Promtail...');
+
+    try {
+      await uninstallPromtailService({
+        addLog,
+        setLogs,
+        updateCurrentStep: (step) => addLog(`Current step: ${step}`)
+      });
+
+      addLog('Promtail uninstalled successfully.');
+      setInstallationStatus('promtail', 'not-started');
+      checkAndRemoveComponentsStep();
+    } catch (error) {
+      console.error('Error uninstalling Promtail:', error);
+      addLog(`Error uninstalling Promtail: ${error.message}`);
+      setInstallationStatus('promtail', 'error');
+    } finally {
+      setIsInstalling(false);
+    }
+  };
+
+  // Helper function to get the storage class name
+  const getStorageClassName = async (addComponentLog) => {
+    addComponentLog('Checking for available storage classes...');
+    const storageClassResult = await window.api.executeCommand('kubectl', [
+      'get',
+      'storageclass',
+      'linode-block-storage',
+      '--no-headers',
+      '--ignore-not-found'
+    ]);
+    
+    let storageClassName = '';
+    if (storageClassResult.code === 0 && storageClassResult.stdout.trim()) {
+      addComponentLog('Using linode-block-storage storage class for volumes.');
+      storageClassName = 'linode-block-storage';
+    } else {
+      // Get the default storage class
+      const defaultStorageClassResult = await window.api.executeCommand('kubectl', [
+        'get',
+        'storageclass',
+        '-o',
+        'jsonpath={.items[?(@.metadata.annotations.storageclass\\.kubernetes\\.io/is-default-class=="true")].metadata.name}'
+      ]);
+      
+      if (defaultStorageClassResult.code === 0 && defaultStorageClassResult.stdout.trim()) {
+        storageClassName = defaultStorageClassResult.stdout.trim();
+        addComponentLog(`Using default storage class '${storageClassName}' for volumes.`);
+      } else {
+        addComponentLog('No default storage class found. Services may not be able to provision storage.');
+        storageClassName = ''; // Let Helm use the default from the chart
+      }
+    }
+    
+    return storageClassName;
   };
 
   // Update the UI to ensure install and uninstall buttons are properly displayed
@@ -1261,32 +2146,44 @@ data:
       <Card>
         <div className="flex justify-between items-start mb-4">
           <div>
-            <h2 className="text-xl font-semibold">Monitoring Service</h2>
+            <h2 className="text-xl font-semibold">Monitoring Stack</h2>
             <p className="text-gray-500">
-              Prometheus and Grafana for monitoring the cluster
+              Infrastructure monitoring and logging for the EDURange Cloud cluster
             </p>
           </div>
-          <StatusBadge status={installationStatus.monitoringService} />
+        </div>
+      </Card>
+
+      {/* Prometheus */}
+      <Card>
+        <div className="flex justify-between items-start mb-4">
+          <div>
+            <h2 className="text-xl font-semibold">Prometheus</h2>
+            <p className="text-gray-500">
+              Metrics collection and alerting system
+            </p>
+          </div>
+          <StatusBadge status={installationStatus.prometheus || 'not-started'} />
         </div>
 
         <div className="space-y-4">
-          {activeComponent === 'monitoringService' && (
-            <LogDisplay logs={logs.monitoringService} maxHeight="200px" />
+          {activeComponent === 'prometheusService' && (
+            <LogDisplay logs={logs.prometheusService || []} maxHeight="200px" />
           )}
 
           <div className="flex space-x-2 justify-end">
-            {(installationStatus.monitoringService === 'not-started' ||
-              installationStatus.monitoringService === 'pending' ||
-              installationStatus.monitoringService === 'error') && (
+            {(installationStatus.prometheus === 'not-started' ||
+              installationStatus.prometheus === 'pending' ||
+              installationStatus.prometheus === 'error') && (
               <Button
-                onClick={handleInstallMonitoringService}
+                onClick={() => handleInstallPrometheus()}
                 disabled={isInstalling}
               >
-                Install Monitoring Service
+                Install Prometheus
               </Button>
             )}
 
-            {installationStatus.monitoringService === 'installing' && (
+            {installationStatus.prometheus === 'installing' && (
               <>
                 <Button
                   disabled={true}
@@ -1294,7 +2191,7 @@ data:
                   Installing...
                 </Button>
                 <Button
-                  onClick={() => handleForceCancelInstallation('monitoringService')}
+                  onClick={() => handleForceCancelInstallation('prometheus')}
                   variant="danger"
                 >
                   Cancel Installation
@@ -1302,10 +2199,187 @@ data:
               </>
             )}
 
-            {(installationStatus.monitoringService === 'installed' ||
-              installationStatus.monitoringService === 'success') && (
+            {(installationStatus.prometheus === 'installed' ||
+              installationStatus.prometheus === 'success') && (
               <Button
-                onClick={handleUninstallMonitoringService}
+                onClick={() => handleUninstallPrometheus()}
+                variant="danger"
+                disabled={isInstalling}
+              >
+                Uninstall
+              </Button>
+            )}
+          </div>
+        </div>
+      </Card>
+
+      {/* Loki */}
+      <Card>
+        <div className="flex justify-between items-start mb-4">
+          <div>
+            <h2 className="text-xl font-semibold">Loki</h2>
+            <p className="text-gray-500">
+              Log aggregation system
+            </p>
+          </div>
+          <StatusBadge status={installationStatus.loki || 'not-started'} />
+        </div>
+
+        <div className="space-y-4">
+          {activeComponent === 'lokiService' && (
+            <LogDisplay logs={logs.lokiService || []} maxHeight="200px" />
+          )}
+
+          <div className="flex space-x-2 justify-end">
+            {(installationStatus.loki === 'not-started' ||
+              installationStatus.loki === 'pending' ||
+              installationStatus.loki === 'error') && (
+              <Button
+                onClick={() => handleInstallLoki()}
+                disabled={isInstalling}
+              >
+                Install Loki
+              </Button>
+            )}
+
+            {installationStatus.loki === 'installing' && (
+              <>
+                <Button
+                  disabled={true}
+                >
+                  Installing...
+                </Button>
+                <Button
+                  onClick={() => handleForceCancelInstallation('loki')}
+                  variant="danger"
+                >
+                  Cancel Installation
+                </Button>
+              </>
+            )}
+
+            {(installationStatus.loki === 'installed' ||
+              installationStatus.loki === 'success') && (
+              <Button
+                onClick={() => handleUninstallLoki()}
+                variant="danger"
+                disabled={isInstalling}
+              >
+                Uninstall
+              </Button>
+            )}
+          </div>
+        </div>
+      </Card>
+
+      {/* Grafana */}
+      <Card>
+        <div className="flex justify-between items-start mb-4">
+          <div>
+            <h2 className="text-xl font-semibold">Grafana</h2>
+            <p className="text-gray-500">
+              Visualization and dashboarding system
+            </p>
+          </div>
+          <StatusBadge status={installationStatus.grafana || 'not-started'} />
+        </div>
+
+        <div className="space-y-4">
+          {activeComponent === 'grafanaService' && (
+            <LogDisplay logs={logs.grafanaService || []} maxHeight="200px" />
+          )}
+
+          <div className="flex space-x-2 justify-end">
+            {(installationStatus.grafana === 'not-started' ||
+              installationStatus.grafana === 'pending' ||
+              installationStatus.grafana === 'error') && (
+              <Button
+                onClick={() => handleInstallGrafana()}
+                disabled={isInstalling}
+              >
+                Install Grafana
+              </Button>
+            )}
+
+            {installationStatus.grafana === 'installing' && (
+              <>
+                <Button
+                  disabled={true}
+                >
+                  Installing...
+                </Button>
+                <Button
+                  onClick={() => handleForceCancelInstallation('grafana')}
+                  variant="danger"
+                >
+                  Cancel Installation
+                </Button>
+              </>
+            )}
+
+            {(installationStatus.grafana === 'installed' ||
+              installationStatus.grafana === 'success') && (
+              <Button
+                onClick={() => handleUninstallGrafana()}
+                variant="danger"
+                disabled={isInstalling}
+              >
+                Uninstall
+              </Button>
+            )}
+          </div>
+        </div>
+      </Card>
+
+      {/* Promtail */}
+      <Card>
+        <div className="flex justify-between items-start mb-4">
+          <div>
+            <h2 className="text-xl font-semibold">Promtail</h2>
+            <p className="text-gray-500">
+              Log collection agent for Loki
+            </p>
+          </div>
+          <StatusBadge status={installationStatus.promtail || 'not-started'} />
+        </div>
+
+        <div className="space-y-4">
+          {activeComponent === 'promtailService' && (
+            <LogDisplay logs={logs.promtailService || []} maxHeight="200px" />
+          )}
+
+          <div className="flex space-x-2 justify-end">
+            {(installationStatus.promtail === 'not-started' ||
+              installationStatus.promtail === 'pending' ||
+              installationStatus.promtail === 'error') && (
+              <Button
+                onClick={() => handleInstallPromtail()}
+                disabled={isInstalling}
+              >
+                Install Promtail
+              </Button>
+            )}
+
+            {installationStatus.promtail === 'installing' && (
+              <>
+                <Button
+                  disabled={true}
+                >
+                  Installing...
+                </Button>
+                <Button
+                  onClick={() => handleForceCancelInstallation('promtail')}
+                  variant="danger"
+                >
+                  Cancel Installation
+                </Button>
+              </>
+            )}
+
+            {(installationStatus.promtail === 'installed' ||
+              installationStatus.promtail === 'success') && (
+              <Button
+                onClick={() => handleUninstallPromtail()}
                 variant="danger"
                 disabled={isInstalling}
               >

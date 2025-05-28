@@ -1,0 +1,78 @@
+{
+  "$schema": "https://raw.githubusercontent.com/EDURange/schema/main/schemas/cdf.schema.json",
+  "metadata": {
+    "id": "sql-injection-challenge2",
+    "pack_id": "sql-injection-series",
+    "name": "SQL Injection: Error-Based Information Disclosure",
+    "version": "1.0.0",
+    "description": "Learn how SQL errors can reveal sensitive information about database structure. In this challenge, you'll use error-based SQL injection to discover column names, then extract the flag from a database table using UNION-based SQL injection.",
+    "challenge_type": "sql-injection",
+    "difficulty": "beginner",
+    "estimated_time": 15
+  },
+  "components": [
+    {
+      "type": "webosApp",
+      "id": "settings",
+      "config": {
+        "title": "Settings",
+        "icon": "./icons/settings.svg",
+        "width": 50,
+        "height": 60,
+        "screen": "displaySettings",
+        "disabled": false,
+        "favourite": true,
+        "desktop_shortcut": false,
+        "launch_on_startup": false,
+        "app_type": "custom"
+      }
+    },
+    {
+      "type": "webosApp",
+      "id": "chrome",
+      "config": {
+        "title": "Browser",
+        "icon": "./icons/browser.svg",
+        "width": 70,
+        "height": 80,
+        "screen": "displayChrome",
+        "disabled": false,
+        "favourite": true,
+        "desktop_shortcut": true,
+        "launch_on_startup": false,
+        "app_type": "browser"
+      }
+    },
+    {
+      "type": "webosApp",
+      "id": "web_chal",
+      "config": {
+        "title": "SQL Challenge 2",
+        "icon": "./icons/browser.svg",
+        "width": 70,
+        "height": 80,
+        "screen": "displayWebChal",
+        "disabled": false,
+        "favourite": true,
+        "desktop_shortcut": true,
+        "launch_on_startup": true,
+        "app_type": "custom"
+      }
+    },
+    {
+      "id": "flag-question",
+      "type": "question",
+      "config": {
+        "type": "flag",
+        "text": "What is the flag value hidden in the database?",
+        "points": 100,
+        "answer": "CTF_error_based_injection_flag",
+        "hint": "Error messages can reveal important database information. First, try triggering SQL errors to discover database structure. Then, look for a table named 'flags' and try to use a UNION-based SQL injection to extract values from it. Remember that UNION requires the same number of columns in both queries."
+      }
+    }
+  ],
+  "typeConfig": {
+    "challengeImage": "registry.edurange.cloud/challenges/sql-injection-challenge2",
+    "databaseImage": "mysql:5.7"
+  }
+}

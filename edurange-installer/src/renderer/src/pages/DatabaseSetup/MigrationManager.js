@@ -241,6 +241,7 @@ model Challenge {
   appConfigs        ChallengeAppConfig[]
   groupChallenges   GroupChallenge[]
   activityLogs      ActivityLog[]
+  instances         ChallengeInstance[]  // Add relation to instances
   createdAt         DateTime             @default(now())
   updatedAt         DateTime             @updatedAt
 
@@ -287,6 +288,9 @@ model ChallengeInstance {
   activityLogs      ActivityLog[]
   competition       CompetitionGroup @relation(fields: [competitionId], references: [id], onDelete: Cascade)
   user              User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  challenge         Challenge        @relation(fields: [challengeId], references: [id])
+  
+  @@index([challengeId])
 }
 
 model Account {
@@ -541,7 +545,7 @@ fi
 # If all connection attempts failed, try to create the admin user
 if [ "$CONNECTION_SUCCESSFUL" != "true" ]; then
   echo "All connection attempts failed. Trying to connect as postgres to create admin user..."
-  
+
   # Try to connect as postgres to create admin user
   if PGPASSWORD=$DB_PASS psql -h $DB_HOST -p $DB_PORT -U postgres -d postgres -c "CREATE USER admin WITH PASSWORD '$DB_PASS' SUPERUSER;" > /dev/null 2>&1; then
     echo "Successfully created admin user!"
@@ -559,7 +563,7 @@ fi
 if [ "$CONNECTION_SUCCESSFUL" != "true" ]; then
   echo "Still no connection. Waiting 30 seconds and trying one more time..."
   sleep 30
-  
+
   echo "Final attempt: Trying postgres user with postgres database..."
   if PGPASSWORD=$DB_PASS psql -h $DB_HOST -p $DB_PORT -U postgres -d postgres -c "SELECT 1" > /dev/null 2>&1; then
     echo "Connection with postgres user to postgres database successful on final attempt!"
@@ -570,7 +574,7 @@ if [ "$CONNECTION_SUCCESSFUL" != "true" ]; then
     echo "Connection with postgres user to postgres database failed on final attempt."
     # Show detailed error for debugging
     PGPASSWORD=$DB_PASS psql -h $DB_HOST -p $DB_PORT -U postgres -d postgres -c "SELECT 1" || true
-    
+
     echo "All connection attempts failed. Cannot proceed with migration."
     exit 1
   fi
@@ -583,14 +587,14 @@ echo "=== Ensuring target database exists ==="
 if [ "$DB_NAME_FOR_MIGRATION" != "$DB_NAME" ]; then
   echo "Checking if database '$DB_NAME' exists..."
   DB_EXISTS=$(PGPASSWORD=$DB_PASS psql -h $DB_HOST -p $DB_PORT -U $DB_USER_FOR_MIGRATION -d $DB_NAME_FOR_MIGRATION -t -c "SELECT 1 FROM pg_database WHERE datname='$DB_NAME'" | grep -c 1 || echo "0")
-  
+
   if [ "$DB_EXISTS" = "0" ]; then
     echo "Database '$DB_NAME' does not exist. Creating it..."
     PGPASSWORD=$DB_PASS psql -h $DB_HOST -p $DB_PORT -U $DB_USER_FOR_MIGRATION -d $DB_NAME_FOR_MIGRATION -c "CREATE DATABASE $DB_NAME;" || true
-    
+
     # Verify database was created
     DB_EXISTS=$(PGPASSWORD=$DB_PASS psql -h $DB_HOST -p $DB_PORT -U $DB_USER_FOR_MIGRATION -d $DB_NAME_FOR_MIGRATION -t -c "SELECT 1 FROM pg_database WHERE datname='$DB_NAME'" | grep -c 1 || echo "0")
-    
+
     if [ "$DB_EXISTS" = "0" ]; then
       echo "Failed to create database '$DB_NAME'. Using $DB_NAME_FOR_MIGRATION instead."
     else
@@ -614,17 +618,17 @@ if echo $TABLE_EXISTS | grep -q "t"; then
   # Using --force-reset to ensure the database is completely reset
   echo "Running Prisma DB push with force-reset..."
   echo "Command: DATABASE_URL=\"postgresql://$DB_USER_FOR_MIGRATION:$DB_PASS@$DB_HOST:$DB_PORT/$DB_NAME_FOR_MIGRATION\" prisma db push --schema=/tmp/prisma/schema.prisma --skip-generate --force-reset"
-  
+
   # Run and capture exit code
   DATABASE_URL="postgresql://$DB_USER_FOR_MIGRATION:$DB_PASS@$DB_HOST:$DB_PORT/$DB_NAME_FOR_MIGRATION" prisma db push --schema=/tmp/prisma/schema.prisma --skip-generate --force-reset
   PRISMA_EXIT_CODE=$?
-  
+
   echo "Prisma command exit code: $PRISMA_EXIT_CODE"
-  
+
   if [ $PRISMA_EXIT_CODE -ne 0 ]; then
     echo "ERROR: Prisma migration failed with exit code $PRISMA_EXIT_CODE"
     echo "Trying alternative approach with direct SQL..."
-    
+
     # Try to create tables directly with SQL as a fallback
     echo "Creating tables directly with SQL..."
     PGPASSWORD=$DB_PASS psql -h $DB_HOST -p $DB_PORT -U $DB_USER_FOR_MIGRATION -d $DB_NAME_FOR_MIGRATION -c "
@@ -638,7 +642,7 @@ if echo $TABLE_EXISTS | grep -q "t"; then
       \\"createdAt\\" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
       \\"updatedAt\\" TIMESTAMP NOT NULL
     );
-    
+
     CREATE TABLE IF NOT EXISTS \\"CompetitionGroup\\" (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
@@ -658,36 +662,36 @@ else
   # For a fresh database, don't use --force-reset
   echo "Running Prisma DB push..."
   echo "Command: DATABASE_URL=\"postgresql://$DB_USER_FOR_MIGRATION:$DB_PASS@$DB_HOST:$DB_PORT/$DB_NAME_FOR_MIGRATION\" prisma db push --schema=/tmp/prisma/schema.prisma --skip-generate"
-  
+
   # Run and capture exit code
   DATABASE_URL="postgresql://$DB_USER_FOR_MIGRATION:$DB_PASS@$DB_HOST:$DB_PORT/$DB_NAME_FOR_MIGRATION" prisma db push --schema=/tmp/prisma/schema.prisma --skip-generate
   PRISMA_EXIT_CODE=$?
-  
+
   echo "Prisma command exit code: $PRISMA_EXIT_CODE"
-  
+
   if [ $PRISMA_EXIT_CODE -ne 0 ]; then
     echo "ERROR: Prisma migration failed with exit code $PRISMA_EXIT_CODE"
     echo "Checking Prisma installation..."
     which prisma || echo "Prisma not found in PATH"
     prisma --version || echo "Failed to get Prisma version"
-    
+
     echo "Checking Node.js version..."
     node --version || echo "Failed to get Node.js version"
-    
+
     echo "Checking npm version..."
     npm --version || echo "Failed to get npm version"
-    
+
     echo "Checking environment..."
     env | grep -i "database\\|postgres\\|prisma" | sed 's/=.*/=REDACTED/' || echo "No relevant environment variables found"
-    
+
     echo "Trying to create a minimal package.json and install prisma locally..."
     echo '{"name":"migration","version":"1.0.0"}' > /tmp/package.json
     cd /tmp && npm install prisma@latest --save-dev
-    
+
     echo "Trying migration with local prisma installation..."
     cd /tmp && DATABASE_URL="postgresql://$DB_USER_FOR_MIGRATION:$DB_PASS@$DB_HOST:$DB_PORT/$DB_NAME_FOR_MIGRATION" npx prisma db push --schema=/tmp/prisma/schema.prisma --skip-generate
     LOCAL_PRISMA_EXIT_CODE=$?
-    
+
     echo "Local Prisma command exit code: $LOCAL_PRISMA_EXIT_CODE"
   fi
 fi
@@ -700,7 +704,7 @@ MISSING_TABLES=""
 for TABLE in $TABLES_TO_CHECK; do
   echo "Checking for table: $TABLE"
   TABLE_EXISTS=$(PGPASSWORD=$DB_PASS psql -h $DB_HOST -p $DB_PORT -U $DB_USER_FOR_MIGRATION -d $DB_NAME_FOR_MIGRATION -t -c "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = '\"$TABLE\"' AND table_schema = 'public')" 2>/dev/null || echo "false")
-  
+
   if echo $TABLE_EXISTS | grep -q "t"; then
     echo "✅ Table $TABLE exists"
   else

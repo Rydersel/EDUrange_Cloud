@@ -3,8 +3,8 @@ PyYAML
 gunicorn==23.0.0
 gevent
 python-dotenv
-kubernetes
-requests
+kubernetes>=32.0.1
+requests>=2.32.3
 Flask
 Flask-Cors
 psutil

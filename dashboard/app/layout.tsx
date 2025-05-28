@@ -29,8 +29,8 @@ export default async function RootLayout({
         <NextTopLoader />
         <ThemeProvider
           attribute="class"
-          defaultTheme="system"
-          enableSystem={true}
+          defaultTheme="dark"
+          enableSystem={false}
           disableTransitionOnChange
         >
           <Providers session={session}>

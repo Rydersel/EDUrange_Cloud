@@ -92,6 +92,9 @@ export async function POST(req: NextRequest) {
     
     let challengeInstance;
     try {
+      // Generate a consistent k8s instance name that includes the challenge ID
+      const k8s_instance_name = `challenge-${challengeId.substring(0, 8)}-${session.user.id.substring(0, 8)}-${Date.now()}`;
+      
       // Create initial challenge instance record
       challengeInstance = await prisma.challengeInstance.create({
         data: {
@@ -102,6 +105,7 @@ export async function POST(req: NextRequest) {
           status: "CREATING",
           flagSecretName: null,
           flag: generateFlag(challengeId),
+          k8s_instance_name: k8s_instance_name, // Store the consistent k8s instance name
         },
       });
 
@@ -126,7 +130,9 @@ export async function POST(req: NextRequest) {
         user_id: session.user.id,
         cdf_content: cdfContent,
         competition_id: competitionId,
-        user_role: userRole // Include user role for priority queue
+        user_role: userRole, // Include user role for priority queue
+        challenge_id: challengeId, // Explicitly include challenge ID
+        k8s_instance_name: challengeInstance.k8s_instance_name // Include the consistent k8s instance name
       };
 
       console.log(`Sending payload to instance manager: ${JSON.stringify({
@@ -134,9 +140,11 @@ export async function POST(req: NextRequest) {
         user_id: session.user.id,
         cdf_content_length: String(cdfContent).length,
         competition_id: competitionId,
-        user_role: userRole
+        user_role: userRole,
+        challenge_id: challengeId,
+        k8s_instance_name: challengeInstance.k8s_instance_name
       })}`);
-
+      
       // Correctly construct the URL for the start-challenge endpoint
       // instanceManagerUrl already includes /api
       const startChallengeUrl = `${instanceManagerUrl}/start-challenge`;

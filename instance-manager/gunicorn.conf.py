@@ -53,7 +53,7 @@ logconfig_dict = {
 
 # Gunicorn config
 bind = '0.0.0.0:8000'
-workers = 1  # Single worker for debugging
+workers = 1 # Set to one for now to avoid race conditions
 worker_class = 'gevent'
 timeout = 120
 keepalive = 5
@@ -72,4 +72,4 @@ def post_fork(server, worker):
         level=logging.INFO,
         format='%(asctime)s [%(levelname)s] %(message)s',
         stream=sys.stdout
-    ) 
+    )

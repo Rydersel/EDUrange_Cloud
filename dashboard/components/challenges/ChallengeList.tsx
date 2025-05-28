@@ -127,70 +127,17 @@ export function ChallengeList({ competitionId, activeInstances, onTerminateInsta
     devLog("All active instances:", activeInstances);
     devLog("All challenges:", challenges);
     
-    // First pass: only do direct matches by challengeId
+    // Use direct matches by challengeId - no pattern matching needed
     activeInstances.forEach(instance => {
       if (instance.challengeId) {
-        // Direct match by ID - highest priority
+        // Direct match by ID
         devLog(`Direct match: Instance ${instance.id} mapped to challenge ${instance.challengeId}`);
         map.set(instance.challengeId, instance);
+      } else {
+        // Log warning for instances without a challenge ID
+        devLog(`Warning: Instance ${instance.id} has no challengeId`);
       }
     });
-    
-    // Second pass: try pattern matching only for instances not yet matched
-    const unmatchedInstances = activeInstances.filter(instance => 
-      !instance.challengeId || !map.has(instance.challengeId)
-    );
-    
-    if (unmatchedInstances.length > 0) {
-      devLog(`${unmatchedInstances.length} instances still need matching:`, unmatchedInstances);
-      
-      unmatchedInstances.forEach(instance => {
-        // Try to match by name pattern in instance ID
-        for (const challenge of challenges) {
-          // Skip if this challenge is already matched
-          if (map.has(challenge.id)) continue;
-          
-          // Try to see if the challenge name or ID is contained in the instance ID
-          const instanceIdLower = instance.id.toLowerCase();
-          const challengeNameLower = challenge.name.toLowerCase().replace(/\s+/g, '');
-          const challengeIdLower = challenge.id.toLowerCase();
-          
-          if (instanceIdLower.includes(challengeNameLower) || 
-              instanceIdLower.includes(challengeIdLower) || 
-              // Bandit Level 1 -> bandit-1 pattern match
-              (challenge.name.toLowerCase().includes('level') && 
-               instanceIdLower.includes(challenge.name.toLowerCase().replace('level', '')
-                                                             .replace(/\s+/g, '-')))) {
-            devLog(`Pattern match: Instance ${instance.id} mapped to challenge ${challenge.id} (${challenge.name})`);
-            map.set(challenge.id, instance);
-            // Mark this instance as matched
-            instance.challengeId = challenge.id;
-            break;
-          }
-        }
-      });
-    }
-    
-    // Fallback: If we still have unmapped active instances and challenges
-    const remainingInstances = activeInstances.filter(instance => 
-      !instance.challengeId || !challenges.some(c => c.id === instance.challengeId)
-    );
-    
-    const unmappedChallenges = challenges.filter(challenge => 
-      !map.has(challenge.id)
-    );
-    
-    if (remainingInstances.length > 0 && unmappedChallenges.length > 0) {
-      devLog("Using fallback mapping - assigning by order");
-      // Sort challenges by some stable order (like name or ID)
-      const sortedChallenges = [...unmappedChallenges].sort((a, b) => a.name.localeCompare(b.name));
-      
-      // Map challenges to the remaining instances
-      for (let i = 0; i < Math.min(remainingInstances.length, sortedChallenges.length); i++) {
-        map.set(sortedChallenges[i].id, remainingInstances[i]);
-        devLog(`Fallback match: Instance ${remainingInstances[i].id} mapped to challenge ${sortedChallenges[i].id} (${sortedChallenges[i].name})`);
-      }
-    }
     
     devLog("Final active challenge map:", Array.from(map.entries()));
     return map;
@@ -760,4 +707,3 @@ export function ChallengeList({ competitionId, activeInstances, onTerminateInsta
     </div>
   )
 }
-

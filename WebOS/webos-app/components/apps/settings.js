@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { version } from '../../utils/version';
 
 const MenuItem = ({ label, isActive, onClick }) => (
   <button
@@ -205,10 +206,10 @@ export function Settings(props) {
   const renderAboutSection = () => (
     <div className="p-4 pt-8 text-gray-300 flex flex-col items-center">
       <h1 className="text-4xl font-bold mb-2">EDURange WebOS</h1>
-      <p className="text-xl mb-4">Version 0.1.0</p>
+      <p className="text-xl mb-4">Version {version}</p>
       <p className="text-lg mb-6">Loaded Challenge: Temp</p>
       <a
-        href="https://github.com/Rydersel/EDUrange_Cloud"
+        href="https://github.com/Rydersel/EDURange_CLOUD"
         target="_blank"
         rel="noopener noreferrer"
         className="bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded"

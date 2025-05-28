@@ -229,7 +229,7 @@ const CompetitionCard = ({ competition, isAdmin }: { competition: Competition; i
                 size="sm"
                 asChild
               >
-                <Link href={`/dashboard/app/admin/competitions/${competition.id}`}>
+                <Link href={`/admin/competitions/${competition.id}`}>
                   View Details
                 </Link>
               </Button>

@@ -307,8 +307,28 @@ const CertManagerSetup = () => {
         '--create-namespace',
         '--version',
         'v1.13.1',
-        '--set',
-        'installCRDs=true'
+        '--set', 'installCRDs=true',
+        '--set', 'extraArgs={--feature-gates=ExperimentalGatewayAPISupport=true}',
+        '--set', 'webhook.timeoutSeconds=30',
+        '--set', 'cainjector.extraArgs={--leader-election-namespace=cert-manager}',
+        // Resource limits for controller (keeping replica count at 1 for HPA)
+        '--set', 'resources.requests.cpu=100m',
+        '--set', 'resources.requests.memory=128Mi',
+        '--set', 'resources.limits.cpu=300m',
+        '--set', 'resources.limits.memory=512Mi',
+        // Resource limits for webhook (keeping replica count at 1 for HPA)
+        '--set', 'webhook.resources.requests.cpu=50m',
+        '--set', 'webhook.resources.requests.memory=64Mi',
+        '--set', 'webhook.resources.limits.cpu=100m',
+        '--set', 'webhook.resources.limits.memory=256Mi',
+        // Resource limits for cainjector (keeping replica count at 1 for HPA)
+        '--set', 'cainjector.resources.requests.cpu=50m',
+        '--set', 'cainjector.resources.requests.memory=64Mi',
+        '--set', 'cainjector.resources.limits.cpu=100m',
+        '--set', 'cainjector.resources.limits.memory=256Mi',
+        // Enable metrics for monitoring
+        '--set', 'prometheus.enabled=true',
+        '--set', 'prometheus.servicemonitor.enabled=true'
       ]);
 
       if (installResult.code !== 0) {
@@ -330,6 +350,92 @@ const CertManagerSetup = () => {
 
       addLog('cert-manager pods are ready.');
       setLogs(prev => [...prev, 'cert-manager pods are ready.']);
+
+      // New Step: Set up Horizontal Pod Autoscalers for cert-manager components
+      addLog('Setting up autoscaling for cert-manager components...');
+      setLogs(prev => [...prev, 'Setting up autoscaling for cert-manager components...']);
+
+      const hpaYaml = `
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: cert-manager
+  namespace: cert-manager
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: cert-manager
+  minReplicas: 1
+  maxReplicas: 6
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 75
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: cert-manager-webhook
+  namespace: cert-manager
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: cert-manager-webhook
+  minReplicas: 1
+  maxReplicas: 6
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 75
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: cert-manager-cainjector
+  namespace: cert-manager
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: cert-manager-cainjector
+  minReplicas: 1
+  maxReplicas: 6
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 75
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+`;
+
+      const hpaResult = await window.api.applyManifestFromString(hpaYaml);
+
+      if (hpaResult.code !== 0) {
+        addLog(`Warning: Failed to set up autoscaling for cert-manager: ${hpaResult.stderr}`);
+        setLogs(prev => [...prev, `Warning: Failed to set up autoscaling for cert-manager: ${hpaResult.stderr}`]);
+        // Don't throw error, continue with the installation
+      } else {
+        addLog('Autoscaling set up successfully for cert-manager components.');
+        setLogs(prev => [...prev, 'Autoscaling set up successfully for cert-manager components.']);
+      }
 
       // Step 5: Create Cloudflare API Token Secret
       addLog('Creating Cloudflare API token secret...');
@@ -406,6 +512,12 @@ spec:
   dnsNames:
   - '*.${domain.name}'
   - '${domain.name}'
+  duration: 2160h # 90 days
+  renewBefore: 720h # 30 days
+  privateKey:
+    algorithm: RSA
+    encoding: PKCS1
+    size: 2048
 `;
 
       const certificateResult = await window.api.applyManifestFromString(certificateYaml);

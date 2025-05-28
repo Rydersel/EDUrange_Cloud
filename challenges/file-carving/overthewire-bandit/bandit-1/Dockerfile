@@ -1,4 +1,4 @@
-# docker buildx build --platform linux/amd64-t registry.rydersel.cloud/bandit1 . --push
+# docker buildx build --platform linux/amd64-t registry.edurange.cloud/challenges/bandit1 . --push
 
 FROM debian:bullseye-slim
 

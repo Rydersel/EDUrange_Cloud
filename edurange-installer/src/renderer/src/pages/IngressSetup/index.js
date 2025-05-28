@@ -132,8 +132,8 @@ const IngressSetup = () => {
       setLogs(prev => [...prev, 'NGINX Ingress Controller pods are ready.']);
 
       // Configure client_max_body_size
-      addLog('Configuring client_max_body_size in NGINX Ingress Controller...');
-      setLogs(prev => [...prev, 'Configuring client_max_body_size in NGINX Ingress Controller...']);
+      addLog('Configuring enhanced settings in NGINX Ingress Controller...');
+      setLogs(prev => [...prev, 'Configuring enhanced settings in NGINX Ingress Controller...']);
 
       const patchResult = await window.api.executeCommand('kubectl', [
         'patch',
@@ -142,15 +142,83 @@ const IngressSetup = () => {
         'ingress-nginx',
         'ingress-nginx-controller',
         '--patch',
-        '{"data": {"proxy-body-size": "0", "proxy-read-timeout": "600", "proxy-send-timeout": "600", "proxy-connect-timeout": "600", "proxy-max-temp-file-size": "1024m"}}'
+        '{"data": {"proxy-body-size": "0", "proxy-buffer-size": "128k", "proxy-buffers-number": "4", "proxy-read-timeout": "600", "proxy-send-timeout": "600", "proxy-connect-timeout": "600", "proxy-max-temp-file-size": "1024m", "keep-alive": "75", "keep-alive-requests": "10000", "worker-processes": "auto", "worker-connections": "65536", "use-forwarded-headers": "true", "upstream-keepalive-connections": "1000", "upstream-keepalive-timeout": "60", "upstream-keepalive-requests": "10000", "max-worker-connections": "65536", "server-tokens": "false", "client-body-buffer-size": "128k", "client-max-body-size": "50m", "large-client-header-buffers": "4 16k"}}'
       ]);
 
       if (patchResult.code !== 0) {
-        throw new Error(`Failed to configure client_max_body_size: ${patchResult.stderr}`);
+        throw new Error(`Failed to configure NGINX settings: ${patchResult.stderr}`);
       }
 
-      addLog('client_max_body_size and timeout settings configured successfully.');
-      setLogs(prev => [...prev, 'client_max_body_size and timeout settings configured successfully.']);
+      addLog('NGINX Ingress Controller settings configured successfully.');
+      setLogs(prev => [...prev, 'NGINX Ingress Controller settings configured successfully.']);
+
+      // Add resource limits to the deployment
+      addLog('Setting resource limits for NGINX Ingress Controller...');
+      setLogs(prev => [...prev, 'Setting resource limits for NGINX Ingress Controller...']);
+
+      const resourcePatchResult = await window.api.executeCommand('kubectl', [
+        'patch',
+        'deployment',
+        '-n',
+        'ingress-nginx',
+        'ingress-nginx-controller',
+        '--patch',
+        '{"spec":{"template":{"spec":{"containers":[{"name":"controller","resources":{"requests":{"cpu":"200m","memory":"512Mi"},"limits":{"cpu":"1000m","memory":"1Gi"}}}]}}}}'
+      ]);
+
+      if (resourcePatchResult.code !== 0) {
+        throw new Error(`Failed to set resource limits: ${resourcePatchResult.stderr}`);
+      }
+
+      addLog('Resource limits set successfully.');
+      setLogs(prev => [...prev, 'Resource limits set successfully.']);
+
+      // Set up Horizontal Pod Autoscaler for the NGINX Ingress Controller
+      addLog('Setting up autoscaling for NGINX Ingress Controller...');
+      setLogs(prev => [...prev, 'Setting up autoscaling for NGINX Ingress Controller...']);
+
+      // Create HPA using kubectl apply with a YAML manifest
+      const hpaManifest = `
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: ingress-nginx-controller
+  namespace: ingress-nginx
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: ingress-nginx-controller
+  minReplicas: 1
+  maxReplicas: 6
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 75
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 75
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+`;
+
+      const hpaResult = await window.api.applyManifestFromString(hpaManifest);
+
+      if (hpaResult.code !== 0) {
+        addLog(`Warning: Failed to set up autoscaling: ${hpaResult.stderr}`);
+        setLogs(prev => [...prev, `Warning: Failed to set up autoscaling: ${hpaResult.stderr}`]);
+        // Don't throw error, continue with the installation
+      } else {
+        addLog('Autoscaling set up successfully.');
+        setLogs(prev => [...prev, 'Autoscaling set up successfully.']);
+      }
 
       // Restart the ingress controller to apply the configuration
       addLog('Restarting NGINX Ingress Controller...');

@@ -1,14 +1,11 @@
 'use client';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { useToast } from '@/components/ui/use-toast';
 import { AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { validateCompetitionCode } from '@/lib/validation/competition-code';
+import { useCompetitionJoin } from '@/lib/hooks/use-competition-join';
 
 interface JoinCompetitionDialogProps {
   open: boolean;
@@ -16,61 +13,15 @@ interface JoinCompetitionDialogProps {
 }
 
 export function JoinCompetitionDialog({ open, onOpenChange }: JoinCompetitionDialogProps) {
-  const [code, setCode] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [isInvalid, setIsInvalid] = useState(false);
-  const router = useRouter();
-  const { toast } = useToast();
-
-  const handleCodeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const newCode = e.target.value;
-    setCode(newCode);
-    setIsInvalid(false);
-    const validation = validateCompetitionCode(newCode);
-    setError(validation.error);
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const validation = validateCompetitionCode(code);
-    if (!validation.isValid) {
-      setError(validation.error);
-      return;
-    }
-
-    setIsLoading(true);
-    try {
-      const response = await fetch('/api/competitions/join', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ code }),
-      });
-
-      if (!response.ok) {
-        setIsInvalid(true);
-        setError("Invalid competition code");
-        return;
-      }
-
-      const data = await response.json();
-      toast({
-        title: "Success!",
-        description: "You've successfully joined the competition.",
-      });
-
-      onOpenChange(false);
-      router.refresh();
-      router.push(`/competitions/${data.competition.id}`);
-    } catch (error: any) {
-      setIsInvalid(true);
-      setError("Invalid competition code");
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  // Use the shared hook for competition joining logic
+  const {
+    code,
+    isLoading,
+    error,
+    isInvalid,
+    handleCodeChange,
+    handleSubmit
+  } = useCompetitionJoin(() => onOpenChange(false));
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

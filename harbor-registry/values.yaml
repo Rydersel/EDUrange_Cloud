@@ -25,28 +25,84 @@ expose:
       nginx.ingress.kubernetes.io/proxy-body-size: "0"
       # Disable buffering for core API
       nginx.ingress.kubernetes.io/proxy-buffering: "off"
+      # Add timeout and connection settings for improved resilience
+      nginx.ingress.kubernetes.io/proxy-connect-timeout: "300"
+      nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
+      nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
+      nginx.ingress.kubernetes.io/proxy-next-upstream-timeout: "0"
+      nginx.ingress.kubernetes.io/proxy-next-upstream: "error timeout http_502"
 
-# Core settings to fix authentication issues
+# Metrics configuration - enables Prometheus metrics collection
+metrics:
+  enabled: true
+  core:
+    path: /metrics
+    port: 8001
+  registry:
+    path: /metrics
+    port: 8001
+  jobservice:
+    path: /metrics
+    port: 8001
+  exporter:
+    path: /metrics
+    port: 8001
+
+# Core settings to optimize for auto-scaling
 core:
-  replicas: 1  # Reduce to 1 replica for testing
-  # Maximum number of concurrent users
-  maxConcurrency: 100
+  replicas: 1  # Minimum replicas - HPA will scale up as needed
+  # Maximum number of concurrent users - increased for larger audience
+  maxConcurrency: 500
   # Allow anonymous read-only access
   anonymousAccessForRead: true
+  # Resource configuration for auto-scaling
+  resources:
+    requests:
+      memory: 768Mi
+      cpu: 300m
+    limits:
+      memory: 1.5Gi
+      cpu: 1.5
+  # Enable metrics for auto-scaling
+  metrics:
+    enabled: true
+    path: /metrics
+    port: 8001
 
-# Change service configuration to ensure proper routing
+# Portal configuration
 portal:
   serviceType: "ClusterIP"  # Ensure portal is ClusterIP, not LoadBalancer
-  # Ensure portal is using port 80
   port: 80
+  replicas: 1  # Minimum replicas - HPA will scale up as needed
+  # Resource configuration for auto-scaling
+  resources:
+    requests:
+      memory: 256Mi
+      cpu: 100m
+    limits:
+      memory: 512Mi
+      cpu: 500m
 
 # Database settings with clear password
 database:
   type: internal
   internal:
     password: "Harbor@db123"
-    # Size for database PVC
-    size: 10Gi
+    # Increased size for database PVC
+    size: 20Gi
+    # Enhanced database resources
+    resources:
+      requests:
+        memory: 512Mi
+        cpu: 250m
+      limits:
+        memory: 1Gi
+        cpu: 1
+  # Enable database metrics
+  metrics:
+    enabled: true
+    serviceMonitor:
+      enabled: true
 
 # Persistence settings
 persistence:
@@ -67,50 +123,117 @@ persistence:
     filesystem:
       rootdirectory: /storage
 
-# Registry component settings
+# Registry component settings - optimized for auto-scaling
 registry:
-  replicas: 1
+  replicas: 1  # Minimum replicas - HPA will scale up as needed
   # Registry storage driver
   storageProviders:
     filesystem:
       rootdirectory: /storage
+  # Resource configuration for auto-scaling
+  resources:
+    requests:
+      memory: 512Mi
+      cpu: 300m
+    limits:
+      memory: 1Gi
+      cpu: 1
+  # Add registry-specific optimizations
+  relativeurls: true  # Use relative URLs to reduce load
+  middleware:
+    enabled: true
+    type: registry
+    registry:
+      - name: readiness
+        options:
+          interval: 10s
+          threshold: 3
+          method: GET
+          timeout: 5s
+  # Enable metrics for auto-scaling
+  metrics:
+    enabled: true
+    path: /metrics
+    port: 8001
 
 # ChartMuseum for Helm charts
 chartmuseum:
   enabled: true
-  replicas: 1
+  replicas: 1  # Minimum replicas - HPA will scale up as needed
+  # Resource configuration
+  resources:
+    requests:
+      memory: 256Mi
+      cpu: 100m
+    limits:
+      memory: 512Mi
+      cpu: 500m
 
 # Trivy for container vulnerability scanning
 trivy:
   enabled: true
-  replicas: 1
+  replicas: 1  # Minimum replicas - HPA will scale up as needed
   # Skip vulnerability scanning for challenge images
   # This is a custom configuration through security policy
   ignoreNamespaces:
     - challenges
   # Update vulnerability database
   updateInterval: "24h"
+  # Resource configuration
+  resources:
+    requests:
+      memory: 256Mi
+      cpu: 100m
+    limits:
+      memory: 512Mi
+      cpu: 500m
 
 # Notary for content trust
 notary:
   enabled: false
 
-# Redis for caching
+# Redis for caching - improve caching capacity
 redis:
   type: internal
   internal:
-    # Size for Redis PVC
-    size: 5Gi
+    # Increase size for Redis PVC
+    size: 10Gi
+    # Redis resource configuration
+    resources:
+      requests:
+        memory: 256Mi
+        cpu: 100m
+      limits:
+        memory: 512Mi
+        cpu: 500m
+  # Enable Redis metrics
+  metrics:
+    enabled: true
+    serviceMonitor:
+      enabled: true
 
 # Job service settings
 jobservice:
   replicas: 1
   # Maximum job workers
   maxJobWorkers: 10
+  # Resource configuration for auto-scaling
+  resources:
+    requests:
+      memory: 256Mi
+      cpu: 100m
+    limits:
+      memory: 1Gi
+      cpu: 1
+  # Enable metrics
+  metrics:
+    enabled: true
+    path: /metrics
+    port: 8001
 
-# Log settings
+# Log settings - reduce logging overhead in production
 log:
-  level: debug  # Set to debug for troubleshooting
+  level: info  # Change from debug to info for production to reduce I/O
   # Rotating files for logs
   rotate_count: 50
   # Size of a single log file
@@ -122,6 +245,14 @@ proxy:
   httpProxy: ""
   httpsProxy: ""
   noProxy: "127.0.0.1,localhost,.local,.internal"
+  # Resource configuration
+  resources:
+    requests:
+      memory: 128Mi
+      cpu: 100m
+    limits:
+      memory: 256Mi
+      cpu: 250m
 
 # Authentication
 externalURL: https://registry.edurange.cloud
@@ -132,21 +263,31 @@ resources:
   small:
     requests:
       memory: 256Mi
-      cpu: 250m
+      cpu: 100m
     limits:
       memory: 512Mi
-      cpu: 500m
+      cpu: 250m
   medium:
     requests:
       memory: 512Mi
-      cpu: 500m
+      cpu: 250m
     limits:
       memory: 1Gi
-      cpu: 1
+      cpu: 500m
   large:
     requests:
       memory: 1Gi
-      cpu: 1
+      cpu: 500m
     limits:
       memory: 2Gi
-      cpu: 2
+      cpu: 1
+
+# Connection pool settings
+connection_pool:
+  max_idle_connections: 50
+  max_open_connections: 100
+  conn_max_lifetime: 14400
+
+# Update checker
+updateChecker:
+  enabled: false

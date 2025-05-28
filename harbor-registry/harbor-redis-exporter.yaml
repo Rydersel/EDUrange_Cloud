@@ -1,0 +1,69 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: harbor-redis-exporter
+  namespace: harbor
+  labels:
+    app: harbor
+    component: redis-exporter
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: harbor
+      component: redis-exporter
+  template:
+    metadata:
+      labels:
+        app: harbor
+        component: redis-exporter
+    spec:
+      containers:
+      - name: redis-exporter
+        image: oliver006/redis_exporter:v1.45.0
+        env:
+        - name: REDIS_ADDR
+          value: "redis://harbor-redis:6379"
+        - name: REDIS_EXPORTER_LOG_FORMAT
+          value: "json"
+        ports:
+        - name: metrics
+          containerPort: 9121
+        resources:
+          limits:
+            cpu: 100m
+            memory: 100Mi
+          requests:
+            cpu: 50m
+            memory: 50Mi
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 9121
+          initialDelaySeconds: 30
+          timeoutSeconds: 5
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 9121
+          initialDelaySeconds: 10
+          timeoutSeconds: 5
+      restartPolicy: Always
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: harbor-redis-exporter-metrics
+  namespace: harbor
+  labels:
+    app: harbor
+    component: redis-exporter
+spec:
+  selector:
+    app: harbor
+    component: redis-exporter
+  ports:
+  - name: metrics
+    port: 9121
+    targetPort: 9121
+  type: ClusterIP 

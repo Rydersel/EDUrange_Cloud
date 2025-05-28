@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import Clock from '@/components/util-components/clock';
 import Countdown from '@/components/util-components/countdown';
+import { getShortVersion } from '@/utils/version';
 
 const Navbar = ({ lockScreen, shutDown }) => {
 	const [status_card, setStatusCard] = useState(false);
@@ -14,7 +15,7 @@ const Navbar = ({ lockScreen, shutDown }) => {
 					'pl-3 pr-3 outline-none transition duration-100 ease-in-out border-b-2 border-transparent focus:border-purple-800 py-1 '
 				}
 			>
-				Edurange WebOS
+				Edurange WebOS {getShortVersion()}
 			</div>
 
 			<div

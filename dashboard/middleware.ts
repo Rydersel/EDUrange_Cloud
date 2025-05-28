@@ -47,10 +47,11 @@ export async function middleware(request: NextRequest) {
       secret: process.env.NEXTAUTH_SECRET,
     });
 
-    // If no token or token is invalid, redirect to home page
+    // If no token or token is invalid, redirect to signin page
     if (!token) {
-      // Redirect to home page instead of signin
-      return NextResponse.redirect(new URL('/', request.url));
+      // Redirect to signin page with callback URL
+      const callbackUrl = encodeURIComponent(request.nextUrl.pathname);
+      return NextResponse.redirect(new URL(`/auth/signin?callbackUrl=${callbackUrl}`, request.url));
     }
 
     // For admin routes, check if user is an admin

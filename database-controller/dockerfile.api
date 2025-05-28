@@ -1,7 +1,7 @@
 # docker buildx build -f dockerfile.api --platform linux/amd64 -t registry.edurange.cloud/edurange/database-api . --push
 
 # Stage 1: Builder/Dependencies
-FROM python:3.10-slim AS builder
+FROM python:3.13.3-slim  AS builder
 
 # Set environment variables for Python best practices
 ENV PYTHONDONTWRITEBYTECODE=1
@@ -25,11 +25,11 @@ COPY schema.prisma schema.prisma
 RUN prisma generate --generator client_py
 
 # Ensure generated files are accessible (might be redundant if copied correctly, but safe)
-RUN chmod -R a+rX /usr/local/lib/python3.10/site-packages/prisma/
+RUN chmod -R a+rX /usr/local/lib/python3.13/site-packages/prisma/
 
 
 # Stage 2: Final Runtime Image
-FROM python:3.10-slim
+FROM python:3.13.3-slim
 
 # Set environment variables for Python best practices
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -44,30 +44,34 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends procps && \
     rm -rf /var/lib/apt/lists/*
 
-# Copy Python dependencies and Prisma files from builder
-COPY --from=builder /usr/local/lib/python3.10/site-packages/ /usr/local/lib/python3.10/site-packages/
-COPY --from=builder /root/.cache/prisma-python/ /root/.cache/prisma-python/
-
-# Copy application files
+# Copy application files first
 COPY api/ /app/
 COPY schema.prisma /app/schema.prisma
 COPY requirements.txt /app/requirements.txt
 
-# Install gunicorn for production-grade WSGI server
-RUN pip install --no-cache-dir gunicorn && \
-    which gunicorn || echo "gunicorn not found in PATH" && \
-    python -c "import site; print('Python site-packages:', site.getsitepackages())" && \
-    python -m pip list && \
-    echo "PATH=$PATH"
+# Install Python dependencies directly in the final image
+# This ensures all dependencies are properly installed in the correct site-packages directory
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy Prisma client files and Prisma cache from builder
+COPY --from=builder /usr/local/lib/python3.13/site-packages/prisma/ /usr/local/lib/python3.13/site-packages/prisma/
+COPY --from=builder /root/.cache/prisma-python/ /root/.cache/prisma-python/
 
 # Make directories for file uploads if needed
 RUN mkdir -p /tmp/pack_uploads && chmod 777 /tmp/pack_uploads
 
+# Verify installation and show debug info
+RUN python -c "import flask; print('Flask version:', flask.__version__)" && \
+    python -c "import site; print('Python site-packages:', site.getsitepackages())" && \
+    python -c "from prisma import Prisma; print('Prisma client properly installed')" && \
+    python -m pip list && \
+    echo "PATH=$PATH"
+
 # Expose the API port
 EXPOSE 8000
 
-# Start the Flask application with Python directly
-CMD ["python", "-m", "gunicorn", "--bind", "0.0.0.0:8000", "--workers", "2", "--timeout", "120", "app:app"]
+# Start the Flask application with gunicorn
+CMD ["gunicorn", "--bind", "0.0.0.0:8000", "--workers", "1", "--timeout", "120", "app:app"]
 
 # TODO: Re-enable non-root user later. Temporarily running as root due to Prisma permission issues.
 

@@ -1,0 +1,1 @@
+kubectl get pods --all-namespaces | grep -E "Error|CrashLoopBackOff|Failed|Completed" | awk "{print \$1,\$2}" | while read ns name; do echo "Deleting $name from $ns"; kubectl delete pod $name -n $ns; done

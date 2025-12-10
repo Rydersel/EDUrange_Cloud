@@ -82,7 +82,7 @@
     "jsonwebtoken": "^9.0.2",
     "jszip": "^3.10.1",
     "lucide-react": "^0.477.0",
-    "next": "15.2.4",
+    "next": "15.4.8",
     "next-auth": "^4.24.11",
     "next-themes": "^0.2.1",
     "nextjs-toploader": "^1.6.12",

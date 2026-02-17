@@ -1,4 +1,4 @@
-# EDURANGE Cloud (WORK IN PROGRESS)
+# EDURANGE Cloud (LEGACY)
  
  ## [Documentation](https://docs.edurange.cloud/)
  
